@@ -70,7 +70,15 @@ impl App {
             });
         });
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.label(format!("{}", self.debug_state.cpu.read().unwrap().a))
+            if let Ok(cpu) = self.debug_state.cpu.read() {
+                ui.label("CPU");
+                ui.label(format!("sp {}", cpu.sp));
+                ui.label(format!("pc {}", cpu.pc));
+                ui.label(format!("p {}", cpu.flags));
+                ui.label(format!("a  {}", cpu.a));
+                ui.label(format!("x  {}", cpu.x));
+                ui.label(format!("y  {}", cpu.y));
+            }
         });
     }
 }
