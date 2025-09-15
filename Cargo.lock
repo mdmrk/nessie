@@ -1837,6 +1837,7 @@ dependencies = [
  "eframe",
  "egui",
  "env_logger",
+ "log",
 ]
 
 [[package]]

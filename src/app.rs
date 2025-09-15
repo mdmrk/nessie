@@ -3,6 +3,8 @@ use std::{
     thread,
 };
 
+use log::error;
+
 use crate::{
     debug::DebugState,
     emu::{Command, Event, emu_thread},
@@ -35,7 +37,9 @@ impl App {
     }
 
     fn send_command(&self, command: Command) {
-        if let Err(e) = self.command_tx.send(command) {}
+        if let Err(e) = self.command_tx.send(command) {
+            error!("{e}");
+        }
     }
 
     fn handle_events(&mut self) {
