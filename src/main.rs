@@ -1,29 +1,4 @@
-use std::sync::Arc;
-
-use egui::mutex::RwLock;
-use nessie::emu;
-
-struct App {
-    emu: Arc<RwLock<emu::Emu>>,
-}
-
-impl App {
-    fn new() -> Self {
-        Self {
-            emu: Arc::new(RwLock::new(emu::Emu::new())),
-        }
-    }
-}
-
-impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.label("test");
-            let r = self.emu.read();
-            ui.label(format!("{}", (*r).cpu.a))
-        });
-    }
-}
+use nessie::app::App;
 
 fn main() -> eframe::Result {
     env_logger::init();
