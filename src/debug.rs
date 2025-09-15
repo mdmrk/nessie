@@ -9,7 +9,7 @@ pub struct DebugState {
 impl DebugState {
     pub fn new() -> Self {
         Self {
-            cpu: RwLock::new(Cpu { a: 0 }),
+            cpu: RwLock::new(Cpu::new()),
         }
     }
 
