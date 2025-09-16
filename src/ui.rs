@@ -74,20 +74,23 @@ impl Ui {
                             ui.end_row();
                         });
                 }
+
                 ui.separator();
+
                 ui.heading("Memory");
-                ui.text_edit_singleline(&mut self.mem_search);
+                egui::TextEdit::singleline(&mut self.mem_search)
+                    .hint_text("Address")
+                    .char_limit(4)
+                    .show(ui);
                 if let Ok(bus) = self.debug_state.bus.read() {
                     egui::Grid::new("mem_grid")
                         .num_columns(2)
                         .striped(true)
                         .show(ui, |ui| {
-                            if !self.mem_search.is_empty() {
+                            if let Ok(n) = self.mem_search.parse::<usize>() {
                                 ui.add(egui::Label::new(format!("0x{}", self.mem_search)));
-                                if let Ok(n) = self.mem_search.parse::<usize>() {
-                                    if n < 0xffff {
-                                        ui.label(format!("{}", bus.read_byte(n)));
-                                    }
+                                if n < 0xffff {
+                                    ui.label(format!("{}", bus.read_byte(n)));
                                 }
                                 ui.end_row();
                             }
