@@ -8,13 +8,14 @@ use log::error;
 use crate::{
     debug::DebugState,
     emu::{Command, Event, emu_thread},
+    ui::Ui,
 };
 
 pub struct App {
     command_tx: mpsc::Sender<Command>,
     event_rx: mpsc::Receiver<Event>,
 
-    debug_state: Arc<DebugState>,
+    ui: Ui,
 }
 
 impl App {
@@ -32,17 +33,17 @@ impl App {
         Self {
             command_tx,
             event_rx,
-            debug_state,
+            ui: Ui::new(debug_state),
         }
     }
 
-    fn send_command(&self, command: Command) {
+    pub fn send_command(&self, command: Command) {
         if let Err(e) = self.command_tx.send(command) {
             error!("{e}");
         }
     }
 
-    fn handle_events(&mut self) {
+    pub fn handle_events(&mut self) {
         while let Ok(event) = self.event_rx.try_recv() {
             match event {
                 Event::Started => {}
@@ -50,42 +51,11 @@ impl App {
             }
         }
     }
-
-    fn ui(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        egui::TopBottomPanel::top("menubar").show(ctx, |ui| {
-            egui::MenuBar::new().ui(ui, |ui| {
-                ui.menu_button("File", |ui| {
-                    if ui.button("Quit").clicked() {
-                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
-                    }
-                });
-                ui.menu_button("Emulator", |ui| {
-                    if ui.button("Start").clicked() {
-                        self.send_command(Command::Start);
-                    }
-                    if ui.button("Stop").clicked() {
-                        self.send_command(Command::Stop);
-                    }
-                });
-            });
-        });
-        egui::CentralPanel::default().show(ctx, |ui| {
-            if let Ok(cpu) = self.debug_state.cpu.read() {
-                ui.label("CPU");
-                ui.label(format!("sp {}", cpu.sp));
-                ui.label(format!("pc {}", cpu.pc));
-                ui.label(format!("p {}", cpu.flags));
-                ui.label(format!("a  {}", cpu.a));
-                ui.label(format!("x  {}", cpu.x));
-                ui.label(format!("y  {}", cpu.y));
-            }
-        });
-    }
 }
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.handle_events();
-        self.ui(ctx, frame);
+        self.ui.draw(self, ctx, frame);
     }
 }
