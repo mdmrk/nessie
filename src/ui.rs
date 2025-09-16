@@ -1,7 +1,15 @@
 use log::error;
-use std::sync::{Arc, mpsc};
+use std::{
+    any::Any,
+    sync::{Arc, mpsc},
+};
 
-use crate::{app::App, debug::DebugState, emu::Command};
+use crate::{
+    app::App,
+    cpu::{self, Flags},
+    debug::DebugState,
+    emu::Command,
+};
 
 pub struct Ui {
     command_tx: mpsc::Sender<Command>,
@@ -60,9 +68,6 @@ impl Ui {
                             ui.add(egui::Label::new("pc"));
                             ui.label(format!("{}", cpu.pc));
                             ui.end_row();
-                            ui.add(egui::Label::new("p"));
-                            ui.label(format!("{}", cpu.flags));
-                            ui.end_row();
                             ui.add(egui::Label::new("a"));
                             ui.label(format!("{}", cpu.a));
                             ui.end_row();
@@ -71,6 +76,32 @@ impl Ui {
                             ui.end_row();
                             ui.add(egui::Label::new("y"));
                             ui.label(format!("{}", cpu.y));
+                            ui.end_row();
+                        });
+                    let flags = [
+                        (Flags::N, "N"),
+                        (Flags::V, "V"),
+                        (Flags::B, "B"),
+                        (Flags::D, "D"),
+                        (Flags::I, "I"),
+                        (Flags::Z, "Z"),
+                        (Flags::C, "C"),
+                    ];
+                    egui::Grid::new("flags_grid")
+                        .num_columns(flags.len())
+                        .striped(true)
+                        .show(ui, |ui| {
+                            for flag in &flags {
+                                ui.label(flag.1);
+                            }
+                            ui.end_row();
+                            for flag in flags {
+                                if cpu.flags.contains(flag.0) {
+                                    ui.label("✔");
+                                } else {
+                                    ui.label("-");
+                                }
+                            }
                             ui.end_row();
                         });
                 }
