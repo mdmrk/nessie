@@ -1,6 +1,10 @@
 use std::sync::{Arc, mpsc};
 
-use crate::{cpu, debug::DebugState};
+use crate::{
+    bus::{self, Bus},
+    cpu::{self, Cpu},
+    debug::DebugState,
+};
 
 pub enum Command {
     Start,
@@ -13,14 +17,16 @@ pub enum Event {
 }
 
 pub struct Emu {
-    pub cpu: cpu::Cpu,
+    pub cpu: Cpu,
+    pub bus: Bus,
     pub running: bool,
 }
 
 impl Emu {
     pub fn new() -> Self {
         Self {
-            cpu: cpu::Cpu::new(),
+            cpu: Cpu::new(),
+            bus: Bus::new(),
             running: false,
         }
     }
