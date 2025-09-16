@@ -24,9 +24,6 @@ impl fmt::Display for Flags {
         if self.contains(Flags::V) {
             flags.push("V");
         }
-        if self.contains(Flags::_1) {
-            flags.push("1");
-        }
         if self.contains(Flags::B) {
             flags.push("B");
         }
@@ -62,7 +59,7 @@ impl Cpu {
         Self {
             sp: 0xfd,
             pc: 0xfffc,
-            flags: Flags::from_bits(0b00000100).unwrap(),
+            flags: Flags::from_bits(0b00100100).unwrap(),
             a: 0,
             x: 0,
             y: 0,
