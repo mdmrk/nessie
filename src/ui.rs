@@ -1,19 +1,32 @@
-use std::sync::Arc;
+use log::error;
+use std::sync::{Arc, mpsc};
 
 use crate::{app::App, debug::DebugState, emu::Command};
 
 pub struct Ui {
+    command_tx: mpsc::Sender<Command>,
+
     debug_state: Arc<DebugState>,
+
+    mem_search: String,
 }
 
 impl Ui {
-    pub fn new(debug_state: Arc<DebugState>) -> Self {
+    pub fn new(command_tx: mpsc::Sender<Command>, debug_state: Arc<DebugState>) -> Self {
         Self {
+            command_tx: command_tx,
             debug_state: debug_state,
+            mem_search: "".to_string(),
         }
     }
 
-    pub fn draw(&self, app: &App, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn send_command(&self, command: Command) {
+        if let Err(e) = self.command_tx.send(command) {
+            error!("{e}");
+        }
+    }
+
+    pub fn draw(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         egui::TopBottomPanel::top("menubar").show(ctx, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("File", |ui| {
@@ -23,10 +36,10 @@ impl Ui {
                 });
                 ui.menu_button("Emulator", |ui| {
                     if ui.button("Start").clicked() {
-                        app.send_command(Command::Start);
+                        self.send_command(Command::Start);
                     }
                     if ui.button("Stop").clicked() {
-                        app.send_command(Command::Stop);
+                        self.send_command(Command::Stop);
                     }
                 });
             });
@@ -61,17 +74,19 @@ impl Ui {
                             ui.end_row();
                         });
                 }
-                // ui.text_edit_singleline(&mut self.mem_search);
-                // if let Ok(bus) = self.debug_state.bus.read() {
-                //     egui::Grid::new("mem_grid")
-                //         .num_columns(2)
-                //         .striped(true)
-                //         .show(ui, |ui| {
-                //             ui.add(egui::Label::new(format!("{}", self.mem_search)));
-                //             ui.label(format!("{}", bus.read_byte(self.mem_search)));
-                //             ui.end_row();
-                //         });
-                // }
+                ui.separator();
+                ui.heading("Memory");
+                ui.text_edit_singleline(&mut self.mem_search);
+                if let Ok(bus) = self.debug_state.bus.read() {
+                    egui::Grid::new("mem_grid")
+                        .num_columns(2)
+                        .striped(true)
+                        .show(ui, |ui| {
+                            ui.add(egui::Label::new(format!("{}", self.mem_search)));
+                            // ui.label(format!("{}", bus.read_byte(self.mem_search)));
+                            ui.end_row();
+                        });
+                }
             });
     }
 }

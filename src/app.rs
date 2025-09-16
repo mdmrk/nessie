@@ -3,8 +3,6 @@ use std::{
     thread,
 };
 
-use log::error;
-
 use crate::{
     debug::DebugState,
     emu::{Command, Event, emu_thread},
@@ -12,7 +10,6 @@ use crate::{
 };
 
 pub struct App {
-    command_tx: mpsc::Sender<Command>,
     event_rx: mpsc::Receiver<Event>,
 
     ui: Ui,
@@ -31,15 +28,8 @@ impl App {
         });
 
         Self {
-            command_tx,
             event_rx,
-            ui: Ui::new(debug_state),
-        }
-    }
-
-    pub fn send_command(&self, command: Command) {
-        if let Err(e) = self.command_tx.send(command) {
-            error!("{e}");
+            ui: Ui::new(command_tx, debug_state),
         }
     }
 
@@ -56,6 +46,6 @@ impl App {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.handle_events();
-        self.ui.draw(self, ctx, frame);
+        self.ui.draw(ctx, frame);
     }
 }
