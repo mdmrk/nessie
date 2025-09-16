@@ -82,9 +82,15 @@ impl Ui {
                         .num_columns(2)
                         .striped(true)
                         .show(ui, |ui| {
-                            ui.add(egui::Label::new(format!("{}", self.mem_search)));
-                            // ui.label(format!("{}", bus.read_byte(self.mem_search)));
-                            ui.end_row();
+                            if !self.mem_search.is_empty() {
+                                ui.add(egui::Label::new(format!("0x{}", self.mem_search)));
+                                if let Ok(n) = self.mem_search.parse::<usize>() {
+                                    if n < 0xffff {
+                                        ui.label(format!("{}", bus.read_byte(n)));
+                                    }
+                                }
+                                ui.end_row();
+                            }
                         });
                 }
             });
