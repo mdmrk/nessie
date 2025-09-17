@@ -122,14 +122,19 @@ impl Ui {
             .resizable(false)
             .show(ctx, |ui| {
                 ui.heading("Loaded ROM");
-                if let Ok(cart_r) = self.debug_state.cart.read() {
-                    if let Some(cart) = &*cart_r {
-                        ui.label(format!(
-                            "{}",
-                            String::from_utf8(cart.header.magic.to_vec()).unwrap_or("".to_string())
-                        ));
-                    } else {
-                        ui.label("Not loaded");
+                if let Ok(cart_header_opt) = self.debug_state.cart_header.read() {
+                    match &*cart_header_opt {
+                        Some(cart_header) => {
+                            ui.label(format!(
+                                "{}",
+                                String::from_utf8(cart_header.magic.to_vec())
+                                    .unwrap_or("".to_string())
+                            ));
+                            ui.label(format!("has trainer {}", cart_header.flags6.has_trainer));
+                        }
+                        None => {
+                            ui.label("Not loaded");
+                        }
                     }
                 }
             });
