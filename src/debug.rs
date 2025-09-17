@@ -1,10 +1,11 @@
 use std::sync::RwLock;
 
-use crate::{bus::Bus, cpu::Cpu, emu::Emu};
+use crate::{bus::Bus, cart::Cart, cpu::Cpu, emu::Emu};
 
 pub struct DebugState {
     pub cpu: RwLock<Cpu>,
     pub bus: RwLock<Bus>,
+    pub cart: RwLock<Option<Cart>>,
 }
 
 impl DebugState {
@@ -12,6 +13,7 @@ impl DebugState {
         Self {
             cpu: RwLock::new(Cpu::new()),
             bus: RwLock::new(Bus::new()),
+            cart: RwLock::new(None),
         }
     }
 
@@ -21,6 +23,9 @@ impl DebugState {
         }
         if let Ok(mut bus) = self.bus.write() {
             *bus = emu.bus.clone();
+        }
+        if let Ok(mut cart) = self.cart.write() {
+            *cart = emu.cart.clone();
         }
     }
 }

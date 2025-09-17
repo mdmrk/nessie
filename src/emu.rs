@@ -18,7 +18,7 @@ pub struct Emu {
     pub cpu: Cpu,
     pub bus: Bus,
     pub running: bool,
-    cart: Option<Cart>,
+    pub cart: Option<Cart>,
 }
 
 impl Emu {
@@ -45,7 +45,7 @@ impl Emu {
 
 pub fn emu_thread(
     command_rx: mpsc::Receiver<Command>,
-    event_tx: mpsc::Sender<Event>,
+    _event_tx: mpsc::Sender<Event>,
     debug_state: Arc<DebugState>,
     args: &Args,
 ) {

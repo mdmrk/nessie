@@ -1,15 +1,7 @@
 use log::error;
-use std::{
-    any::Any,
-    sync::{Arc, mpsc},
-};
+use std::sync::{Arc, mpsc};
 
-use crate::{
-    app::App,
-    cpu::{self, Flags},
-    debug::DebugState,
-    emu::Command,
-};
+use crate::{cpu::Flags, debug::DebugState, emu::Command};
 
 pub struct Ui {
     command_tx: mpsc::Sender<Command>,
@@ -34,7 +26,7 @@ impl Ui {
         }
     }
 
-    pub fn draw(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    pub fn draw(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::TopBottomPanel::top("menubar").show(ctx, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("File", |ui| {
@@ -52,7 +44,7 @@ impl Ui {
                 });
             });
         });
-        egui::CentralPanel::default().show(ctx, |ui| {});
+        egui::CentralPanel::default().show(ctx, |_ui| {});
         egui::SidePanel::left("left_panel")
             .resizable(false)
             .show(ctx, |ui| {
@@ -124,6 +116,21 @@ impl Ui {
                                 ui.end_row();
                             }
                         });
+                }
+            });
+        egui::SidePanel::right("right_panel")
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.heading("Loaded ROM");
+                if let Ok(cart_r) = self.debug_state.cart.read() {
+                    if let Some(cart) = &*cart_r {
+                        ui.label(format!(
+                            "{}",
+                            String::from_utf8(cart.header.magic.to_vec()).unwrap_or("".to_string())
+                        ));
+                    } else {
+                        ui.label("Not loaded");
+                    }
                 }
             });
     }
