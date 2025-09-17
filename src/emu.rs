@@ -1,10 +1,8 @@
 use std::sync::{Arc, mpsc};
 
-use crate::{
-    bus::{self, Bus},
-    cpu::{self, Cpu},
-    debug::DebugState,
-};
+use log::info;
+
+use crate::{args::Args, bus::Bus, cart::Cart, cpu::Cpu, debug::DebugState};
 
 pub enum Command {
     Start,
@@ -20,6 +18,7 @@ pub struct Emu {
     pub cpu: Cpu,
     pub bus: Bus,
     pub running: bool,
+    cart: Option<Cart>,
 }
 
 impl Emu {
@@ -27,7 +26,15 @@ impl Emu {
         Self {
             cpu: Cpu::new(),
             bus: Bus::new(),
+            cart: None,
             running: false,
+        }
+    }
+
+    pub fn load_rom(&mut self, rom_path: &String) {
+        if let Some(cart) = Cart::insert(rom_path) {
+            self.cart = Some(cart);
+            info!("Rom '{}' loaded", rom_path);
         }
     }
 
@@ -40,8 +47,13 @@ pub fn emu_thread(
     command_rx: mpsc::Receiver<Command>,
     event_tx: mpsc::Sender<Event>,
     debug_state: Arc<DebugState>,
+    args: &Args,
 ) {
     let mut emu = Emu::new();
+
+    if let Some(rom) = &args.rom {
+        emu.load_rom(rom);
+    }
 
     loop {
         while let Ok(command) = command_rx.try_recv() {

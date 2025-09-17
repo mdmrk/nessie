@@ -1,5 +1,3 @@
-use core::fmt;
-
 bitflags::bitflags! {
     #[derive(Debug, Clone)]
     pub struct Flags: u8 {
