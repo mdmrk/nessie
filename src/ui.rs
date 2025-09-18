@@ -1,4 +1,5 @@
 use log::error;
+use size::Size;
 use std::sync::{Arc, mpsc};
 
 use crate::{cpu::Flags, debug::DebugState, emu::Command};
@@ -131,6 +132,13 @@ impl Ui {
                                     .unwrap_or("".to_string())
                             ));
                             ui.label(format!("has trainer {}", cart_header.flags6.has_trainer));
+                            ui.label(format!(
+                                "prg_size {}",
+                                Size::from_bytes(
+                                    Size::from_kilobytes(16).bytes() as usize
+                                        * cart_header.prg_rom_size as usize
+                                )
+                            ));
                         }
                         None => {
                             ui.label("Not loaded");
