@@ -1,5 +1,5 @@
+use bytesize::ByteSize;
 use packed_struct::prelude::*;
-use size::Size;
 
 #[derive(PrimitiveEnum_u8, Clone, Copy, Debug, PartialEq)]
 pub enum NametableArrangement {
@@ -50,14 +50,13 @@ impl Cart {
             Ok(contents) => {
                 let header = unsafe { std::ptr::read(contents.as_ptr() as *const Header) };
                 let rom = contents.clone();
-                let prg_data_size =
-                    Size::from_kilobytes(16).bytes() as usize * header.prg_rom_size as usize;
+                let prg_data_size = ByteSize::kib(16).0 as usize * header.prg_rom_size as usize;
                 let prg_data = std::ptr::slice_from_raw_parts(
                     if header.flags6.has_trainer {
                         contents
                             .as_ptr()
                             .wrapping_add(size_of::<Header>())
-                            .wrapping_add(Size::from_bytes(512).bytes() as usize)
+                            .wrapping_add(ByteSize::b(512).0 as usize)
                     } else {
                         contents.as_ptr().wrapping_add(size_of::<Header>())
                     },

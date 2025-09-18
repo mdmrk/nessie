@@ -1,5 +1,5 @@
+use bytesize::ByteSize;
 use log::error;
-use size::Size;
 use std::sync::{Arc, mpsc};
 
 use crate::{cpu::Flags, debug::DebugState, emu::Command};
@@ -131,13 +131,10 @@ impl Ui {
                                 String::from_utf8(cart_header.magic.to_vec())
                                     .unwrap_or("".to_string())
                             ));
-                            ui.label(format!("has trainer {}", cart_header.flags6.has_trainer));
+                            ui.label(format!("has trainer: {}", cart_header.flags6.has_trainer));
                             ui.label(format!(
                                 "prg_size {}",
-                                Size::from_bytes(
-                                    Size::from_kilobytes(16).bytes() as usize
-                                        * cart_header.prg_rom_size as usize
-                                )
+                                ByteSize::kib(16) * cart_header.prg_rom_size
                             ));
                         }
                         None => {
