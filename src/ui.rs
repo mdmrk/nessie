@@ -132,8 +132,9 @@ impl Ui {
                                     .unwrap_or("".to_string())
                             ));
                             ui.label(format!("has trainer: {}", cart_header.flags6.has_trainer));
+                            ui.label(format!("mapper: {}", cart_header.get_mapper()));
                             ui.label(format!(
-                                "prg_size {}",
+                                "prg rom size {}",
                                 ByteSize::kib(16) * cart_header.prg_rom_size
                             ));
                         }
