@@ -113,7 +113,7 @@ impl Ui {
                         .show(ui, |ui| {
                             if let Ok(n) = self.mem_search.parse::<usize>() {
                                 ui.add(egui::Label::new(format!("0x{}", self.mem_search)));
-                                ui.label(format!("{}", bus.read_byte(n)));
+                                // ui.label(format!("{}", bus.read_byte(n)));
                                 ui.end_row();
                             }
                         });
