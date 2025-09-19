@@ -101,23 +101,23 @@ impl Ui {
 
                 ui.separator();
 
-                ui.heading("Memory");
-                egui::TextEdit::singleline(&mut self.mem_search)
-                    .hint_text("Address")
-                    .char_limit(4)
-                    .show(ui);
-                if let Ok(bus) = self.debug_state.bus.read() {
-                    egui::Grid::new("mem_grid")
-                        .num_columns(2)
-                        .striped(true)
-                        .show(ui, |ui| {
-                            if let Ok(n) = self.mem_search.parse::<usize>() {
-                                ui.add(egui::Label::new(format!("0x{}", self.mem_search)));
-                                // ui.label(format!("{}", bus.read_byte(n)));
-                                ui.end_row();
-                            }
-                        });
-                }
+                // ui.heading("Memory");
+                // egui::TextEdit::singleline(&mut self.mem_search)
+                //     .hint_text("Address")
+                //     .char_limit(4)
+                //     .show(ui);
+                // if let Ok(bus) = self.debug_state.bus.read() {
+                //     egui::Grid::new("mem_grid")
+                //         .num_columns(2)
+                //         .striped(true)
+                //         .show(ui, |ui| {
+                //             if let Ok(n) = self.mem_search.parse::<usize>() {
+                //                 ui.add(egui::Label::new(format!("0x{}", self.mem_search)));
+                //                 ui.label(format!("{}", bus.read_byte(n)));
+                //                 ui.end_row();
+                //             }
+                //         });
+                // }
             });
         egui::SidePanel::right("right_panel")
             .resizable(false)
