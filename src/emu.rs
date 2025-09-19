@@ -34,13 +34,17 @@ impl Emu {
     pub fn load_rom(&mut self, rom_path: &String) {
         if let Some(cart) = Cart::insert(rom_path) {
             self.cart = Some(cart);
-            info!("Rom '{}' loaded", rom_path);
+            info!("Rom \"{}\" loaded", rom_path);
         }
     }
 
-    pub fn start(&self) {}
+    pub fn start(&mut self) {
+        self.running = true;
+    }
 
-    pub fn stop(&self) {}
+    pub fn stop(&mut self) {
+        self.running = false;
+    }
 }
 
 pub fn emu_thread(
@@ -60,16 +64,18 @@ pub fn emu_thread(
             match command {
                 Command::Start => {
                     emu.start();
-                    emu.running = true;
                 }
                 Command::Stop => {
                     emu.stop();
-                    emu.running = false;
                 }
             }
         }
 
-        emu.cpu.step();
+        if emu.running
+            && let Some(cart) = emu.cart.as_mut()
+        {
+            emu.cpu.step(&emu.bus, cart);
+        }
         debug_state.update(&emu);
     }
 }

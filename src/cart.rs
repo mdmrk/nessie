@@ -41,7 +41,7 @@ pub struct Header {
 pub struct Cart {
     pub header: Header,
     pub rom: Vec<u8>,
-    pub prg_data: *const [u8],
+    pub prg_data_ptr: *const [u8],
 }
 
 impl Cart {
@@ -51,7 +51,7 @@ impl Cart {
                 let header = unsafe { std::ptr::read(contents.as_ptr() as *const Header) };
                 let rom = contents.clone();
                 let prg_data_size = ByteSize::kib(16).0 as usize * header.prg_rom_size as usize;
-                let prg_data = std::ptr::slice_from_raw_parts(
+                let prg_data_ptr = std::ptr::slice_from_raw_parts(
                     if header.flags6.has_trainer {
                         contents
                             .as_ptr()
@@ -66,7 +66,7 @@ impl Cart {
                 Some(Self {
                     header,
                     rom,
-                    prg_data,
+                    prg_data_ptr,
                 })
             }
             Err(_) => None,
