@@ -1,40 +1,29 @@
 use bytesize::ByteSize;
-use packed_struct::prelude::*;
+use modular_bitfield::prelude::*;
 
-#[derive(PrimitiveEnum_u8, Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Specifier)]
 pub enum NametableArrangement {
     Vertical = 0,
     Horitzontal = 1,
 }
 
-#[repr(C)]
-#[derive(PackedStruct, Clone)]
-#[packed_struct(bit_numbering = "msb0")]
+#[bitfield(bytes = 1)]
+#[derive(Debug, Clone)]
 pub struct Flags6 {
-    #[packed_field(bits = "0", ty = "enum")]
     pub nametable_arrangement: NametableArrangement,
-    #[packed_field(bits = "1")]
     pub has_backed_prg_ram: bool,
-    #[packed_field(bits = "2")]
     pub has_trainer: bool,
-    #[packed_field(bits = "3")]
     pub has_alt_nametable_layout: bool,
-    #[packed_field(bits = "4..=7")]
-    pub mapper_lower: Integer<u8, packed_bits::Bits<4>>,
+    pub mapper_lower: B4,
 }
 
-#[repr(C)]
-#[derive(PackedStruct, Clone)]
-#[packed_struct(bit_numbering = "msb0")]
+#[bitfield(bytes = 1)]
+#[derive(Debug, Clone)]
 pub struct Flags7 {
-    #[packed_field(bits = "0")]
     pub has_vs_unisystem: bool,
-    #[packed_field(bits = "1")]
     pub has_playchoice_10: bool,
-    #[packed_field(bits = "2..=3")]
-    pub this_is_two: Integer<u8, packed_bits::Bits<2>>,
-    #[packed_field(bits = "4..=7")]
-    pub mapper_upper: Integer<u8, packed_bits::Bits<4>>,
+    pub this_is_two: B2,
+    pub mapper_upper: B4,
 }
 
 #[repr(C)]
@@ -45,16 +34,15 @@ pub struct Header {
     pub chr_rom_size: u8,
     pub flags6: Flags6,
     pub flags7: Flags7,
-    pub flags8: u8,  // TODO: Implement properly
+    pub prg_ram_size: u8,
     pub flags9: u8,  // TODO: Implement properly
     pub flags10: u8, // TODO: Implement properly
-    pub _pad: [u8; 5],
+    _pad: [u8; 5],
 }
 
 impl Header {
     pub fn get_mapper(&self) -> u8 {
-        self.flags7.mapper_upper.checked_shl(4).unwrap()
-            | self.flags6.mapper_lower.checked_add(0).unwrap() // TODO: emmm
+        (self.flags7.mapper_upper() as u8) << 4 | self.flags6.mapper_lower()
     }
 }
 
@@ -73,7 +61,7 @@ impl Cart {
                 let rom = contents.clone();
                 let prg_data_size = ByteSize::kib(16).0 as usize * header.prg_rom_size as usize;
                 let prg_data_ptr = std::ptr::slice_from_raw_parts(
-                    if header.flags6.has_trainer {
+                    if !header.flags6.has_trainer() {
                         contents
                             .as_ptr()
                             .wrapping_add(size_of::<Header>())

@@ -1,3 +1,7 @@
+use log::warn;
+
+use crate::{bus::Bus, cart::Cart};
+
 bitflags::bitflags! {
     #[derive(Debug, Clone)]
     pub struct Flags: u8 {
@@ -34,5 +38,20 @@ impl Cpu {
         }
     }
 
-    pub fn step(&mut self) {}
+    fn fetch(&mut self, bus: &Bus, cart: &mut Cart) -> u8 {
+        let pc = self.pc as usize;
+        self.pc += 1;
+        return bus.read_byte(pc, cart);
+    }
+
+    fn execute(&self, opcode: u8, bus: &Bus) {
+        match opcode {
+            _ => warn!("Invalid opcode 0x{:x}", opcode),
+        }
+    }
+
+    pub fn step(&mut self, bus: &Bus, cart: &mut Cart) {
+        let opcode = self.fetch(bus, cart);
+        self.execute(opcode, bus);
+    }
 }

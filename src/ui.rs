@@ -120,7 +120,7 @@ impl Ui {
                 // }
             });
         egui::SidePanel::right("right_panel")
-            .resizable(false)
+            .resizable(true)
             .show(ctx, |ui| {
                 ui.heading("Loaded ROM");
                 if let Ok(cart_header_opt) = self.debug_state.cart_header.read() {
@@ -131,8 +131,8 @@ impl Ui {
                                 String::from_utf8(cart_header.magic.to_vec())
                                     .unwrap_or("".to_string())
                             ));
-                            ui.label(format!("has trainer: {}", cart_header.flags6.has_trainer));
-                            ui.label(format!("mapper: {}", cart_header.get_mapper()));
+                            ui.label(format!("has trainer: {}", cart_header.flags6.has_trainer()));
+                            ui.label(format!("mapper: {:?}", cart_header.get_mapper()));
                             ui.label(format!(
                                 "prg rom size {}",
                                 ByteSize::kib(16) * cart_header.prg_rom_size
