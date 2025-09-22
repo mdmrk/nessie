@@ -5,4 +5,5 @@ pub mod cart;
 pub mod cpu;
 pub mod debug;
 pub mod emu;
+pub mod mapper;
 pub mod ui;

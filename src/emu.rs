@@ -33,6 +33,10 @@ impl Emu {
 
     pub fn load_rom(&mut self, rom_path: &String) {
         if let Some(cart) = Cart::insert(rom_path) {
+            let data = cart.prg_data.get(0..16 * 1024).unwrap();
+            self.bus.write(0x8000, data);
+            let data2 = cart.prg_data.get(16 * 1024 * 15..16 * 1024 * 16).unwrap();
+            self.bus.write(0xBFFF, data2);
             self.cart = Some(cart);
             info!("Rom \"{}\" loaded", rom_path);
         }

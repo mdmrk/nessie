@@ -111,7 +111,7 @@ impl Ui {
                         .num_columns(2)
                         .striped(true)
                         .show(ui, |ui| {
-                            if let Ok(n) = self.mem_search.parse::<usize>() {
+                            if let Ok(n) = usize::from_str_radix(&self.mem_search, 16) {
                                 ui.add(egui::Label::new(format!("0x{}", self.mem_search)));
                                 ui.label(format!("{}", bus.read_byte(n)));
                                 ui.end_row();
