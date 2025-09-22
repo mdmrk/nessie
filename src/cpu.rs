@@ -1,13 +1,14 @@
+use bitflags::bitflags;
 use log::warn;
 
 use crate::{bus::Bus, cart::Cart};
 
-bitflags::bitflags! {
+bitflags! {
     #[derive(Debug, Clone)]
     pub struct Flags: u8 {
         const N = 1 << 7;
         const V = 1 << 6;
-        const _1 = 1 << 5;
+        const _ = 1 << 5;
         const B = 1 << 4;
         const D = 1 << 3;
         const I = 1 << 2;
@@ -31,7 +32,7 @@ impl Cpu {
         Self {
             sp: 0xfd,
             pc: 0xfffc,
-            flags: Flags::from_bits(0b00100100).unwrap(),
+            flags: Flags::I,
             a: 0,
             x: 0,
             y: 0,
