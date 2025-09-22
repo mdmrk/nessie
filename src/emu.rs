@@ -71,10 +71,8 @@ pub fn emu_thread(
             }
         }
 
-        if emu.running
-            && let Some(cart) = emu.cart.as_mut()
-        {
-            emu.cpu.step(&emu.bus, cart);
+        if emu.running {
+            emu.cpu.step(&emu.bus);
         }
         debug_state.update(&emu);
     }

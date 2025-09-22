@@ -1,7 +1,7 @@
 use bitflags::bitflags;
 use log::warn;
 
-use crate::{bus::Bus, cart::Cart};
+use crate::bus::Bus;
 
 bitflags! {
     #[derive(Debug, Clone)]
@@ -39,10 +39,10 @@ impl Cpu {
         }
     }
 
-    fn fetch(&mut self, bus: &Bus, cart: &mut Cart) -> u8 {
+    fn fetch(&mut self, bus: &Bus) -> u8 {
         let pc = self.pc as usize;
         self.pc += 1;
-        return bus.read_byte(pc, cart);
+        return bus.read_byte(pc);
     }
 
     fn execute(&self, opcode: u8, bus: &Bus) {
@@ -51,8 +51,8 @@ impl Cpu {
         }
     }
 
-    pub fn step(&mut self, bus: &Bus, cart: &mut Cart) {
-        let opcode = self.fetch(bus, cart);
+    pub fn step(&mut self, bus: &Bus) {
+        let opcode = self.fetch(bus);
         self.execute(opcode, bus);
     }
 }
