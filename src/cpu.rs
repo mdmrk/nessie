@@ -31,7 +31,7 @@ impl Cpu {
     pub fn new() -> Self {
         Self {
             sp: 0xfd,
-            pc: 0xfffc,
+            pc: 0,
             flags: Flags::I | Flags::_1,
             a: 0,
             x: 0,

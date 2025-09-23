@@ -1,4 +1,7 @@
-use std::sync::{Arc, mpsc};
+use std::{
+    io::Read,
+    sync::{Arc, mpsc},
+};
 
 use log::info;
 
@@ -33,11 +36,15 @@ impl Emu {
 
     pub fn load_rom(&mut self, rom_path: &String) {
         if let Some(cart) = Cart::insert(rom_path) {
-            let data = cart.prg_data.get(0..16 * 1024).unwrap();
+            let size = cart.header.prg_rom_size as usize;
+            let data = cart.prg_data.get(0..size * 1024).unwrap();
             self.bus.write(0x8000, data);
-            let data2 = cart.prg_data.get(16 * 1024 * 15..16 * 1024 * 16).unwrap();
-            self.bus.write(0xBFFF, data2);
+            let offset = (size - 1) * 16 * 1024;
+            let data2 = cart.prg_data.get(offset..offset + 16 * 1024).unwrap();
+            self.bus.write(0xC000, data2);
             self.cart = Some(cart);
+            self.cpu.pc =
+                (self.bus.read_byte(0xfffc) as u16) << 4 as u16 | self.bus.read_byte(0xfffd) as u16;
             info!("Rom \"{}\" loaded", rom_path);
         }
     }

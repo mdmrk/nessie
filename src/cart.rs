@@ -1,4 +1,3 @@
-use bytesize::ByteSize;
 use modular_bitfield::prelude::*;
 
 use crate::mapper::MMC1;
