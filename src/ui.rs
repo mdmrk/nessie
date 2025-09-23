@@ -111,10 +111,16 @@ impl Ui {
                         .num_columns(2)
                         .striped(true)
                         .show(ui, |ui| {
+                            const SHOW_MORE: usize = 5;
+
                             if let Ok(n) = usize::from_str_radix(&self.mem_search, 16) {
-                                ui.add(egui::Label::new(format!("0x{}", self.mem_search)));
-                                ui.label(format!("{}", bus.read_byte(n)));
-                                ui.end_row();
+                                for i in n.checked_sub(SHOW_MORE).unwrap_or(0)
+                                    ..=(n + SHOW_MORE).min(0xffff)
+                                {
+                                    ui.add(egui::Label::new(format!("0x{:x}", i)));
+                                    ui.label(format!("{}", bus.read_byte(i)));
+                                    ui.end_row();
+                                }
                             }
                         });
                 }
