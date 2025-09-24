@@ -5,11 +5,14 @@ use std::sync::{Arc, mpsc};
 use crate::{cpu::Flags, debug::DebugState, emu::Command};
 
 pub struct Ui {
-    command_tx: mpsc::Sender<Command>,
+    pub command_tx: mpsc::Sender<Command>,
 
     debug_state: Arc<DebugState>,
 
     mem_search: String,
+
+    pub running: bool,
+    pub paused: bool,
 }
 
 impl Ui {
@@ -18,10 +21,12 @@ impl Ui {
             command_tx: command_tx,
             debug_state: debug_state,
             mem_search: "".to_string(),
+            running: true,
+            paused: false,
         }
     }
 
-    fn send_command(&self, command: Command) {
+    pub fn send_command(&self, command: Command) {
         if let Err(e) = self.command_tx.send(command) {
             error!("{e}");
         }
@@ -36,12 +41,29 @@ impl Ui {
                     }
                 });
                 ui.menu_button("Emulator", |ui| {
-                    if ui.button("Start").clicked() {
-                        self.send_command(Command::Start);
-                    }
-                    if ui.button("Stop").clicked() {
-                        self.send_command(Command::Stop);
-                    }
+                    ui.add_enabled_ui(self.paused, |ui| {
+                        if ui.button("Step").clicked() {
+                            self.send_command(Command::Step);
+                        }
+                    });
+                    ui.add_enabled_ui(self.paused, |ui| {
+                        if ui.button("Resume").clicked() {
+                            self.send_command(Command::Resume);
+                            self.paused = false;
+                        }
+                    });
+                    ui.add_enabled_ui(!self.paused, |ui| {
+                        if ui.button("Pause").clicked() {
+                            self.send_command(Command::Pause);
+                            self.paused = true;
+                        }
+                    });
+                    ui.add_enabled_ui(self.running, |ui| {
+                        if ui.button("Stop").clicked() {
+                            self.send_command(Command::Stop);
+                            self.running = false;
+                        }
+                    });
                 });
             });
         });

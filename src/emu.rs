@@ -8,20 +8,25 @@ use log::info;
 use crate::{args::Args, bus::Bus, cart::Cart, cpu::Cpu, debug::DebugState};
 
 pub enum Command {
-    Start,
     Stop,
+    Pause,
+    Resume,
+    Step,
 }
 
 pub enum Event {
-    Started,
     Stopped,
+    Paused,
+    Resumed,
 }
 
 pub struct Emu {
     pub cpu: Cpu,
     pub bus: Bus,
-    pub running: bool,
     pub cart: Option<Cart>,
+    pub running: bool,
+    pub paused: bool,
+    pub want_step: bool,
 }
 
 impl Emu {
@@ -31,6 +36,8 @@ impl Emu {
             bus: Bus::new(),
             cart: None,
             running: true,
+            paused: false,
+            want_step: false,
         }
     }
 
@@ -57,21 +64,24 @@ impl Emu {
         }
     }
 
-    pub fn start(&mut self) {
-        self.running = true;
-    }
-
     pub fn stop(&mut self) {
         self.running = false;
     }
+
+    pub fn pause(&mut self) {
+        self.paused = true;
+    }
+
+    pub fn resume(&mut self) {
+        self.paused = false;
+    }
+
+    pub fn step(&mut self) {
+        self.want_step = true;
+    }
 }
 
-pub fn emu_thread(
-    command_rx: mpsc::Receiver<Command>,
-    _event_tx: mpsc::Sender<Event>,
-    debug_state: Arc<DebugState>,
-    args: &Args,
-) {
+pub fn emu_thread(command_rx: mpsc::Receiver<Command>, debug_state: Arc<DebugState>, args: &Args) {
     let mut emu = Emu::new();
 
     if let Some(rom) = &args.rom {
@@ -81,21 +91,39 @@ pub fn emu_thread(
     loop {
         while let Ok(command) = command_rx.try_recv() {
             match command {
-                Command::Start => {
-                    emu.start();
-                }
                 Command::Stop => {
                     emu.stop();
+                }
+                Command::Pause => {
+                    emu.pause();
+                }
+                Command::Resume => {
+                    emu.resume();
+                }
+                Command::Step => {
+                    emu.step();
                 }
             }
         }
 
         if emu.running {
-            println!(
-                "{:04X}  4C F5 C5  JMP $C5F5                       A:00 X:00 Y:00 P:24 SP:FD PPU:  0, 21 CYC:7",
-                emu.cpu.pc
-            );
-            emu.cpu.step(&emu.bus);
+            if emu.paused {
+                if emu.want_step {
+                    println!(
+                        "{:04X}  4C F5 C5  JMP $C5F5                       A:00 X:00 Y:00 P:24 SP:FD PPU:  0, 21 CYC:7",
+                        emu.cpu.pc
+                    );
+                    emu.cpu.step(&emu.bus);
+                    emu.want_step = false;
+                }
+            } else {
+                // FIXME: duplicate code
+                println!(
+                    "{:04X}  4C F5 C5  JMP $C5F5                       A:00 X:00 Y:00 P:24 SP:FD PPU:  0, 21 CYC:7",
+                    emu.cpu.pc
+                );
+                emu.cpu.step(&emu.bus);
+            }
         }
         debug_state.update(&emu);
     }
