@@ -3,6 +3,83 @@ use log::warn;
 
 use crate::bus::Bus;
 
+pub enum OpcodeMnemonic {
+    LDA,
+    STA,
+    LDX,
+    STX,
+    LDY,
+    STY,
+    TAX,
+    TXA,
+    TAY,
+    TYA,
+    ADC,
+    SBC,
+    INC,
+    DEC,
+    INX,
+    DEX,
+    INY,
+    DEY,
+    ASL,
+    LSR,
+    ROL,
+    ROR,
+    AND,
+    ORA,
+    EOR,
+    BIT,
+    CMP,
+    CPX,
+    CPY,
+    BCC,
+    BCS,
+    BEQ,
+    BNE,
+    BPL,
+    BMI,
+    BVC,
+    BVS,
+    JMP,
+    JSR,
+    RTS,
+    BRK,
+    RTI,
+    PHA,
+    PLA,
+    PHP,
+    PLP,
+    TXS,
+    TSX,
+    CLC,
+    SEC,
+    CLI,
+    SEI,
+    CLD,
+    SED,
+    CLV,
+}
+
+pub struct Op {
+    pub mnemonic: OpcodeMnemonic,
+    pub bytes: u8,
+    pub cycles: u8,
+}
+
+impl Op {
+    pub fn from_opcode(opcode: u8) -> Option<Self> {
+        match opcode {
+            0x4C => Some(Op {
+                mnemonic: OpcodeMnemonic::JMP,
+                bytes: 3,
+                cycles: 3,
+            }),
+            _ => None,
+        }
+    }
+}
+
 bitflags! {
     #[derive(Debug, Clone)]
     pub struct Flags: u8 {
@@ -18,6 +95,18 @@ bitflags! {
 }
 
 #[derive(Clone)]
+pub enum AddressingMode {
+    Immediate,
+    ZeroPage,
+    ZeroPageX,
+    Absolute,
+    AbsoluteX,
+    AbsoluteY,
+    IndirectX,
+    IndirectY,
+}
+
+#[derive(Clone)]
 pub struct Cpu {
     pub sp: u8,
     pub pc: u16,
@@ -25,6 +114,7 @@ pub struct Cpu {
     pub a: u8,
     pub x: u8,
     pub y: u8,
+    pub mode: AddressingMode,
 }
 
 impl Cpu {
@@ -36,6 +126,7 @@ impl Cpu {
             a: 0,
             x: 0,
             y: 0,
+            mode: AddressingMode::Immediate,
         }
     }
 
@@ -46,8 +137,17 @@ impl Cpu {
     }
 
     fn execute(&self, opcode: u8, bus: &Bus) {
-        match opcode {
-            _ => warn!("Invalid opcode 0x{:x}", opcode),
+        let op = Op::from_opcode(opcode);
+
+        match op {
+            Some(op) => match op {
+                _ => {
+                    warn!("Not implemented opcode 0x{:04X}", opcode);
+                }
+            },
+            None => {
+                warn!("Not found opcode 0x{:04X}", opcode);
+            }
         }
     }
 

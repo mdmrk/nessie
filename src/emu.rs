@@ -30,7 +30,7 @@ impl Emu {
             cpu: Cpu::new(),
             bus: Bus::new(),
             cart: None,
-            running: false,
+            running: true,
         }
     }
 
@@ -91,6 +91,10 @@ pub fn emu_thread(
         }
 
         if emu.running {
+            println!(
+                "{:04X}  4C F5 C5  JMP $C5F5                       A:00 X:00 Y:00 P:24 SP:FD PPU:  0, 21 CYC:7",
+                emu.cpu.pc
+            );
             emu.cpu.step(&emu.bus);
         }
         debug_state.update(&emu);
