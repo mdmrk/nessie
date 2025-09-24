@@ -3,6 +3,8 @@ use std::{
     thread,
 };
 
+use egui::{Key, KeyboardShortcut};
+
 use crate::{
     args::Args,
     debug::DebugState,
@@ -34,10 +36,27 @@ impl App {
 
         Self { ui }
     }
+
+    fn listen_shortcuts(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let shortcuts: &[KeyboardShortcut] = &[
+            // Step
+            KeyboardShortcut {
+                modifiers: Default::default(),
+                logical_key: Key::ArrowDown,
+            },
+        ];
+
+        ctx.input(|i| {
+            for shortcut in shortcuts {
+                if i.consume_shortcut(shortcut) {}
+            }
+        });
+    }
 }
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        self.listen_shortcuts(ctx, frame);
         self.ui.draw(ctx, frame);
     }
 }
