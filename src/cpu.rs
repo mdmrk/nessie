@@ -1,7 +1,7 @@
 use core::fmt;
 
 use bitflags::bitflags;
-use log::warn;
+use log::{debug, warn};
 
 use crate::bus::Bus;
 
@@ -159,8 +159,8 @@ impl Cpu {
 
     fn execute(&mut self, opcode: u8, op: Op, bus: &Bus) {
         let all_bytes = bus.read(self.pc, op.bytes);
-        println!(
-            "{:04X}  {:9} {} ${:26} A:{:02} X:{:02} Y:{:02} P:{:02} SP:{:02X} PPU:  0, 21 CYC:{}",
+        debug!(
+            "{:04X}  {:9} {} ${:26} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:  0, 21 CYC:{}",
             self.pc,
             all_bytes
                 .iter()

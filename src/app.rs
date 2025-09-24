@@ -5,16 +5,11 @@ use std::{
 
 use egui::{Key, KeyboardShortcut};
 
-use crate::{
-    args::Args,
-    debug::DebugState,
-    emu::{Command, emu_thread},
-    ui::Ui,
-};
+use crate::{args::Args, debug::DebugState, emu::emu_thread, ui::Ui};
 
 struct Shortcut {
+    name: &'static str,
     keyboard_shortcut: KeyboardShortcut,
-    callback: Box<dyn Fn()>,
 }
 
 pub struct App {
@@ -42,21 +37,23 @@ impl App {
     }
 
     fn listen_shortcuts(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let shortcuts: &[Shortcut] = &[
-            // Step
-            Shortcut {
-                keyboard_shortcut: KeyboardShortcut {
-                    modifiers: Default::default(),
-                    logical_key: Key::ArrowDown,
-                },
-                callback: Box::new(|| {}),
+        let shortcuts: &[Shortcut] = &[Shortcut {
+            name: "step",
+            keyboard_shortcut: KeyboardShortcut {
+                modifiers: Default::default(),
+                logical_key: Key::ArrowRight,
             },
-        ];
+        }];
 
         ctx.input_mut(|i| {
             for shortcut in shortcuts {
                 if i.consume_shortcut(&shortcut.keyboard_shortcut) {
-                    (shortcut.callback)();
+                    match shortcut.name {
+                        "step" => {
+                            self.ui.emu_step();
+                        }
+                        _ => {}
+                    }
                 }
             }
         });
