@@ -1,7 +1,5 @@
 use modular_bitfield::prelude::*;
 
-use crate::mapper::MMC1;
-
 #[derive(Clone, Copy, Debug, Specifier)]
 pub enum NametableArrangement {
     Vertical = 0,
@@ -84,7 +82,6 @@ pub struct Cart {
     pub header: Header,
     pub rom: Vec<u8>,
     pub prg_data: Vec<u8>,
-    pub mapper: MMC1,
 }
 
 impl Cart {
@@ -105,7 +102,6 @@ impl Cart {
                     header,
                     rom,
                     prg_data,
-                    mapper: MMC1::new(),
                 })
             }
             Err(_) => None,
