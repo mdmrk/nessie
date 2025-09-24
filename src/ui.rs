@@ -5,14 +5,14 @@ use std::sync::{Arc, mpsc};
 use crate::{cpu::Flags, debug::DebugState, emu::Command};
 
 pub struct Ui {
-    pub command_tx: mpsc::Sender<Command>,
+    command_tx: mpsc::Sender<Command>,
 
     debug_state: Arc<DebugState>,
 
     mem_search: String,
 
-    pub running: bool,
-    pub paused: bool,
+    running: bool,
+    paused: bool,
 }
 
 impl Ui {
@@ -32,6 +32,26 @@ impl Ui {
         }
     }
 
+    pub fn emu_step(&mut self) {
+        self.send_command(Command::Step);
+    }
+
+    pub fn emu_resume(&mut self) {
+        self.paused = false;
+        self.send_command(Command::Resume);
+    }
+
+    pub fn emu_pause(&mut self) {
+        self.paused = true;
+        self.send_command(Command::Pause);
+    }
+
+    pub fn emu_stop(&mut self) {
+        // TODO: define stop ??
+        self.send_command(Command::Stop);
+        self.running = false;
+    }
+
     pub fn draw(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::TopBottomPanel::top("menubar").show(ctx, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
@@ -43,25 +63,22 @@ impl Ui {
                 ui.menu_button("Emulator", |ui| {
                     ui.add_enabled_ui(self.paused, |ui| {
                         if ui.button("Step").clicked() {
-                            self.send_command(Command::Step);
+                            self.emu_step();
                         }
                     });
                     ui.add_enabled_ui(self.paused, |ui| {
                         if ui.button("Resume").clicked() {
-                            self.send_command(Command::Resume);
-                            self.paused = false;
+                            self.emu_resume();
                         }
                     });
                     ui.add_enabled_ui(!self.paused, |ui| {
                         if ui.button("Pause").clicked() {
-                            self.send_command(Command::Pause);
-                            self.paused = true;
+                            self.emu_pause();
                         }
                     });
                     ui.add_enabled_ui(self.running, |ui| {
                         if ui.button("Stop").clicked() {
-                            self.send_command(Command::Stop);
-                            self.running = false;
+                            self.emu_stop();
                         }
                     });
                 });

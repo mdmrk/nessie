@@ -12,6 +12,11 @@ use crate::{
     ui::Ui,
 };
 
+struct Shortcut {
+    keyboard_shortcut: KeyboardShortcut,
+    callback: Box<dyn Fn()>,
+}
+
 pub struct App {
     ui: Ui,
 }
@@ -30,25 +35,29 @@ impl App {
 
         let mut ui = Ui::new(command_tx, debug_state);
         if args.pause {
-            ui.send_command(Command::Pause);
-            ui.paused = true;
+            ui.emu_pause();
         }
 
         Self { ui }
     }
 
     fn listen_shortcuts(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let shortcuts: &[KeyboardShortcut] = &[
+        let shortcuts: &[Shortcut] = &[
             // Step
-            KeyboardShortcut {
-                modifiers: Default::default(),
-                logical_key: Key::ArrowDown,
+            Shortcut {
+                keyboard_shortcut: KeyboardShortcut {
+                    modifiers: Default::default(),
+                    logical_key: Key::ArrowDown,
+                },
+                callback: Box::new(|| {}),
             },
         ];
 
-        ctx.input(|i| {
+        ctx.input_mut(|i| {
             for shortcut in shortcuts {
-                if i.consume_shortcut(shortcut) {}
+                if i.consume_shortcut(&shortcut.keyboard_shortcut) {
+                    (shortcut.callback)();
+                }
             }
         });
     }
