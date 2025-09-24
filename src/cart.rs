@@ -58,7 +58,7 @@ pub struct Flags10 {
 }
 
 #[repr(C)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Header {
     pub magic: [u8; 4],
     pub prg_rom_size: u8,
@@ -91,7 +91,7 @@ impl Cart {
                 let header = unsafe { std::ptr::read(contents.as_ptr() as *const Header) };
                 let rom = contents.clone();
                 let prg_data_size = 16 * 1024 * header.prg_rom_size as usize;
-                let prg_data_offset = if !header.flags6.has_trainer() {
+                let prg_data_offset = if header.flags6.has_trainer() {
                     size_of::<Header>() + 512
                 } else {
                     size_of::<Header>()
