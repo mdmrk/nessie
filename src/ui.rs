@@ -52,23 +52,28 @@ impl Ui {
                 if let Ok(cpu) = self.debug_state.cpu.read() {
                     ui.heading("CPU");
                     egui::Grid::new("cpu_grid")
-                        .num_columns(2)
+                        .num_columns(3)
                         .striped(true)
                         .show(ui, |ui| {
                             ui.add(egui::Label::new("sp"));
                             ui.label(format!("{}", cpu.sp));
+                            ui.label(format!("0x{:X}", cpu.sp));
                             ui.end_row();
                             ui.add(egui::Label::new("pc"));
                             ui.label(format!("{}", cpu.pc));
+                            ui.label(format!("0x{:X}", cpu.pc));
                             ui.end_row();
                             ui.add(egui::Label::new("a"));
                             ui.label(format!("{}", cpu.a));
+                            ui.label(format!("0x{:X}", cpu.a));
                             ui.end_row();
                             ui.add(egui::Label::new("x"));
                             ui.label(format!("{}", cpu.x));
+                            ui.label(format!("0x{:X}", cpu.x));
                             ui.end_row();
                             ui.add(egui::Label::new("y"));
                             ui.label(format!("{}", cpu.y));
+                            ui.label(format!("0x{:X}", cpu.y));
                             ui.end_row();
                         });
                     let flags = [
