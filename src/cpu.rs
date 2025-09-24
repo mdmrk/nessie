@@ -109,6 +109,10 @@ bitflags! {
     }
 }
 
+fn form_u16(bytes: &[u8]) -> u16 {
+    ((bytes[2] as u16) << 8) | bytes[1] as u16
+}
+
 #[derive(Clone)]
 pub enum AddressingMode {
     Immediate,
@@ -180,14 +184,16 @@ impl Cpu {
             self.cycle_count
         );
 
+        self.pc += op.bytes;
         match op.mnemonic {
-            OpMnemonic::JMP => {}
+            OpMnemonic::JMP => {
+                let pc = form_u16(all_bytes);
+                self.pc = pc;
+            }
             _ => {
                 warn!("Not implemented opcode 0x{:04X}", opcode);
             }
         };
-
-        self.pc += op.bytes;
         self.cycle_count += op.cycles;
     }
 
