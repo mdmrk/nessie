@@ -109,19 +109,10 @@ pub fn emu_thread(command_rx: mpsc::Receiver<Command>, debug_state: Arc<DebugSta
         if emu.running {
             if emu.paused {
                 if emu.want_step {
-                    println!(
-                        "{:04X}  4C F5 C5  JMP $C5F5                       A:00 X:00 Y:00 P:24 SP:FD PPU:  0, 21 CYC:7",
-                        emu.cpu.pc
-                    );
                     emu.cpu.step(&emu.bus);
                     emu.want_step = false;
                 }
             } else {
-                // FIXME: duplicate code
-                println!(
-                    "{:04X}  4C F5 C5  JMP $C5F5                       A:00 X:00 Y:00 P:24 SP:FD PPU:  0, 21 CYC:7",
-                    emu.cpu.pc
-                );
                 emu.cpu.step(&emu.bus);
             }
         }

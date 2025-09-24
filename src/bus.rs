@@ -12,6 +12,10 @@ impl Bus {
         self.mem[addr]
     }
 
+    pub fn read(&self, addr: u16, bytes: u16) -> &[u8] {
+        &self.mem[addr as usize..addr as usize + bytes as usize]
+    }
+
     pub fn write_byte(&mut self, addr: usize, value: u8) {
         self.mem[addr] = value;
     }

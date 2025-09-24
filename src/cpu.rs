@@ -1,9 +1,22 @@
+use core::fmt;
+
 use bitflags::bitflags;
 use log::warn;
 
 use crate::bus::Bus;
 
-pub enum OpcodeMnemonic {
+macro_rules! op {
+    ($mnemonic:expr, $bytes:expr, $cycles:expr) => {
+        Some(Op {
+            mnemonic: $mnemonic,
+            bytes: $bytes,
+            cycles: $cycles,
+        })
+    };
+}
+
+#[derive(Debug)]
+pub enum OpMnemonic {
     LDA,
     STA,
     LDX,
@@ -61,20 +74,22 @@ pub enum OpcodeMnemonic {
     CLV,
 }
 
+impl fmt::Display for OpMnemonic {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 pub struct Op {
-    pub mnemonic: OpcodeMnemonic,
-    pub bytes: u8,
-    pub cycles: u8,
+    pub mnemonic: OpMnemonic,
+    pub bytes: u16,
+    pub cycles: usize,
 }
 
 impl Op {
     pub fn from_opcode(opcode: u8) -> Option<Self> {
         match opcode {
-            0x4C => Some(Op {
-                mnemonic: OpcodeMnemonic::JMP,
-                bytes: 3,
-                cycles: 3,
-            }),
+            0x4C => op!(OpMnemonic::JMP, 3, 3),
             _ => None,
         }
     }
@@ -110,11 +125,12 @@ pub enum AddressingMode {
 pub struct Cpu {
     pub sp: u8,
     pub pc: u16,
-    pub flags: Flags,
+    pub p: Flags,
     pub a: u8,
     pub x: u8,
     pub y: u8,
     pub mode: AddressingMode,
+    pub cycle_count: usize,
 }
 
 impl Cpu {
@@ -122,37 +138,66 @@ impl Cpu {
         Self {
             sp: 0xfd,
             pc: 0,
-            flags: Flags::I | Flags::_1,
+            p: Flags::I | Flags::_1,
             a: 0,
             x: 0,
             y: 0,
             mode: AddressingMode::Immediate,
+            cycle_count: 0,
         }
     }
 
-    fn fetch(&mut self, bus: &Bus) -> u8 {
-        let pc = self.pc as usize;
-        self.pc += 1;
-        return bus.read_byte(pc);
+    fn fetch(&self, bus: &Bus) -> u8 {
+        let opcode = bus.read_byte(self.pc as usize);
+        opcode
     }
 
-    fn execute(&self, opcode: u8, bus: &Bus) {
+    fn decode(&self, opcode: u8) -> Option<Op> {
         let op = Op::from_opcode(opcode);
+        op
+    }
 
-        match op {
-            Some(op) => match op {
-                _ => {
-                    warn!("Not implemented opcode 0x{:04X}", opcode);
-                }
+    fn execute(&mut self, opcode: u8, op: Op, bus: &Bus) {
+        let all_bytes = bus.read(self.pc, op.bytes);
+        println!(
+            "{:04X}  {:9} {} ${:26} A:{:02} X:{:02} Y:{:02} P:{:02} SP:{:02X} PPU:  0, 21 CYC:{}",
+            self.pc,
+            all_bytes
+                .iter()
+                .map(|c| format!("{:02X}", c))
+                .collect::<Vec<String>>()
+                .join(" "),
+            op.mnemonic,
+            match op.bytes {
+                3 => format!("{:X}{:X}", all_bytes[2], all_bytes[1]),
+                _ => "".to_string(),
             },
-            None => {
-                warn!("Not found opcode 0x{:04X}", opcode);
+            self.a,
+            self.x,
+            self.y,
+            self.p.bits(),
+            self.sp,
+            self.cycle_count
+        );
+
+        match op.mnemonic {
+            OpMnemonic::JMP => {}
+            _ => {
+                warn!("Not implemented opcode 0x{:04X}", opcode);
             }
-        }
+        };
+
+        self.pc += op.bytes;
+        self.cycle_count += op.cycles;
     }
 
     pub fn step(&mut self, bus: &Bus) {
         let opcode = self.fetch(bus);
-        self.execute(opcode, bus);
+        let op = self.decode(opcode);
+
+        match op {
+            Some(op) => self.execute(opcode, op, bus),
+            None => warn!("Not found opcode 0x{:04X}", opcode),
+        }
     }
 }

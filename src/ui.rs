@@ -133,7 +133,7 @@ impl Ui {
                             }
                             ui.end_row();
                             for flag in flags {
-                                if cpu.flags.contains(flag.0) {
+                                if cpu.p.contains(flag.0) {
                                     ui.label("✔");
                                 } else {
                                     ui.label("-");
@@ -152,7 +152,7 @@ impl Ui {
                     .show(ui);
                 if let Ok(bus) = self.debug_state.bus.read() {
                     egui::Grid::new("mem_grid")
-                        .num_columns(2)
+                        .num_columns(3)
                         .striped(true)
                         .show(ui, |ui| {
                             const SHOW_MORE: usize = 5;
@@ -163,6 +163,7 @@ impl Ui {
                                 {
                                     ui.add(egui::Label::new(format!("0x{:x}", i)));
                                     ui.label(format!("{}", bus.read_byte(i)));
+                                    ui.label(format!("0x{:02X}", bus.read_byte(i)));
                                     ui.end_row();
                                 }
                             }
