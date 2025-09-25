@@ -89,7 +89,61 @@ pub struct Op {
 impl Op {
     pub fn from_opcode(opcode: u8) -> Option<Self> {
         match opcode {
+            // 0x00 => op!(OpMnemonic::LDA, 0, 0),
+            // 0x00 => op!(OpMnemonic::STA, 0, 0),
+            0xA2 => op!(OpMnemonic::LDX, 2, 2),
+            0x86 => op!(OpMnemonic::STX, 2, 3),
+            // 0x00 => op!(OpMnemonic::LDY, 0, 0),
+            // 0x00 => op!(OpMnemonic::STY, 0, 0),
+            // 0x00 => op!(OpMnemonic::TAX, 0, 0),
+            // 0x00 => op!(OpMnemonic::TXA, 0, 0),
+            // 0x00 => op!(OpMnemonic::TAY, 0, 0),
+            // 0x00 => op!(OpMnemonic::TYA, 0, 0),
+            // 0x00 => op!(OpMnemonic::ADC, 0, 0),
+            // 0x00 => op!(OpMnemonic::SBC, 0, 0),
+            // 0x00 => op!(OpMnemonic::INC, 0, 0),
+            // 0x00 => op!(OpMnemonic::DEC, 0, 0),
+            // 0x00 => op!(OpMnemonic::INX, 0, 0),
+            // 0x00 => op!(OpMnemonic::DEX, 0, 0),
+            // 0x00 => op!(OpMnemonic::INY, 0, 0),
+            // 0x00 => op!(OpMnemonic::DEY, 0, 0),
+            // 0x00 => op!(OpMnemonic::ASL, 0, 0),
+            // 0x00 => op!(OpMnemonic::LSR, 0, 0),
+            // 0x00 => op!(OpMnemonic::ROL, 0, 0),
+            // 0x00 => op!(OpMnemonic::ROR, 0, 0),
+            // 0x00 => op!(OpMnemonic::AND, 0, 0),
+            // 0x00 => op!(OpMnemonic::ORA, 0, 0),
+            // 0x00 => op!(OpMnemonic::EOR, 0, 0),
+            // 0x00 => op!(OpMnemonic::BIT, 0, 0),
+            // 0x00 => op!(OpMnemonic::CMP, 0, 0),
+            // 0x00 => op!(OpMnemonic::CPX, 0, 0),
+            // 0x00 => op!(OpMnemonic::CPY, 0, 0),
+            // 0x00 => op!(OpMnemonic::BCC, 0, 0),
+            // 0x00 => op!(OpMnemonic::BCS, 0, 0),
+            // 0x00 => op!(OpMnemonic::BEQ, 0, 0),
+            // 0x00 => op!(OpMnemonic::BNE, 0, 0),
+            // 0x00 => op!(OpMnemonic::BPL, 0, 0),
+            // 0x00 => op!(OpMnemonic::BMI, 0, 0),
+            // 0x00 => op!(OpMnemonic::BVC, 0, 0),
+            // 0x00 => op!(OpMnemonic::BVS, 0, 0),
             0x4C => op!(OpMnemonic::JMP, 3, 3),
+            0x20 => op!(OpMnemonic::JSR, 3, 6),
+            // 0x00 => op!(OpMnemonic::RTS, 0, 0),
+            // 0x00 => op!(OpMnemonic::BRK, 0, 0),
+            // 0x00 => op!(OpMnemonic::RTI, 0, 0),
+            // 0x00 => op!(OpMnemonic::PHA, 0, 0),
+            // 0x00 => op!(OpMnemonic::PLA, 0, 0),
+            // 0x00 => op!(OpMnemonic::PHP, 0, 0),
+            // 0x00 => op!(OpMnemonic::PLP, 0, 0),
+            // 0x00 => op!(OpMnemonic::TXS, 0, 0),
+            // 0x00 => op!(OpMnemonic::TSX, 0, 0),
+            // 0x00 => op!(OpMnemonic::CLC, 0, 0),
+            // 0x00 => op!(OpMnemonic::SEC, 0, 0),
+            // 0x00 => op!(OpMnemonic::CLI, 0, 0),
+            // 0x00 => op!(OpMnemonic::SEI, 0, 0),
+            // 0x00 => op!(OpMnemonic::CLD, 0, 0),
+            // 0x00 => op!(OpMnemonic::SED, 0, 0),
+            // 0x00 => op!(OpMnemonic::CLV, 0, 0),
             _ => None,
         }
     }
@@ -135,6 +189,7 @@ pub struct Cpu {
     pub y: u8,
     pub mode: AddressingMode,
     pub cycle_count: usize,
+    pub stack: [u8; 256],
 }
 
 impl Cpu {
@@ -148,6 +203,7 @@ impl Cpu {
             y: 0,
             mode: AddressingMode::Immediate,
             cycle_count: 0,
+            stack: [0; 256],
         }
     }
 
@@ -161,7 +217,7 @@ impl Cpu {
         op
     }
 
-    fn execute(&mut self, opcode: u8, op: Op, bus: &Bus) {
+    fn execute(&mut self, opcode: u8, op: Op, bus: &mut Bus) {
         let all_bytes = bus.read(self.pc, op.bytes);
         debug!(
             "{:04X}  {:9} {} ${:26} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:  0, 21 CYC:{}",
@@ -186,10 +242,76 @@ impl Cpu {
 
         self.pc += op.bytes;
         match op.mnemonic {
+            // OpMnemonic::LDA => {},
+            // OpMnemonic::STA => {},
+            OpMnemonic::LDX => {
+                let imm = all_bytes[1];
+                self.x = imm;
+                self.p.set(Flags::Z, self.x == 0);
+                self.p.set(Flags::N, (self.x >> 7) & 1 == 1);
+            }
+            OpMnemonic::STX => {
+                let low_byte = all_bytes[1];
+                let addr = low_byte as usize;
+                bus.write_byte(addr, self.x);
+            }
+            // OpMnemonic::LDY => {},
+            // OpMnemonic::STY => {},
+            // OpMnemonic::TAX => {},
+            // OpMnemonic::TXA => {},
+            // OpMnemonic::TAY => {},
+            // OpMnemonic::TYA => {},
+            // OpMnemonic::ADC => {},
+            // OpMnemonic::SBC => {},
+            // OpMnemonic::INC => {},
+            // OpMnemonic::DEC => {},
+            // OpMnemonic::INX => {},
+            // OpMnemonic::DEX => {},
+            // OpMnemonic::INY => {},
+            // OpMnemonic::DEY => {},
+            // OpMnemonic::ASL => {},
+            // OpMnemonic::LSR => {},
+            // OpMnemonic::ROL => {},
+            // OpMnemonic::ROR => {},
+            // OpMnemonic::AND => {},
+            // OpMnemonic::ORA => {},
+            // OpMnemonic::EOR => {},
+            // OpMnemonic::BIT => {},
+            // OpMnemonic::CMP => {},
+            // OpMnemonic::CPX => {},
+            // OpMnemonic::CPY => {},
+            // OpMnemonic::BCC => {},
+            // OpMnemonic::BCS => {},
+            // OpMnemonic::BEQ => {},
+            // OpMnemonic::BNE => {},
+            // OpMnemonic::BPL => {},
+            // OpMnemonic::BMI => {},
+            // OpMnemonic::BVC => {},
+            // OpMnemonic::BVS => {},
+            //
             OpMnemonic::JMP => {
                 let pc = form_u16(all_bytes);
                 self.pc = pc;
             }
+            OpMnemonic::JSR => {
+                let addr = form_u16(all_bytes);
+            }
+            // OpMnemonic::RTS => {},
+            // OpMnemonic::BRK => {},
+            // OpMnemonic::RTI => {},
+            // OpMnemonic::PHA => {},
+            // OpMnemonic::PLA => {},
+            // OpMnemonic::PHP => {},
+            // OpMnemonic::PLP => {},
+            // OpMnemonic::TXS => {},
+            // OpMnemonic::TSX => {},
+            // OpMnemonic::CLC => {},
+            // OpMnemonic::SEC => {},
+            // OpMnemonic::CLI => {},
+            // OpMnemonic::SEI => {},
+            // OpMnemonic::CLD => {},
+            // OpMnemonic::SED => {},
+            // OpMnemonic::CLV => {},
             _ => {
                 warn!("Not implemented opcode 0x{:04X}", opcode);
             }
@@ -197,7 +319,7 @@ impl Cpu {
         self.cycle_count += op.cycles;
     }
 
-    pub fn step(&mut self, bus: &Bus) {
+    pub fn step(&mut self, bus: &mut Bus) {
         let opcode = self.fetch(bus);
         let op = self.decode(opcode);
 

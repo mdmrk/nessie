@@ -106,15 +106,10 @@ pub fn emu_thread(command_rx: mpsc::Receiver<Command>, debug_state: Arc<DebugSta
             }
         }
 
-        if emu.running {
-            if emu.paused {
-                if emu.want_step {
-                    emu.cpu.step(&emu.bus);
-                    emu.want_step = false;
-                }
-            } else {
-                emu.cpu.step(&emu.bus);
-            }
+        let should_run = emu.running && (emu.paused && emu.want_step || !emu.paused);
+        if should_run {
+            emu.cpu.step(&mut emu.bus);
+            emu.want_step = false;
         }
         debug_state.update(&emu);
     }
