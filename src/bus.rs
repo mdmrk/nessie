@@ -3,6 +3,12 @@ pub struct Bus {
     mem: [u8; 0x10000],
 }
 
+impl Default for Bus {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Bus {
     pub fn new() -> Self {
         Self { mem: [0; 0x10000] }

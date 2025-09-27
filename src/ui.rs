@@ -18,8 +18,8 @@ pub struct Ui {
 impl Ui {
     pub fn new(command_tx: mpsc::Sender<Command>, debug_state: Arc<DebugState>) -> Self {
         Self {
-            command_tx: command_tx,
-            debug_state: debug_state,
+            command_tx,
+            debug_state,
             mem_search: "".to_string(),
             running: true,
             paused: false,
@@ -158,9 +158,7 @@ impl Ui {
                             const SHOW_MORE: usize = 5;
 
                             if let Ok(n) = usize::from_str_radix(&self.mem_search, 16) {
-                                for i in n.checked_sub(SHOW_MORE).unwrap_or(0)
-                                    ..=(n + SHOW_MORE).min(0xffff)
-                                {
+                                for i in n.saturating_sub(SHOW_MORE)..=(n + SHOW_MORE).min(0xffff) {
                                     ui.add(egui::Label::new(format!("0x{:x}", i)));
                                     ui.label(format!("{}", bus.read_byte(i)));
                                     ui.label(format!("0x{:02X}", bus.read_byte(i)));
@@ -177,11 +175,11 @@ impl Ui {
                 if let Ok(cart_header_opt) = self.debug_state.cart_header.read() {
                     match &*cart_header_opt {
                         Some(cart_header) => {
-                            ui.label(format!(
-                                "{}",
+                            ui.label(
                                 String::from_utf8(cart_header.magic.to_vec())
                                     .unwrap_or("".to_string())
-                            ));
+                                    .to_string(),
+                            );
                             ui.label(format!("has trainer: {}", cart_header.flags6.has_trainer()));
                             ui.label(format!("mapper: {:?}", cart_header.get_mapper()));
                             ui.label(format!(

@@ -47,13 +47,8 @@ impl App {
 
         ctx.input_mut(|i| {
             for shortcut in shortcuts {
-                if i.consume_shortcut(&shortcut.keyboard_shortcut) {
-                    match shortcut.name {
-                        "step" => {
-                            self.ui.emu_step();
-                        }
-                        _ => {}
-                    }
+                if i.consume_shortcut(&shortcut.keyboard_shortcut) && shortcut.name == "step" {
+                    self.ui.emu_step();
                 }
             }
         });

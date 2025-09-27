@@ -8,6 +8,12 @@ pub struct DebugState {
     pub cart_header: RwLock<Option<Header>>,
 }
 
+impl Default for DebugState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DebugState {
     pub fn new() -> Self {
         Self {
@@ -25,11 +31,7 @@ impl DebugState {
             *bus = emu.bus.clone();
         }
         if let Ok(mut cart_header) = self.cart_header.write() {
-            *cart_header = if let Some(cart) = &emu.cart {
-                Some(cart.header.clone())
-            } else {
-                None
-            }
+            *cart_header = emu.cart.as_ref().map(|cart| cart.header.clone())
         }
     }
 }

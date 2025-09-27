@@ -189,6 +189,12 @@ pub struct Cpu {
     pub cycle_count: usize,
 }
 
+impl Default for Cpu {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Cpu {
     pub fn new() -> Self {
         Self {
@@ -204,13 +210,11 @@ impl Cpu {
     }
 
     fn fetch(&self, bus: &Bus) -> u8 {
-        let opcode = bus.read_byte(self.pc as usize);
-        opcode
+        bus.read_byte(self.pc as usize)
     }
 
     fn decode(&self, opcode: u8) -> Option<&'static Op> {
-        let op = OPCODES.get(&opcode);
-        op
+        OPCODES.get(&opcode)
     }
 
     fn execute(&mut self, opcode: u8, op: &Op, bus: &mut Bus) {
@@ -218,7 +222,7 @@ impl Cpu {
         let mut cycles = op.cycles[0];
 
         debug!(
-            "{:04X}  {:9} {} ${:26} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:  0, 21 CYC:{}",
+            "[TESTLOG] {:04X}  {:9} {} ${:26} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:  0, 21 CYC:{}",
             self.pc,
             full_op
                 .iter()
@@ -286,7 +290,7 @@ impl Cpu {
             OpMnemonic::BCC => {
                 if !self.p.contains(Flags::C) {
                     let offset = full_op[1] as i16;
-                    let new_pc = self.pc.checked_add_signed(offset).unwrap() as u16;
+                    let new_pc = self.pc.checked_add_signed(offset).unwrap();
                     self.pc = new_pc;
                     cycles = op.cycles[1];
                 }
@@ -294,7 +298,7 @@ impl Cpu {
             OpMnemonic::BCS => {
                 if self.p.contains(Flags::C) {
                     let offset = full_op[1] as i16;
-                    let new_pc = self.pc.checked_add_signed(offset).unwrap() as u16;
+                    let new_pc = self.pc.checked_add_signed(offset).unwrap();
                     self.pc = new_pc;
                     cycles = op.cycles[1];
                 }
@@ -317,7 +321,7 @@ impl Cpu {
                     error!("Stack overflow");
                     return;
                 }
-                bus.write_byte(stack_i, (self.pc >> 8) as u8 & 0xff);
+                bus.write_byte(stack_i, (self.pc >> 8) as u8);
                 bus.write_byte(stack_i - 1, (self.pc & 0xff) as u8);
                 self.sp -= 2;
                 self.pc = addr;

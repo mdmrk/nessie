@@ -1,7 +1,4 @@
-use std::{
-    io::Read,
-    sync::{Arc, mpsc},
-};
+use std::sync::{Arc, mpsc};
 
 use log::info;
 
@@ -27,6 +24,12 @@ pub struct Emu {
     pub running: bool,
     pub paused: bool,
     pub want_step: bool,
+}
+
+impl Default for Emu {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Emu {
@@ -106,7 +109,7 @@ pub fn emu_thread(command_rx: mpsc::Receiver<Command>, debug_state: Arc<DebugSta
             }
         }
 
-        let should_run = emu.running && (emu.paused && emu.want_step || !emu.paused);
+        let should_run = !emu.paused || emu.want_step;
         if should_run {
             emu.cpu.step(&mut emu.bus);
             emu.want_step = false;
