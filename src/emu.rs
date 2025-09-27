@@ -51,7 +51,7 @@ impl Emu {
                 self.cpu.pc = 0xC000; // FIXME: TEST Only
             } else if cart.header.get_mapper() == 1 {
                 let size = cart.header.prg_rom_size as usize;
-                let data = cart.prg_data.get(0..size * 16 * 1024).unwrap();
+                let data = cart.prg_data.get(0..16 * 1024).unwrap();
                 self.bus.write(0x8000, data);
                 let offset = (size - 1) * 16 * 1024;
                 let data2 = cart.prg_data.get(offset..offset + 16 * 1024).unwrap();
