@@ -2,6 +2,7 @@ use core::fmt;
 
 use bitflags::bitflags;
 use log::{debug, error, warn};
+use phf::phf_map;
 
 use crate::bus::Bus;
 
@@ -79,77 +80,72 @@ pub struct Op {
 
 macro_rules! op {
     ($mnemonic:expr, $bytes:expr, $cycles:expr) => {
-        Some(Op {
+        Op {
             mnemonic: $mnemonic,
             bytes: $bytes,
             cycles: $cycles,
-        })
+        }
     };
 }
 
-impl Op {
-    pub fn from_opcode(opcode: u8) -> Option<Self> {
-        match opcode {
-            0xA9 => op!(OpMnemonic::LDA, 2, &[2]),
-            // 0x00 => op!(OpMnemonic::STA, 0, &[0]),
-            0xA2 => op!(OpMnemonic::LDX, 2, &[2]),
-            0x86 => op!(OpMnemonic::STX, 2, &[3]),
-            // 0x00 => op!(OpMnemonic::LDY, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::STY, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::TAX, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::TXA, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::TAY, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::TYA, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::ADC, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::SBC, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::INC, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::DEC, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::INX, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::DEX, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::INY, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::DEY, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::ASL, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::LSR, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::ROL, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::ROR, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::AND, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::ORA, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::EOR, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::BIT, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::CMP, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::CPX, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::CPY, 0, &[0]),
-            0x90 => op!(OpMnemonic::BCC, 2, &[2, 3, 4]),
-            0xB0 => op!(OpMnemonic::BCS, 2, &[2, 3, 4]),
-            0xF0 => op!(OpMnemonic::BEQ, 2, &[2, 3, 4]),
-            // 0x00 => op!(OpMnemonic::BNE, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::BPL, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::BMI, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::BVC, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::BVS, 0, &[0]),
-            0x4C => op!(OpMnemonic::JMP, 3, &[3]),
-            0x20 => op!(OpMnemonic::JSR, 3, &[6]),
-            // 0x00 => op!(OpMnemonic::RTS, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::BRK, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::RTI, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::PHA, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::PLA, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::PHP, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::PLP, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::TXS, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::TSX, 0, &[0]),
-            0x18 => op!(OpMnemonic::CLC, 1, &[2]),
-            0x38 => op!(OpMnemonic::SEC, 1, &[2]),
-            // 0x00 => op!(OpMnemonic::CLI, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::SEI, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::CLD, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::SED, 0, &[0]),
-            // 0x00 => op!(OpMnemonic::CLV, 0, &[0]),
-            0xEA => op!(OpMnemonic::NOP, 1, &[2]),
-            _ => None,
-        }
-    }
-}
+static OPCODES: phf::Map<u8, Op> = phf_map! {
+    0xA9u8 => op!(OpMnemonic::LDA, 2, &[2]),
+    // 0x00u8 => op!(OpMnemonic::STA, 0, &[0]),
+    0xA2u8 => op!(OpMnemonic::LDX, 2, &[2]),
+    0x86u8 => op!(OpMnemonic::STX, 2, &[3]),
+    // 0x00u8 => op!(OpMnemonic::LDY, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::STY, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::TAX, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::TXA, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::TAY, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::TYA, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::ADC, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::SBC, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::INC, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::DEC, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::INX, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::DEX, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::INY, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::DEY, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::ASL, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::LSR, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::ROL, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::ROR, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::AND, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::ORA, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::EOR, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::BIT, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::CMP, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::CPX, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::CPY, 0, &[0]),
+    0x90u8 => op!(OpMnemonic::BCC, 2, &[2, 3, 4]),
+    0xB0u8 => op!(OpMnemonic::BCS, 2, &[2, 3, 4]),
+    0xF0u8 => op!(OpMnemonic::BEQ, 2, &[2, 3, 4]),
+    // 0x00u8 => op!(OpMnemonic::BNE, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::BPL, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::BMI, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::BVC, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::BVS, 0, &[0]),
+    0x4Cu8 => op!(OpMnemonic::JMP, 3, &[3]),
+    0x20u8 => op!(OpMnemonic::JSR, 3, &[6]),
+    // 0x00u8 => op!(OpMnemonic::RTS, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::BRK, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::RTI, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::PHA, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::PLA, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::PHP, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::PLP, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::TXS, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::TSX, 0, &[0]),
+    0x18u8 => op!(OpMnemonic::CLC, 1, &[2]),
+    0x38u8 => op!(OpMnemonic::SEC, 1, &[2]),
+    // 0x00u8 => op!(OpMnemonic::CLI, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::SEI, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::CLD, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::SED, 0, &[0]),
+    // 0x00u8 => op!(OpMnemonic::CLV, 0, &[0]),
+    0xEAu8 => op!(OpMnemonic::NOP, 1, &[2]),
+};
 
 bitflags! {
     #[derive(Debug, Clone)]
@@ -212,12 +208,12 @@ impl Cpu {
         opcode
     }
 
-    fn decode(&self, opcode: u8) -> Option<Op> {
-        let op = Op::from_opcode(opcode);
+    fn decode(&self, opcode: u8) -> Option<&'static Op> {
+        let op = OPCODES.get(&opcode);
         op
     }
 
-    fn execute(&mut self, opcode: u8, op: Op, bus: &mut Bus) {
+    fn execute(&mut self, opcode: u8, op: &Op, bus: &mut Bus) {
         let full_op = bus.read(self.pc, op.bytes);
         let mut cycles = op.cycles[0];
 
