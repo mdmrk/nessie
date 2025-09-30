@@ -4,30 +4,22 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  workflow_dispatch:
+permissions:
+  contents: read
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-D warnings"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        toolchain: [stable]
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ matrix.toolchain }}
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release --verbose
   fmt:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -36,8 +28,58 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --all-targets --all-features -- -D warnings
+  build:
+    needs: [fmt, clippy]
+    runs-on: ${{ matrix.os }}
+    env:
+      RUSTFLAGS: "-D warnings"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            toolchain: stable
+            target: x86_64-unknown-linux-gnu
+            bin_ext: ""
+            artifact_name: nessie-linux-x64
+          - os: windows-latest
+            toolchain: stable
+            target: x86_64-pc-windows-msvc
+            bin_ext: ".exe"
+            artifact_name: nessie-windows-x64
+          - os: macos-latest
+            toolchain: stable
+            target: x86_64-apple-darwin
+            bin_ext: ""
+            artifact_name: nessie-macos-x64
+          - os: macos-latest
+            toolchain: stable
+            target: aarch64-apple-darwin
+            bin_ext: ""
+            artifact_name: nessie-macos-arm64
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - run: cargo build --release --locked --verbose --target ${{ matrix.target }}
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            target/${{ matrix.target }}/release/nessie${{ matrix.bin_ext }}
+          if-no-files-found: error
