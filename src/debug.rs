@@ -6,6 +6,7 @@ pub struct DebugState {
     pub cpu: RwLock<Cpu>,
     pub bus: RwLock<Bus>,
     pub cart_header: RwLock<Option<Header>>,
+    pub cpu_log: RwLock<String>,
 }
 
 impl Default for DebugState {
@@ -20,10 +21,11 @@ impl DebugState {
             cpu: RwLock::new(Cpu::new()),
             bus: RwLock::new(Bus::new()),
             cart_header: RwLock::new(None),
+            cpu_log: RwLock::new("".into()),
         }
     }
 
-    pub fn update(&self, emu: &Emu) {
+    pub fn update(&self, emu: &mut Emu) {
         if let Ok(mut cpu) = self.cpu.write() {
             *cpu = emu.cpu.clone();
         }
@@ -32,6 +34,10 @@ impl DebugState {
         }
         if let Ok(mut cart_header) = self.cart_header.write() {
             *cart_header = emu.cart.as_ref().map(|cart| cart.header.clone())
+        }
+        if let Ok(mut cpu_log) = self.cpu_log.write() {
+            cpu_log.push_str(&emu.cpu.log);
+            emu.cpu.log.clear();
         }
     }
 }

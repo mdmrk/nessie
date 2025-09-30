@@ -187,6 +187,7 @@ pub struct Cpu {
     pub y: u8,
     pub mode: AddressingMode,
     pub cycle_count: usize,
+    pub log: String,
 }
 
 impl Default for Cpu {
@@ -206,6 +207,7 @@ impl Cpu {
             y: 0,
             mode: AddressingMode::Immediate,
             cycle_count: 0,
+            log: "".into(),
         }
     }
 
@@ -221,25 +223,27 @@ impl Cpu {
         let full_op = bus.read(self.pc, op.bytes);
         let mut cycles = op.cycles[0];
 
-        debug!(
-            "[TESTLOG] {:04X}  {:9} {} ${:26} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:  0, 21 CYC:{}",
-            self.pc,
-            full_op
-                .iter()
-                .map(|c| format!("{:02X}", c))
-                .collect::<Vec<String>>()
-                .join(" "),
-            op.mnemonic,
-            match op.bytes {
-                3 => format!("{:X}{:X}", full_op[2], full_op[1]),
-                _ => "".to_string(),
-            },
-            self.a,
-            self.x,
-            self.y,
-            self.p.bits(),
-            self.sp,
-            self.cycle_count
+        self.log.push_str(
+            &format!(
+                "{:04X}  {:9} {} ${:26} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:  0, 21 CYC:{}\n",
+                self.pc,
+                full_op
+                    .iter()
+                    .map(|c| format!("{:02X}", c))
+                    .collect::<Vec<String>>()
+                    .join(" "),
+                op.mnemonic,
+                match op.bytes {
+                    3 => format!("{:X}{:X}", full_op[2], full_op[1]),
+                    _ => "".to_string(),
+                },
+                self.a,
+                self.x,
+                self.y,
+                self.p.bits(),
+                self.sp,
+                self.cycle_count
+            )
         );
 
         self.pc += op.bytes;

@@ -20,7 +20,7 @@ impl Ui {
         Self {
             command_tx,
             debug_state,
-            mem_search: "".to_string(),
+            mem_search: "".into(),
             running: true,
             paused: false,
         }
@@ -53,40 +53,42 @@ impl Ui {
     }
 
     pub fn draw(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::TopBottomPanel::top("menubar").show(ctx, |ui| {
-            egui::MenuBar::new().ui(ui, |ui| {
-                ui.menu_button("File", |ui| {
-                    if ui.button("Quit").clicked() {
-                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
-                    }
-                });
-                ui.menu_button("Emulator", |ui| {
-                    ui.add_enabled_ui(self.paused, |ui| {
-                        if ui.button("Step").clicked() {
-                            self.emu_step();
+        egui::TopBottomPanel::top("menubar")
+            .resizable(false)
+            .show(ctx, |ui| {
+                egui::MenuBar::new().ui(ui, |ui| {
+                    ui.menu_button("File", |ui| {
+                        if ui.button("Quit").clicked() {
+                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                         }
                     });
-                    ui.add_enabled_ui(self.paused, |ui| {
-                        if ui.button("Resume").clicked() {
-                            self.emu_resume();
-                        }
-                    });
-                    ui.add_enabled_ui(!self.paused, |ui| {
-                        if ui.button("Pause").clicked() {
-                            self.emu_pause();
-                        }
-                    });
-                    ui.add_enabled_ui(self.running, |ui| {
-                        if ui.button("Stop").clicked() {
-                            self.emu_stop();
-                        }
+                    ui.menu_button("Emulator", |ui| {
+                        ui.add_enabled_ui(self.paused, |ui| {
+                            if ui.button("Step").clicked() {
+                                self.emu_step();
+                            }
+                        });
+                        ui.add_enabled_ui(self.paused, |ui| {
+                            if ui.button("Resume").clicked() {
+                                self.emu_resume();
+                            }
+                        });
+                        ui.add_enabled_ui(!self.paused, |ui| {
+                            if ui.button("Pause").clicked() {
+                                self.emu_pause();
+                            }
+                        });
+                        ui.add_enabled_ui(self.running, |ui| {
+                            if ui.button("Stop").clicked() {
+                                self.emu_stop();
+                            }
+                        });
                     });
                 });
             });
-        });
-        egui::CentralPanel::default().show(ctx, |_ui| {});
         egui::SidePanel::left("left_panel")
-            .resizable(false)
+            .resizable(true)
+            .default_width(200.0)
             .show(ctx, |ui| {
                 if let Ok(cpu) = self.debug_state.cpu.read() {
                     ui.heading("CPU");
@@ -170,6 +172,7 @@ impl Ui {
             });
         egui::SidePanel::right("right_panel")
             .resizable(true)
+            .default_width(200.0)
             .show(ctx, |ui| {
                 ui.heading("Loaded ROM");
                 if let Ok(cart_header_opt) = self.debug_state.cart_header.read() {
@@ -193,5 +196,12 @@ impl Ui {
                     }
                 }
             });
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                if let Ok(cpu_log) = self.debug_state.cpu_log.read() {
+                    ui.label(egui::RichText::new(&*cpu_log).text_style(egui::TextStyle::Monospace));
+                }
+            })
+        });
     }
 }

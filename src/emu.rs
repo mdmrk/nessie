@@ -114,6 +114,6 @@ pub fn emu_thread(command_rx: mpsc::Receiver<Command>, debug_state: Arc<DebugSta
             emu.cpu.step(&mut emu.bus);
             emu.want_step = false;
         }
-        debug_state.update(&emu);
+        debug_state.update(&mut emu);
     }
 }
