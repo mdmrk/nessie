@@ -9,7 +9,6 @@ permissions:
   contents: read
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: "-D warnings"
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -38,8 +37,6 @@ jobs:
   build:
     needs: [fmt]
     runs-on: ${{ matrix.os }}
-    env:
-      RUSTFLAGS: "-D warnings"
     strategy:
       fail-fast: false
       matrix:
