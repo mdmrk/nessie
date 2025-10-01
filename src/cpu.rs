@@ -1,10 +1,114 @@
 use core::fmt;
 
 use bitflags::bitflags;
-use log::{debug, error, warn};
+use log::warn;
 use phf::phf_map;
 
 use crate::bus::Bus;
+
+#[derive(Debug)]
+pub enum OperandValue {
+    Implicid,
+    Address(u16, bool),
+    Value(u8),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum AddressingMode {
+    Implicid,
+    Accumulator,
+    Immediate,
+    ZeroPage,
+    ZeroPageX,
+    ZeroPageY,
+    Absolute,
+    AbsoluteX,
+    AbsoluteY,
+    Indirect,
+    IndirectX,
+    IndirectY,
+    Relative,
+}
+
+impl AddressingMode {
+    pub fn resolve(&self, cpu: &Cpu, bus: &Bus, operands: &[u8]) -> OperandValue {
+        match self {
+            AddressingMode::Implicid | AddressingMode::Accumulator => OperandValue::Implicid,
+            AddressingMode::Immediate => OperandValue::Value(operands[0]),
+            AddressingMode::ZeroPage => OperandValue::Address(operands[0] as u16, false),
+            AddressingMode::ZeroPageX => {
+                let addr = operands[0].wrapping_add(cpu.x) as u16;
+                OperandValue::Address(addr, false)
+            }
+            AddressingMode::ZeroPageY => {
+                let addr = operands[0].wrapping_add(cpu.y) as u16;
+                OperandValue::Address(addr, false)
+            }
+            AddressingMode::Absolute => {
+                let addr = u16::from_le_bytes([operands[0], operands[1]]);
+                OperandValue::Address(addr, false)
+            }
+            AddressingMode::AbsoluteX => {
+                let base = u16::from_le_bytes([operands[0], operands[1]]);
+                let addr = base.wrapping_add(cpu.x as u16);
+                let page_crossed = (base & 0xFF00) != (addr & 0xFF00);
+                OperandValue::Address(addr, page_crossed)
+            }
+            AddressingMode::AbsoluteY => {
+                let base = u16::from_le_bytes([operands[0], operands[1]]);
+                let addr = base.wrapping_add(cpu.y as u16);
+                let page_crossed = (base & 0xFF00) != (addr & 0xFF00);
+                OperandValue::Address(addr, page_crossed)
+            }
+            AddressingMode::Indirect => {
+                let ptr = u16::from_le_bytes([operands[0], operands[1]]);
+                let lo = bus.read_byte(ptr as usize);
+                let hi = bus.read_byte(((ptr & 0xFF00) | ((ptr + 1) & 0x00FF)) as usize);
+                let addr = u16::from_le_bytes([lo, hi]);
+                OperandValue::Address(addr, false)
+            }
+            AddressingMode::IndirectX => {
+                let ptr = operands[0].wrapping_add(cpu.x);
+                let lo = bus.read_byte(ptr as usize);
+                let hi = bus.read_byte(ptr.wrapping_add(1) as usize);
+                let addr = u16::from_le_bytes([lo, hi]);
+                OperandValue::Address(addr, false)
+            }
+            AddressingMode::IndirectY => {
+                let ptr = operands[0];
+                let lo = bus.read_byte(ptr as usize);
+                let hi = bus.read_byte(ptr.wrapping_add(1) as usize);
+                let base = u16::from_le_bytes([lo, hi]);
+                let addr = base.wrapping_add(cpu.y as u16);
+                let page_crossed = (base & 0xFF00) != (addr & 0xFF00);
+                OperandValue::Address(addr, page_crossed)
+            }
+            AddressingMode::Relative => {
+                let offset = operands[0] as i8;
+                let addr = cpu.pc.wrapping_add_signed(offset as i16);
+                let page_crossed = (cpu.pc & 0xFF00) != (addr & 0xFF00);
+                OperandValue::Address(addr, page_crossed)
+            }
+        }
+    }
+
+    pub fn operand_bytes(&self) -> u8 {
+        match self {
+            AddressingMode::Implicid | AddressingMode::Accumulator => 0,
+            AddressingMode::Immediate
+            | AddressingMode::ZeroPage
+            | AddressingMode::ZeroPageX
+            | AddressingMode::ZeroPageY
+            | AddressingMode::IndirectX
+            | AddressingMode::IndirectY
+            | AddressingMode::Relative => 1,
+            AddressingMode::Absolute
+            | AddressingMode::AbsoluteX
+            | AddressingMode::AbsoluteY
+            | AddressingMode::Indirect => 2,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum OpMnemonic {
@@ -74,77 +178,81 @@ impl fmt::Display for OpMnemonic {
 
 pub struct Op {
     pub mnemonic: OpMnemonic,
+    pub mode: AddressingMode,
     pub bytes: u16,
-    pub cycles: &'static [usize],
+    pub base_cycles: usize,
+    pub execute: fn(&mut Cpu, &mut Bus, AddressingMode, &[u8]) -> u8,
 }
 
 macro_rules! op {
-    ($mnemonic:expr, $bytes:expr, $cycles:expr) => {
+    ($mnemonic:expr, $mode:expr, $bytes:expr, $base_cycles:expr, $execute:expr) => {
         Op {
             mnemonic: $mnemonic,
+            mode: $mode,
             bytes: $bytes,
-            cycles: $cycles,
+            base_cycles: $base_cycles,
+            execute: $execute,
         }
     };
 }
 
 static OPCODES: phf::Map<u8, Op> = phf_map! {
-    0xA9u8 => op!(OpMnemonic::LDA, 2, &[2]),
-    // 0x00u8 => op!(OpMnemonic::STA, 0, &[0]),
-    0xA2u8 => op!(OpMnemonic::LDX, 2, &[2]),
-    0x86u8 => op!(OpMnemonic::STX, 2, &[3]),
-    // 0x00u8 => op!(OpMnemonic::LDY, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::STY, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::TAX, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::TXA, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::TAY, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::TYA, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::ADC, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::SBC, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::INC, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::DEC, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::INX, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::DEX, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::INY, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::DEY, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::ASL, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::LSR, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::ROL, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::ROR, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::AND, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::ORA, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::EOR, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::BIT, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::CMP, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::CPX, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::CPY, 0, &[0]),
-    0x90u8 => op!(OpMnemonic::BCC, 2, &[2, 3, 4]),
-    0xB0u8 => op!(OpMnemonic::BCS, 2, &[2, 3, 4]),
-    0xF0u8 => op!(OpMnemonic::BEQ, 2, &[2, 3, 4]),
-    // 0x00u8 => op!(OpMnemonic::BNE, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::BPL, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::BMI, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::BVC, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::BVS, 0, &[0]),
-    0x4Cu8 => op!(OpMnemonic::JMP, 3, &[3]),
-    0x20u8 => op!(OpMnemonic::JSR, 3, &[6]),
-    // 0x00u8 => op!(OpMnemonic::RTS, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::BRK, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::RTI, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::PHA, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::PLA, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::PHP, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::PLP, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::TXS, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::TSX, 0, &[0]),
-    0x18u8 => op!(OpMnemonic::CLC, 1, &[2]),
-    0x38u8 => op!(OpMnemonic::SEC, 1, &[2]),
-    // 0x00u8 => op!(OpMnemonic::CLI, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::SEI, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::CLD, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::SED, 0, &[0]),
-    // 0x00u8 => op!(OpMnemonic::CLV, 0, &[0]),
-    0xEAu8 => op!(OpMnemonic::NOP, 1, &[2]),
+    0xA9u8 => op!(OpMnemonic::LDA, AddressingMode::Immediate, 2, 2, Cpu::lda),
+    // 0x00u8 => op!(OpMnemonic::STA, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    0xA2u8 => op!(OpMnemonic::LDX, AddressingMode::Immediate, 2, 2, Cpu::ldx),
+    0x86u8 => op!(OpMnemonic::STX, AddressingMode::Immediate, 2, 3, Cpu::stx),
+    // 0x00u8 => op!(OpMnemonic::LDY, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::STY, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::TAX, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::TXA, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::TAY, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::TYA, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::ADC, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::SBC, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::INC, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::DEC, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::INX, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::DEX, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::INY, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::DEY, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::ASL, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::LSR, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::ROL, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::ROR, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::AND, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::ORA, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::EOR, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::BIT, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::CMP, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::CPX, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::CPY, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    0x90u8 => op!(OpMnemonic::BCC, AddressingMode::Immediate, 2, 2, Cpu::bcc),
+    0xB0u8 => op!(OpMnemonic::BCS, AddressingMode::Immediate, 2, 2, Cpu::bcs),
+    // 0xF0u8 => op!(OpMnemonic::BEQ, AddressingMode::Immediate, 2, 2, Cpu::beq),
+    // 0x00u8 => op!(OpMnemonic::BNE, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::BPL, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::BMI, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::BVC, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::BVS, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    0x4Cu8 => op!(OpMnemonic::JMP, AddressingMode::Immediate, 3, 3, Cpu::jmp),
+    0x20u8 => op!(OpMnemonic::JSR, AddressingMode::Immediate, 3, 6, Cpu::jsr),
+    // 0x00u8 => op!(OpMnemonic::RTS, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::BRK, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::RTI, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::PHA, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::PLA, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::PHP, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::PLP, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::TXS, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::TSX, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    0x18u8 => op!(OpMnemonic::CLC, AddressingMode::Immediate, 1, 2, Cpu::clc),
+    0x38u8 => op!(OpMnemonic::SEC, AddressingMode::Immediate, 1, 2, Cpu::sec),
+    // 0x00u8 => op!(OpMnemonic::CLI, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::SEI, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::CLD, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::SED, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    // 0x00u8 => op!(OpMnemonic::CLV, AddressingMode::Immediate, 0, 0, Cpu::xxx),
+    0xEAu8 => op!(OpMnemonic::NOP, AddressingMode::Immediate, 1, 2, Cpu::nop),
 };
 
 bitflags! {
@@ -161,22 +269,6 @@ bitflags! {
     }
 }
 
-fn form_u16(bytes: &[u8]) -> u16 {
-    ((bytes[2] as u16) << 8) | bytes[1] as u16
-}
-
-#[derive(Clone)]
-pub enum AddressingMode {
-    Immediate,
-    ZeroPage,
-    ZeroPageX,
-    Absolute,
-    AbsoluteX,
-    AbsoluteY,
-    IndirectX,
-    IndirectY,
-}
-
 #[derive(Clone)]
 pub struct Cpu {
     pub sp: usize,
@@ -185,7 +277,6 @@ pub struct Cpu {
     pub a: u8,
     pub x: u8,
     pub y: u8,
-    pub mode: AddressingMode,
     pub cycle_count: usize,
     pub log: String,
 }
@@ -205,7 +296,6 @@ impl Cpu {
             a: 0,
             x: 0,
             y: 0,
-            mode: AddressingMode::Immediate,
             cycle_count: 0,
             log: "".into(),
         }
@@ -219,23 +309,24 @@ impl Cpu {
         OPCODES.get(&opcode)
     }
 
-    fn execute(&mut self, opcode: u8, op: &Op, bus: &mut Bus) {
-        let full_op = bus.read(self.pc, op.bytes);
-        let mut cycles = op.cycles[0];
+    fn execute(&mut self, bus: &mut Bus, op: &Op) {
+        let operand_bytes = op.mode.operand_bytes();
+        let operands = bus.read(self.pc + 1, operand_bytes as u16).to_vec(); // FIXME: do not clone
 
         self.log.push_str(
             &format!(
-                "{:04X}  {:9} {} ${:26} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:  0, 21 CYC:{}\n",
+                "{:04X}  {:9} {} {:27} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:  0, 21 CYC:{}\n",
                 self.pc,
-                full_op
+                operands
                     .iter()
                     .map(|c| format!("{:02X}", c))
                     .collect::<Vec<String>>()
                     .join(" "),
                 op.mnemonic,
-                match op.bytes {
-                    3 => format!("{:X}{:X}", full_op[2], full_op[1]),
-                    _ => "".to_string(),
+                match op.mode.resolve(self, bus, operands.as_slice()) {
+                    OperandValue::Value(v) => format!("${:02X}", v),
+                    OperandValue::Address(addr, _) => format!("${:04X}", addr),
+                    OperandValue::Implicid => " ".into(),
                 },
                 self.a,
                 self.x,
@@ -246,116 +337,9 @@ impl Cpu {
             )
         );
 
-        self.pc += op.bytes;
-        match op.mnemonic {
-            OpMnemonic::LDA => {
-                let imm = full_op[1];
-                self.x = imm;
-                self.p.set(Flags::Z, self.x == 0);
-                self.p.set(Flags::N, (self.x >> 7) & 1 == 1);
-            }
-            // OpMnemonic::STA => {},
-            OpMnemonic::LDX => {
-                let imm = full_op[1];
-                self.x = imm;
-                self.p.set(Flags::Z, self.x == 0);
-                self.p.set(Flags::N, (self.x >> 7) & 1 == 1);
-            }
-            OpMnemonic::STX => {
-                let low_byte = full_op[1];
-                let addr = low_byte as usize;
-                bus.write_byte(addr, self.x);
-            }
-            // OpMnemonic::LDY => {},
-            // OpMnemonic::STY => {},
-            // OpMnemonic::TAX => {},
-            // OpMnemonic::TXA => {},
-            // OpMnemonic::TAY => {},
-            // OpMnemonic::TYA => {},
-            // OpMnemonic::ADC => {},
-            // OpMnemonic::SBC => {},
-            // OpMnemonic::INC => {},
-            // OpMnemonic::DEC => {},
-            // OpMnemonic::INX => {},
-            // OpMnemonic::DEX => {},
-            // OpMnemonic::INY => {},
-            // OpMnemonic::DEY => {},
-            // OpMnemonic::ASL => {},
-            // OpMnemonic::LSR => {},
-            // OpMnemonic::ROL => {},
-            // OpMnemonic::ROR => {},
-            // OpMnemonic::AND => {},
-            // OpMnemonic::ORA => {},
-            // OpMnemonic::EOR => {},
-            // OpMnemonic::BIT => {},
-            // OpMnemonic::CMP => {},
-            // OpMnemonic::CPX => {},
-            // OpMnemonic::CPY => {},
-            OpMnemonic::BCC => {
-                if !self.p.contains(Flags::C) {
-                    let offset = full_op[1] as i16;
-                    let new_pc = self.pc.checked_add_signed(offset).unwrap();
-                    self.pc = new_pc;
-                    cycles = op.cycles[1];
-                }
-            }
-            OpMnemonic::BCS => {
-                if self.p.contains(Flags::C) {
-                    let offset = full_op[1] as i16;
-                    let new_pc = self.pc.checked_add_signed(offset).unwrap();
-                    self.pc = new_pc;
-                    cycles = op.cycles[1];
-                }
-            }
-            // OpMnemonic::BEQ => {},
-            // OpMnemonic::BNE => {},
-            // OpMnemonic::BPL => {},
-            // OpMnemonic::BMI => {},
-            // OpMnemonic::BVC => {},
-            // OpMnemonic::BVS => {},
-            //
-            OpMnemonic::JMP => {
-                let pc = form_u16(full_op);
-                self.pc = pc;
-            }
-            OpMnemonic::JSR => {
-                let addr = form_u16(full_op);
-                let stack_i = self.sp + 0x100;
-                if stack_i == 0 {
-                    error!("Stack overflow");
-                    return;
-                }
-                bus.write_byte(stack_i, (self.pc >> 8) as u8);
-                bus.write_byte(stack_i - 1, (self.pc & 0xff) as u8);
-                self.sp -= 2;
-                self.pc = addr;
-            }
-            // OpMnemonic::RTS => {},
-            // OpMnemonic::BRK => {},
-            // OpMnemonic::RTI => {},
-            // OpMnemonic::PHA => {},
-            // OpMnemonic::PLA => {},
-            // OpMnemonic::PHP => {},
-            // OpMnemonic::PLP => {},
-            // OpMnemonic::TXS => {},
-            // OpMnemonic::TSX => {},
-            OpMnemonic::CLC => {
-                self.p.set(Flags::C, false);
-            }
-            OpMnemonic::SEC => {
-                self.p.set(Flags::C, true);
-            }
-            // OpMnemonic::CLI => {},
-            // OpMnemonic::SEI => {},
-            // OpMnemonic::CLD => {},
-            // OpMnemonic::SED => {},
-            // OpMnemonic::CLV => {},
-            OpMnemonic::NOP => {}
-            _ => {
-                warn!("Not implemented opcode 0x{:02X}", opcode);
-            }
-        };
-        self.cycle_count += cycles;
+        self.pc += 1 + operand_bytes as u16;
+        (op.execute)(self, bus, op.mode, &operands);
+        self.cycle_count += op.base_cycles;
     }
 
     pub fn step(&mut self, bus: &mut Bus) {
@@ -363,8 +347,203 @@ impl Cpu {
         let op = self.decode(opcode);
 
         match op {
-            Some(op) => self.execute(opcode, op, bus),
-            None => warn!("Not found opcode 0x{:02X}", opcode),
+            Some(op) => {
+                self.execute(bus, op);
+            }
+            None => {
+                warn!("Unknown opcode: 0x{:02X}", opcode);
+                self.pc += 1;
+            }
         }
+    }
+
+    fn update_nz(&mut self, value: u8) {
+        self.p.set(Flags::Z, value == 0);
+        self.p.set(Flags::N, (value >> 7) & 1 == 1);
+    }
+
+    fn push_stack(&mut self, bus: &mut Bus, value: u8) {
+        bus.write_byte(0x100 + self.sp, value);
+        self.sp = self.sp.wrapping_sub(1);
+    }
+
+    // fn pop_stack(&mut self, bus: &Bus) -> u8 {
+    //     self.sp = self.sp.wrapping_add(1);
+    //     bus.read_byte(0x100 + self.sp as usize)
+    // }
+
+    fn read_operand(&self, bus: &Bus, mode: AddressingMode, operands: &[u8]) -> (u8, bool) {
+        match mode.resolve(self, bus, operands) {
+            OperandValue::Value(v) => (v, false),
+            OperandValue::Address(addr, crossed) => (bus.read_byte(addr as usize), crossed),
+            OperandValue::Implicid => (self.a, false),
+        }
+    }
+
+    fn write_operand(&mut self, bus: &mut Bus, mode: AddressingMode, operands: &[u8], value: u8) {
+        match mode.resolve(self, bus, operands) {
+            OperandValue::Address(addr, _) => bus.write_byte(addr as usize, value),
+            OperandValue::Implicid => self.a = value,
+            _ => panic!("Cannot write to this addressing mode"),
+        }
+    }
+
+    fn lda(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
+        let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
+        cpu.a = value;
+        cpu.update_nz(cpu.x);
+        if page_crossed { 1 } else { 0 }
+    }
+
+    // fn sta(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    fn ldx(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
+        let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
+        cpu.x = value;
+        cpu.update_nz(cpu.x);
+        if page_crossed { 1 } else { 0 }
+    }
+
+    fn stx(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
+        cpu.write_operand(bus, mode, operands, cpu.x);
+        0
+    }
+
+    // fn ldy(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn sty(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn tax(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn txa(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn tay(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn tya(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn adc(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn sbc(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn inc(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn dec(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn inx(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn dex(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn iny(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn dey(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn asl(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn lsr(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn rol(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn ror(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn and(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn ora(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn eor(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn bit(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn cmp(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn cpx(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn cpy(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    fn bcc(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
+        if !cpu.p.contains(Flags::C) {
+            let (addr, page_crossed) = cpu.read_operand(bus, mode, operands);
+            cpu.pc = addr as u16;
+            if page_crossed { 2 } else { 1 }
+        } else {
+            0
+        }
+    }
+
+    fn bcs(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
+        if cpu.p.contains(Flags::C) {
+            let (addr, page_crossed) = cpu.read_operand(bus, mode, operands);
+            cpu.pc = addr as u16;
+            if page_crossed { 2 } else { 1 }
+        } else {
+            0
+        }
+    }
+
+    // fn beq(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn bne(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn bpl(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn bmi(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn bvc(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn bvs(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    fn jmp(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
+        let (addr, _) = cpu.read_operand(bus, mode, operands);
+        cpu.pc = addr as u16;
+        0
+    }
+
+    fn jsr(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
+        let (addr, _) = cpu.read_operand(bus, mode, operands);
+        cpu.push_stack(bus, (cpu.pc >> 8) as u8);
+        cpu.push_stack(bus, cpu.pc as u8);
+        cpu.pc = addr as u16;
+        0
+    }
+
+    // fn rts(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn brk(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn rti(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn pha(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn pla(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn php(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn plp(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn txs(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn tsx(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    fn clc(cpu: &mut Cpu, _bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
+        cpu.p.set(Flags::C, false);
+        0
+    }
+
+    fn sec(cpu: &mut Cpu, _bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
+        cpu.p.set(Flags::C, true);
+        0
+    }
+
+    // fn cli(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn sei(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn cld(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn sed(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    // fn clv(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+
+    fn nop(_cpu: &mut Cpu, _bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
+        0
     }
 }
