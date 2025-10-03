@@ -197,11 +197,15 @@ impl Ui {
                 }
             });
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                if let Ok(cpu_log) = self.debug_state.cpu_log.read() {
-                    ui.label(egui::RichText::new(&*cpu_log).text_style(egui::TextStyle::Monospace));
-                }
-            })
+            egui::ScrollArea::vertical()
+                .stick_to_bottom(true)
+                .show(ui, |ui| {
+                    if let Ok(cpu_log) = self.debug_state.cpu_log.read() {
+                        ui.label(
+                            egui::RichText::new(&*cpu_log).text_style(egui::TextStyle::Monospace),
+                        );
+                    }
+                })
         });
     }
 }

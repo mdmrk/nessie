@@ -4,7 +4,7 @@ use bitflags::bitflags;
 use log::warn;
 use phf::phf_map;
 
-use crate::bus::Bus;
+use crate::{bus::Bus, ppu::Ppu};
 
 #[derive(Debug)]
 pub enum OperandValue {
@@ -196,7 +196,7 @@ macro_rules! op {
 
 static OPCODES: phf::Map<u8, Op> = phf_map! {
     0xA9u8 => op!(OpMnemonic::LDA, AddressingMode::Immediate,  2, Cpu::lda),
-    // 0xu8 => op!(OpMnemonic::STA, AddressingMode::Immediate,  0, Cpu::xxx),
+    0x85u8 => op!(OpMnemonic::STA, AddressingMode::ZeroPage,  3, Cpu::sta),
     0xA2u8 => op!(OpMnemonic::LDX, AddressingMode::Immediate,  2, Cpu::ldx),
     0x86u8 => op!(OpMnemonic::STX, AddressingMode::ZeroPage,  3, Cpu::stx),
     // 0xu8 => op!(OpMnemonic::LDY, AddressingMode::Immediate,  0, Cpu::xxx),
@@ -230,8 +230,8 @@ static OPCODES: phf::Map<u8, Op> = phf_map! {
     0xD0u8 => op!(OpMnemonic::BNE, AddressingMode::Relative,  2, Cpu::bne),
     0x10u8 => op!(OpMnemonic::BPL, AddressingMode::Relative,  2, Cpu::bpl),
     0x30u8 => op!(OpMnemonic::BMI, AddressingMode::Relative,  2, Cpu::bmi),
-    // 0xu8 => op!(OpMnemonic::BVC, AddressingMode::Immediate,  0, Cpu::xxx),
-    // 0xu8 => op!(OpMnemonic::BVS, AddressingMode::Immediate,  0, Cpu::xxx),
+    0x50u8 => op!(OpMnemonic::BVC, AddressingMode::Immediate,  2, Cpu::bvc),
+    0x70u8 => op!(OpMnemonic::BVS, AddressingMode::Immediate,  2, Cpu::bvs),
     0x4Cu8 => op!(OpMnemonic::JMP, AddressingMode::Absolute,  3, Cpu::jmp),
     0x20u8 => op!(OpMnemonic::JSR, AddressingMode::Absolute,  6, Cpu::jsr),
     // 0xu8 => op!(OpMnemonic::RTS, AddressingMode::Immediate,  0, Cpu::xxx),
@@ -307,13 +307,13 @@ impl Cpu {
         OPCODES.get(&opcode)
     }
 
-    fn execute(&mut self, bus: &mut Bus, op: &Op, opcode: u8) {
+    fn execute(&mut self, bus: &mut Bus, ppu: &mut Ppu, op: &Op, opcode: u8) {
         let operand_bytes = op.mode.operand_bytes();
         let operands = bus.read(self.pc + 1, operand_bytes as u16).to_vec(); // FIXME: should not clone
 
         self.log.push_str(
             &format!(
-                "{:04X}  {:02X} {:6} {} {:27} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:  0, 21 CYC:{}\n",
+                "{:04X}  {:02X} {:6} {} {:27} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:{:3},{:3} CYC:{}\n",
                 self.pc,
                 opcode,
                 operands
@@ -332,22 +332,26 @@ impl Cpu {
                 self.y,
                 self.p.bits(),
                 self.sp,
+                ppu.scanline,
+                ppu.h_pixel,
                 self.cycle_count
             )
         );
 
         self.pc += 1 + operand_bytes as u16;
-        (op.execute)(self, bus, op.mode, &operands);
-        self.cycle_count += op.base_cycles;
+        let extra_cycles = (op.execute)(self, bus, op.mode, &operands);
+        let total_cycles = op.base_cycles + extra_cycles as usize;
+        self.cycle_count += total_cycles;
+        ppu.step(total_cycles);
     }
 
-    pub fn step(&mut self, bus: &mut Bus) {
+    pub fn step(&mut self, bus: &mut Bus, ppu: &mut Ppu) {
         let opcode = self.fetch(bus);
         let op = self.decode(opcode);
 
         match op {
             Some(op) => {
-                self.execute(bus, op, opcode);
+                self.execute(bus, ppu, op, opcode);
             }
             None => {
                 warn!("Unknown opcode: 0x{:02X}", opcode);
@@ -367,7 +371,7 @@ impl Cpu {
 
     fn pop_stack(&mut self, bus: &Bus) -> u8 {
         self.sp = self.sp.wrapping_add(1);
-        bus.read_byte(0x100 + self.sp as usize)
+        bus.read_byte(0x100 + self.sp)
     }
 
     fn read_operand(&self, bus: &Bus, mode: AddressingMode, operands: &[u8]) -> (u8, bool) {
@@ -393,7 +397,10 @@ impl Cpu {
         if page_crossed { 1 } else { 0 }
     }
 
-    // fn sta(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn sta(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
+        cpu.write_operand(bus, mode, operands, cpu.a);
+        0
+    }
 
     fn ldx(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
         let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
@@ -584,9 +591,31 @@ impl Cpu {
         }
     }
 
-    // fn bvc(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn bvc(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
+        if !cpu.p.contains(Flags::V) {
+            if let OperandValue::Address(addr, page_crossed) = mode.resolve(cpu, bus, operands) {
+                cpu.pc = addr;
+                if page_crossed { 2 } else { 1 }
+            } else {
+                0
+            }
+        } else {
+            0
+        }
+    }
 
-    // fn bvs(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn bvs(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
+        if cpu.p.contains(Flags::V) {
+            if let OperandValue::Address(addr, page_crossed) = mode.resolve(cpu, bus, operands) {
+                cpu.pc = addr;
+                if page_crossed { 2 } else { 1 }
+            } else {
+                0
+            }
+        } else {
+            0
+        }
+    }
 
     fn jmp(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
         if let OperandValue::Address(addr, _) = mode.resolve(cpu, bus, operands) {

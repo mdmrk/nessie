@@ -2,7 +2,7 @@ use std::sync::{Arc, mpsc};
 
 use log::info;
 
-use crate::{args::Args, bus::Bus, cart::Cart, cpu::Cpu, debug::DebugState};
+use crate::{args::Args, bus::Bus, cart::Cart, cpu::Cpu, debug::DebugState, ppu::Ppu};
 
 pub enum Command {
     Stop,
@@ -19,6 +19,7 @@ pub enum Event {
 
 pub struct Emu {
     pub cpu: Cpu,
+    pub ppu: Ppu,
     pub bus: Bus,
     pub cart: Option<Cart>,
     pub running: bool,
@@ -36,6 +37,7 @@ impl Emu {
     pub fn new() -> Self {
         Self {
             cpu: Cpu::new(),
+            ppu: Ppu::new(),
             bus: Bus::new(),
             cart: None,
             running: true,
@@ -111,7 +113,7 @@ pub fn emu_thread(command_rx: mpsc::Receiver<Command>, debug_state: Arc<DebugSta
 
         let should_run = !emu.paused || emu.want_step;
         if should_run {
-            emu.cpu.step(&mut emu.bus);
+            emu.cpu.step(&mut emu.bus, &mut emu.ppu);
             emu.want_step = false;
         }
         debug_state.update(&mut emu);
