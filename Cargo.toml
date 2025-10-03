@@ -11,7 +11,7 @@ eframe = "0.32.3"
 egui = "0.32.3"
 env_logger = "0.11.8"
 log = "0.4.28"
-modular-bitfield = "0.12.0"
+modular-bitfield = { git = "https://github.com/phire/modular-bitfield", branch = "unnecessary_parentheses" } # FIXME: update to master once merged
 phf = { version = "0.13.1", features = ["macros"] }
 
 [profile.release]
