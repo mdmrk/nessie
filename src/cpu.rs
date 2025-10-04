@@ -349,7 +349,7 @@ impl Cpu {
             let ok = debug_log.compare(&debug_str);
             if !ok {
                 let mut log = debug_log.log[debug_log.line - 1].clone();
-                log.push_str("     [ACTUAL LOG]");
+                log.push_str(" [ACTUAL LOG]");
                 self.log.push_str(&log);
             }
             ok
