@@ -101,8 +101,8 @@ pub fn emu_thread(command_rx: mpsc::Receiver<Command>, debug_state: Arc<DebugSta
     if let Some(rom) = &args.rom {
         emu.load_rom(rom);
     }
-    if !&args.logfile.is_empty() {
-        emu.debug_log = Some(DebugLog::new(&args.logfile));
+    if let Some(logfile) = &args.logfile {
+        emu.debug_log = Some(DebugLog::new(&logfile));
     }
 
     loop {

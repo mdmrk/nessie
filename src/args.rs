@@ -10,5 +10,5 @@ pub struct Args {
     pub pause: bool,
 
     #[arg(short, long, help = "A reference output log file to test roms")]
-    pub logfile: String,
+    pub logfile: Option<String>,
 }
