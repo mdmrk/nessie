@@ -2,7 +2,14 @@ use std::sync::{Arc, mpsc};
 
 use log::info;
 
-use crate::{args::Args, bus::Bus, cart::Cart, cpu::Cpu, debug::DebugState, ppu::Ppu};
+use crate::{
+    args::Args,
+    bus::Bus,
+    cart::Cart,
+    cpu::Cpu,
+    debug::{DebugLog, DebugState},
+    ppu::Ppu,
+};
 
 pub enum Command {
     Stop,
@@ -25,6 +32,7 @@ pub struct Emu {
     pub running: bool,
     pub paused: bool,
     pub want_step: bool,
+    pub debug_log: Option<DebugLog>,
 }
 
 impl Default for Emu {
@@ -43,6 +51,7 @@ impl Emu {
             running: true,
             paused: false,
             want_step: false,
+            debug_log: None,
         }
     }
 
@@ -92,6 +101,9 @@ pub fn emu_thread(command_rx: mpsc::Receiver<Command>, debug_state: Arc<DebugSta
     if let Some(rom) = &args.rom {
         emu.load_rom(rom);
     }
+    if !&args.logfile.is_empty() {
+        emu.debug_log = Some(DebugLog::new(&args.logfile));
+    }
 
     loop {
         while let Ok(command) = command_rx.try_recv() {
@@ -113,7 +125,10 @@ pub fn emu_thread(command_rx: mpsc::Receiver<Command>, debug_state: Arc<DebugSta
 
         let should_run = !emu.paused || emu.want_step;
         if should_run {
-            emu.cpu.step(&mut emu.bus, &mut emu.ppu);
+            let ok = emu.cpu.step(&mut emu.bus, &mut emu.ppu, &mut emu.debug_log);
+            if !ok {
+                emu.pause();
+            }
             emu.want_step = false;
         }
         debug_state.update(&mut emu);

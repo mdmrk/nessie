@@ -4,7 +4,7 @@ use bitflags::bitflags;
 use log::warn;
 use phf::phf_map;
 
-use crate::{bus::Bus, ppu::Ppu};
+use crate::{bus::Bus, debug::DebugLog, ppu::Ppu};
 
 #[derive(Debug)]
 pub enum OperandValue {
@@ -307,35 +307,35 @@ impl Cpu {
         OPCODES.get(&opcode)
     }
 
-    fn execute(&mut self, bus: &mut Bus, ppu: &mut Ppu, op: &Op, opcode: u8) {
+    fn execute(
+        &mut self,
+        bus: &mut Bus,
+        ppu: &mut Ppu,
+        op: &Op,
+        opcode: u8,
+        debug_log: &mut Option<DebugLog>,
+    ) -> bool {
         let operand_bytes = op.mode.operand_bytes();
         let operands = bus.read(self.pc + 1, operand_bytes as u16).to_vec(); // FIXME: should not clone
 
-        self.log.push_str(
-            &format!(
-                "{:04X}  {:02X} {:6} {} {:27} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:{:3},{:3} CYC:{}\n",
-                self.pc,
-                opcode,
-                operands
-                    .iter()
-                    .map(|c| format!("{:02X}", c))
-                    .collect::<Vec<String>>()
-                    .join(" "),
-                op.mnemonic,
-                match op.mode.resolve(self, bus, operands.as_slice()) {
-                    OperandValue::Value(v) => format!("{}${:02X}",if op.mode == AddressingMode::Immediate {"#"} else {""} ,v),
-                    OperandValue::Address(addr, _) => format!("${:04X}", addr),
-                    OperandValue::Implicid => " ".into(),
-                },
-                self.a,
-                self.x,
-                self.y,
-                self.p.bits(),
-                self.sp,
-                ppu.scanline,
-                ppu.h_pixel,
-                self.cycle_count
-            )
+        let debug_str = format!(
+            "{:04X}  {:02X} {:6} {} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:{:3},{:3} CYC:{}\n",
+            self.pc,
+            opcode,
+            operands
+                .iter()
+                .map(|c| format!("{:02X}", c))
+                .collect::<Vec<String>>()
+                .join(" "),
+            op.mnemonic,
+            self.a,
+            self.x,
+            self.y,
+            self.p.bits(),
+            self.sp,
+            ppu.scanline,
+            ppu.h_pixel,
+            self.cycle_count
         );
 
         self.pc += 1 + operand_bytes as u16;
@@ -343,18 +343,30 @@ impl Cpu {
         let total_cycles = op.base_cycles + extra_cycles as usize;
         self.cycle_count += total_cycles;
         ppu.step(total_cycles);
+
+        self.log.push_str(&debug_str);
+        if let Some(debug_log) = debug_log {
+            let ok = debug_log.compare(&debug_str);
+            if !ok {
+                let mut log = debug_log.log[debug_log.line - 1].clone();
+                log.push_str("     [ACTUAL LOG]");
+                self.log.push_str(&log);
+            }
+            ok
+        } else {
+            true
+        }
     }
 
-    pub fn step(&mut self, bus: &mut Bus, ppu: &mut Ppu) {
+    pub fn step(&mut self, bus: &mut Bus, ppu: &mut Ppu, debug_log: &mut Option<DebugLog>) -> bool {
         let opcode = self.fetch(bus);
         let op = self.decode(opcode);
 
         match op {
-            Some(op) => {
-                self.execute(bus, ppu, op, opcode);
-            }
+            Some(op) => self.execute(bus, ppu, op, opcode, debug_log),
             None => {
                 warn!("Unknown opcode: 0x{:02X}", opcode);
+                true
             }
         }
     }

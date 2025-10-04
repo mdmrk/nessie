@@ -8,4 +8,7 @@ pub struct Args {
 
     #[arg(short, long, default_value_t = false, help = "Start in paused state")]
     pub pause: bool,
+
+    #[arg(short, long, help = "A reference output log file to test roms")]
+    pub logfile: String,
 }

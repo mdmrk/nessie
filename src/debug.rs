@@ -1,18 +1,38 @@
 use std::sync::RwLock;
 
+use log::warn;
+
 use crate::{bus::Bus, cart::Header, cpu::Cpu, emu::Emu};
 
+#[derive(Default)]
+pub struct DebugLog {
+    pub log: Vec<String>,
+    pub line: usize,
+}
+
+impl DebugLog {
+    pub fn new(logfile: &String) -> Self {
+        let log = String::from_utf8(std::fs::read(logfile).unwrap_or_default())
+            .unwrap()
+            .split("\n")
+            .map(|s| s.to_string())
+            .collect();
+        Self { log, line: 0 }
+    }
+
+    pub fn compare(&mut self, debug_str: &str) -> bool {
+        let line = self.line;
+        self.line += 1;
+        self.log[line].trim() == debug_str.trim()
+    }
+}
+
+#[derive(Default)]
 pub struct DebugState {
     pub cpu: RwLock<Cpu>,
     pub bus: RwLock<Bus>,
     pub cart_header: RwLock<Option<Header>>,
     pub cpu_log: RwLock<String>,
-}
-
-impl Default for DebugState {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl DebugState {
