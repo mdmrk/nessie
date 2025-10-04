@@ -405,7 +405,7 @@ impl Cpu {
     fn lda(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
         let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
         cpu.a = value;
-        cpu.update_nz(cpu.x);
+        cpu.update_nz(cpu.a);
         if page_crossed { 1 } else { 0 }
     }
 
@@ -514,8 +514,8 @@ impl Cpu {
         let (value, _) = cpu.read_operand(bus, mode, operands);
         let result = value & cpu.a;
         cpu.p.set(Flags::Z, result == 0);
-        cpu.p.set(Flags::V, result & 0b0100_0000 != 0);
-        cpu.p.set(Flags::N, result & 0b1000_0000 != 0);
+        cpu.p.set(Flags::V, result & 0b0100_0000 == 0);
+        cpu.p.set(Flags::N, result & 0b1000_0000 == 0);
         0
     }
 

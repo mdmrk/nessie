@@ -116,6 +116,10 @@ impl Ui {
                             ui.label(format!("{}", cpu.y));
                             ui.label(format!("0x{:02X}", cpu.y));
                             ui.end_row();
+                            ui.add(egui::Label::new("p"));
+                            ui.label(format!("{}", cpu.p.bits()));
+                            ui.label(format!("0x{:02X}", cpu.p.bits()));
+                            ui.end_row();
                         });
                     let flags = [
                         (Flags::N, "N"),

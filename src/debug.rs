@@ -1,7 +1,5 @@
 use std::sync::RwLock;
 
-use log::warn;
-
 use crate::{bus::Bus, cart::Header, cpu::Cpu, emu::Emu};
 
 #[derive(Default)]
