@@ -102,7 +102,7 @@ pub fn emu_thread(command_rx: mpsc::Receiver<Command>, debug_state: Arc<DebugSta
         emu.load_rom(rom);
     }
     if let Some(logfile) = &args.logfile {
-        emu.debug_log = Some(DebugLog::new(&logfile));
+        emu.debug_log = Some(DebugLog::new(logfile));
     }
 
     loop {
