@@ -151,6 +151,25 @@ impl Ui {
 
                 ui.separator();
 
+                ui.heading("Stack");
+                if let Ok(bus) = self.debug_state.bus.read() {
+                    egui::ScrollArea::vertical()
+                        .max_height(200.0)
+                        .show(ui, |ui| {
+                            egui::Grid::new("sp_grid")
+                                .num_columns(3)
+                                .striped(true)
+                                .show(ui, |ui| {
+                                    for i in (0x100..0x1FF).rev().into_iter() {
+                                        ui.add(egui::Label::new(format!("0x{:04X}", i)));
+                                        ui.label(format!("{}", bus.read_byte(i)));
+                                        ui.label(format!("0x{:02X}", bus.read_byte(i)));
+                                        ui.end_row();
+                                    }
+                                });
+                        });
+                }
+
                 ui.heading("Memory");
                 egui::TextEdit::singleline(&mut self.mem_search)
                     .hint_text("Address")
@@ -165,7 +184,7 @@ impl Ui {
 
                             if let Ok(n) = usize::from_str_radix(&self.mem_search, 16) {
                                 for i in n.saturating_sub(SHOW_MORE)..=(n + SHOW_MORE).min(0xffff) {
-                                    ui.add(egui::Label::new(format!("0x{:x}", i)));
+                                    ui.add(egui::Label::new(format!("0x{:04X}", i)));
                                     ui.label(format!("{}", bus.read_byte(i)));
                                     ui.label(format!("0x{:02X}", bus.read_byte(i)));
                                     ui.end_row();

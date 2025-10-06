@@ -215,11 +215,11 @@ static OPCODES: phf::Map<u8, Op> = phf_map! {
     // 0xu8 => op!(OpMnemonic::DEY, AddressingMode::Immediate,  0, Cpu::dey),
     // 0xu8 => op!(OpMnemonic::ASL, AddressingMode::Immediate,  0, Cpu::asl),
     // 0xu8 => op!(OpMnemonic::LSR, AddressingMode::Immediate,  0, Cpu::lsr),
-    // 0xu8 => op!(OpMnemonic::ROL, AddressingMode::Immediate,  0, Cpu::rol),
-    // 0xu8 => op!(OpMnemonic::ROR, AddressingMode::Immediate,  0, Cpu::ror),
+    0x2Au8 => op!(OpMnemonic::ROL, AddressingMode::Accumulator,  2, Cpu::rol),
+    0x6Au8 => op!(OpMnemonic::ROR, AddressingMode::Accumulator,  2, Cpu::ror),
     0x29u8 => op!(OpMnemonic::AND, AddressingMode::Immediate,  2, Cpu::and),
     0x09u8 => op!(OpMnemonic::ORA, AddressingMode::Immediate,  2, Cpu::ora),
-    // 0xu8 => op!(OpMnemonic::EOR, AddressingMode::Immediate,  0, Cpu::eor),
+    0x49u8 => op!(OpMnemonic::EOR, AddressingMode::Immediate,  2, Cpu::eor),
     0x24u8 => op!(OpMnemonic::BIT, AddressingMode::ZeroPage,  3, Cpu::bit),
     0xC9u8 => op!(OpMnemonic::CMP, AddressingMode::Immediate,  2, Cpu::cmp),
     0xE0u8 => op!(OpMnemonic::CPX, AddressingMode::Immediate,  2, Cpu::cpx),
@@ -247,9 +247,9 @@ static OPCODES: phf::Map<u8, Op> = phf_map! {
     0x38u8 => op!(OpMnemonic::SEC, AddressingMode::Implicid,  2, Cpu::sec),
     // 0xu8 => op!(OpMnemonic::CLI, AddressingMode::Immediate,  0, Cpu::cli),
     0x78u8 => op!(OpMnemonic::SEI, AddressingMode::Implicid,  2, Cpu::sei),
-    // 0xu8 => op!(OpMnemonic::CLD, AddressingMode::Immediate,  0, Cpu::cld),
+    0xD8u8 => op!(OpMnemonic::CLD, AddressingMode::Implicid,  2, Cpu::cld),
     0xF8u8 => op!(OpMnemonic::SED, AddressingMode::Implicid,  2, Cpu::sed),
-    // 0xu8 => op!(OpMnemonic::CLV, AddressingMode::Immediate,  0, Cpu::clv),
+    0xB8u8 => op!(OpMnemonic::CLV, AddressingMode::Implicid,  2, Cpu::clv),
     0xEAu8 => op!(OpMnemonic::NOP, AddressingMode::Implicid,  2, Cpu::nop),
 };
 
@@ -458,9 +458,15 @@ impl Cpu {
 
     // fn lsr(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
 
-    // fn rol(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn rol(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
+        let (value, _) = cpu.read_operand(bus, mode, operands);
+        0
+    }
 
-    // fn ror(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn ror(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
+        let (value, _) = cpu.read_operand(bus, mode, operands);
+        0
+    }
 
     fn and(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
         let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
@@ -508,14 +514,35 @@ impl Cpu {
         }
     }
 
-    // fn eor(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn eor(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
+        let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
+        cpu.a ^= value;
+        cpu.update_nz(cpu.a);
+        match mode {
+            AddressingMode::AbsoluteX | AddressingMode::AbsoluteY => {
+                if page_crossed {
+                    2
+                } else {
+                    1
+                }
+            }
+            AddressingMode::IndirectY => {
+                if page_crossed {
+                    4
+                } else {
+                    3
+                }
+            }
+            _ => 0,
+        }
+    }
 
     fn bit(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
         let (value, _) = cpu.read_operand(bus, mode, operands);
         let result = value & cpu.a;
         cpu.p.set(Flags::Z, result == 0);
-        cpu.p.set(Flags::V, result & 0b0100_0000 != 0);
-        cpu.p.set(Flags::N, result & 0b1000_0000 != 0);
+        cpu.p.set(Flags::V, value & 0b0100_0000 != 0);
+        cpu.p.set(Flags::N, value & 0b1000_0000 != 0);
         0
     }
 
@@ -628,7 +655,7 @@ impl Cpu {
     }
 
     fn bmi(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
-        if !cpu.p.contains(Flags::N) {
+        if cpu.p.contains(Flags::N) {
             if let OperandValue::Address(addr, page_crossed) = mode.resolve(cpu, bus, operands) {
                 cpu.pc = addr;
                 if page_crossed { 2 } else { 1 }
@@ -685,7 +712,7 @@ impl Cpu {
     fn rts(cpu: &mut Cpu, bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
         let lo = cpu.pop_stack(bus);
         let hi = cpu.pop_stack(bus);
-        cpu.pc = (hi as u16) << 8 | lo as u16;
+        cpu.pc = u16::from_le_bytes([lo, hi]);
         0
     }
 
@@ -705,13 +732,15 @@ impl Cpu {
     }
 
     fn php(cpu: &mut Cpu, bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
-        let p = cpu.p.clone() | Flags::B;
+        let p = cpu.p.clone() | Flags::B | Flags::_1;
         cpu.push_stack(bus, p.bits());
         0
     }
 
     fn plp(cpu: &mut Cpu, bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
-        let p = Flags::from_bits(cpu.pop_stack(bus)).unwrap();
+        let mut p = Flags::from_bits(cpu.pop_stack(bus)).unwrap();
+        p.remove(Flags::B);
+        p.insert(Flags::_1);
         cpu.p = p;
         0
     }
@@ -737,14 +766,20 @@ impl Cpu {
         0
     }
 
-    // fn cld(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn cld(cpu: &mut Cpu, _bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
+        cpu.p.set(Flags::D, false);
+        0
+    }
 
     fn sed(cpu: &mut Cpu, _bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
         cpu.p.set(Flags::D, true);
         0
     }
 
-    // fn clv(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn clv(cpu: &mut Cpu, _bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
+        cpu.p.set(Flags::V, false);
+        0
+    }
 
     fn nop(_cpu: &mut Cpu, _bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
         0
