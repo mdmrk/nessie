@@ -153,7 +153,7 @@ impl Ui {
 
                 ui.heading("Stack");
                 if let Ok(bus) = self.debug_state.bus.read() {
-                    egui::ScrollArea::vertical()
+                    egui::ScrollArea::vertical() // FIXME: optimize this
                         .max_height(200.0)
                         .show(ui, |ui| {
                             egui::Grid::new("sp_grid")

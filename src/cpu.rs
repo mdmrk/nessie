@@ -199,20 +199,21 @@ static OPCODES: phf::Map<u8, Op> = phf_map! {
     0x85u8 => op!(OpMnemonic::STA, AddressingMode::ZeroPage,  3, Cpu::sta),
     0xA2u8 => op!(OpMnemonic::LDX, AddressingMode::Immediate,  2, Cpu::ldx),
     0x86u8 => op!(OpMnemonic::STX, AddressingMode::ZeroPage,  3, Cpu::stx),
-    // 0xu8 => op!(OpMnemonic::LDY, AddressingMode::Immediate,  0, Cpu::ldy),
+    0x8Eu8 => op!(OpMnemonic::STX, AddressingMode::Absolute,  4, Cpu::stx),
+    0xA0u8 => op!(OpMnemonic::LDY, AddressingMode::Immediate,  2, Cpu::ldy),
     // 0xu8 => op!(OpMnemonic::STY, AddressingMode::Immediate,  0, Cpu::sty),
-    // 0xu8 => op!(OpMnemonic::TAX, AddressingMode::Immediate,  0, Cpu::tax),
-    // 0xu8 => op!(OpMnemonic::TXA, AddressingMode::Immediate,  0, Cpu::txa),
-    // 0xu8 => op!(OpMnemonic::TAY, AddressingMode::Immediate,  0, Cpu::tay),
-    // 0xu8 => op!(OpMnemonic::TYA, AddressingMode::Immediate,  0, Cpu::tya),
-    // 0xu8 => op!(OpMnemonic::ADC, AddressingMode::Immediate,  0, Cpu::adc),
-    // 0xu8 => op!(OpMnemonic::SBC, AddressingMode::Immediate,  0, Cpu::sbc),
+    0xAAu8 => op!(OpMnemonic::TAX, AddressingMode::Implicid,  2, Cpu::tax),
+    0x8Au8 => op!(OpMnemonic::TXA, AddressingMode::Implicid,  2, Cpu::txa),
+    0xA8u8 => op!(OpMnemonic::TAY, AddressingMode::Implicid,  2, Cpu::tay),
+    0x98u8 => op!(OpMnemonic::TYA, AddressingMode::Implicid,  2, Cpu::tya),
+    0x69u8 => op!(OpMnemonic::ADC, AddressingMode::Immediate,  2, Cpu::adc),
+    0xE9u8 => op!(OpMnemonic::SBC, AddressingMode::Immediate,  2, Cpu::sbc),
     // 0xu8 => op!(OpMnemonic::INC, AddressingMode::Immediate,  0, Cpu::inc),
     // 0xu8 => op!(OpMnemonic::DEC, AddressingMode::Immediate,  0, Cpu::dec),
-    // 0xu8 => op!(OpMnemonic::INX, AddressingMode::Immediate,  0, Cpu::inx),
-    // 0xu8 => op!(OpMnemonic::DEX, AddressingMode::Immediate,  0, Cpu::dex),
-    // 0xu8 => op!(OpMnemonic::INY, AddressingMode::Immediate,  0, Cpu::iny),
-    // 0xu8 => op!(OpMnemonic::DEY, AddressingMode::Immediate,  0, Cpu::dey),
+    0xE8u8 => op!(OpMnemonic::INX, AddressingMode::Implicid,  2, Cpu::inx),
+    0xCAu8 => op!(OpMnemonic::DEX, AddressingMode::Implicid,  2, Cpu::dex),
+    0xC8u8 => op!(OpMnemonic::INY, AddressingMode::Implicid,  2, Cpu::iny),
+    0x88u8 => op!(OpMnemonic::DEY, AddressingMode::Implicid,  2, Cpu::dey),
     // 0xu8 => op!(OpMnemonic::ASL, AddressingMode::Immediate,  0, Cpu::asl),
     // 0xu8 => op!(OpMnemonic::LSR, AddressingMode::Immediate,  0, Cpu::lsr),
     0x2Au8 => op!(OpMnemonic::ROL, AddressingMode::Accumulator,  2, Cpu::rol),
@@ -241,8 +242,8 @@ static OPCODES: phf::Map<u8, Op> = phf_map! {
     0x68u8 => op!(OpMnemonic::PLA, AddressingMode::Implicid,  4, Cpu::pla),
     0x08u8 => op!(OpMnemonic::PHP, AddressingMode::Implicid,  3, Cpu::php),
     0x28u8 => op!(OpMnemonic::PLP, AddressingMode::Implicid,  4, Cpu::plp),
-    // 0xu8 => op!(OpMnemonic::TXS, AddressingMode::Immediate,  0, Cpu::txs),
-    // 0xu8 => op!(OpMnemonic::TSX, AddressingMode::Immediate,  0, Cpu::tsx),
+    0x9Au8 => op!(OpMnemonic::TXS, AddressingMode::Implicid,  2, Cpu::txs),
+    0xBAu8 => op!(OpMnemonic::TSX, AddressingMode::Implicid,  2, Cpu::tsx),
     0x18u8 => op!(OpMnemonic::CLC, AddressingMode::Implicid,  2, Cpu::clc),
     0x38u8 => op!(OpMnemonic::SEC, AddressingMode::Implicid,  2, Cpu::sec),
     // 0xu8 => op!(OpMnemonic::CLI, AddressingMode::Immediate,  0, Cpu::cli),
@@ -426,33 +427,128 @@ impl Cpu {
         0
     }
 
-    // fn ldy(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn ldy(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
+        let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
+        cpu.y = value;
+        cpu.update_nz(cpu.y);
+        if page_crossed { 1 } else { 0 }
+    }
 
     // fn sty(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
 
-    // fn tax(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn tax(cpu: &mut Cpu, _bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
+        cpu.x = cpu.a;
+        cpu.update_nz(cpu.x);
+        0
+    }
 
-    // fn txa(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn txa(cpu: &mut Cpu, _bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
+        cpu.a = cpu.x;
+        cpu.update_nz(cpu.a);
+        0
+    }
 
-    // fn tay(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn tay(cpu: &mut Cpu, _bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
+        cpu.y = cpu.a;
+        cpu.update_nz(cpu.y);
+        0
+    }
 
-    // fn tya(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn tya(cpu: &mut Cpu, _bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
+        cpu.a = cpu.y;
+        cpu.update_nz(cpu.a);
+        0
+    }
 
-    // fn adc(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn adc(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
+        let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
+        let carry = if cpu.p.contains(Flags::C) { 1 } else { 0 };
+        let old_a = cpu.a;
+        let result = cpu.a.wrapping_add(value + carry);
+        cpu.p
+            .set(Flags::V, ((result ^ cpu.a) & (result ^ value) & 0x80) != 0);
 
-    // fn sbc(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+        cpu.a = result;
+        cpu.update_nz(cpu.a);
+        cpu.p.set(Flags::C, cpu.a < old_a);
+
+        match mode {
+            AddressingMode::AbsoluteX | AddressingMode::AbsoluteY => {
+                if page_crossed {
+                    2
+                } else {
+                    1
+                }
+            }
+            AddressingMode::IndirectY => {
+                if page_crossed {
+                    4
+                } else {
+                    3
+                }
+            }
+            _ => 0,
+        }
+    }
+
+    fn sbc(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
+        let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
+        let carry = if cpu.p.contains(Flags::C) { 1 } else { 0 };
+        let diff = cpu.a as u16 + (!value as u16) + carry as u16;
+        let result = diff as u8;
+
+        cpu.p
+            .set(Flags::V, ((result ^ cpu.a) & (result ^ !value) & 0x80) != 0);
+        cpu.p.set(Flags::C, diff > 0xFF);
+        cpu.a = result;
+        cpu.update_nz(cpu.a);
+
+        match mode {
+            AddressingMode::AbsoluteX | AddressingMode::AbsoluteY => {
+                if page_crossed {
+                    2
+                } else {
+                    1
+                }
+            }
+            AddressingMode::IndirectY => {
+                if page_crossed {
+                    4
+                } else {
+                    3
+                }
+            }
+            _ => 0,
+        }
+    }
 
     // fn inc(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
 
     // fn dec(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
 
-    // fn inx(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn inx(cpu: &mut Cpu, _bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
+        cpu.x = cpu.x.wrapping_add(1);
+        cpu.update_nz(cpu.x);
+        0
+    }
 
-    // fn dex(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn dex(cpu: &mut Cpu, _bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
+        cpu.x = cpu.x.wrapping_sub(1);
+        cpu.update_nz(cpu.x);
+        0
+    }
 
-    // fn iny(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn iny(cpu: &mut Cpu, _bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
+        cpu.y = cpu.y.wrapping_add(1);
+        cpu.update_nz(cpu.y);
+        0
+    }
 
-    // fn dey(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn dey(cpu: &mut Cpu, _bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
+        cpu.y = cpu.y.wrapping_sub(1);
+        cpu.update_nz(cpu.y);
+        0
+    }
 
     // fn asl(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
 
@@ -460,11 +556,21 @@ impl Cpu {
 
     fn rol(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
         let (value, _) = cpu.read_operand(bus, mode, operands);
+        let carry = if cpu.p.contains(Flags::C) { 1 } else { 0 };
+        let result = (value << 1) & carry;
+        cpu.p.set(Flags::C, (value & 0b1000_0000) != 0);
+        cpu.p.set(Flags::Z, result == 0);
+        cpu.p.set(Flags::N, (result & 0b1000_0000) != 0);
         0
     }
 
     fn ror(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
         let (value, _) = cpu.read_operand(bus, mode, operands);
+        let carry = if cpu.p.contains(Flags::C) { 1 } else { 0 };
+        let result = (value >> 1) & carry;
+        cpu.p.set(Flags::C, (value & 0b1) != 0);
+        cpu.p.set(Flags::Z, result == 0);
+        cpu.p.set(Flags::N, (result & 0b1000_0000) != 0);
         0
     }
 
@@ -745,9 +851,16 @@ impl Cpu {
         0
     }
 
-    // fn txs(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn txs(cpu: &mut Cpu, bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
+        bus.write_byte(0x100 + cpu.sp, cpu.x);
+        0
+    }
 
-    // fn tsx(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn tsx(cpu: &mut Cpu, bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
+        cpu.x = bus.read_byte(0x100 + cpu.sp);
+        cpu.update_nz(cpu.x);
+        0
+    }
 
     fn clc(cpu: &mut Cpu, _bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
         cpu.p.set(Flags::C, false);
