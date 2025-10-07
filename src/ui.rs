@@ -160,7 +160,7 @@ impl Ui {
                                 .num_columns(3)
                                 .striped(true)
                                 .show(ui, |ui| {
-                                    for i in (0x100..0x1FF).rev().into_iter() {
+                                    for i in (0x100..0x1FF).rev() {
                                         ui.add(egui::Label::new(format!("0x{:04X}", i)));
                                         ui.label(format!("{}", bus.read_byte(i)));
                                         ui.label(format!("0x{:02X}", bus.read_byte(i)));
