@@ -204,6 +204,12 @@ static OPCODES: phf::Map<u8, Op> = phf_map! {
     0xA1u8 => op!(OpMnemonic::LDA, AddressingMode::IndirectX  , 6, Cpu::lda),
     0xB1u8 => op!(OpMnemonic::LDA, AddressingMode::IndirectY  , 5, Cpu::lda),
     0x85u8 => op!(OpMnemonic::STA, AddressingMode::ZeroPage   , 3, Cpu::sta),
+    0x95u8 => op!(OpMnemonic::STA, AddressingMode::ZeroPageX  , 4, Cpu::sta),
+    0x8Du8 => op!(OpMnemonic::STA, AddressingMode::Absolute   , 4, Cpu::sta),
+    0x9Du8 => op!(OpMnemonic::STA, AddressingMode::AbsoluteX  , 5, Cpu::sta),
+    0x99u8 => op!(OpMnemonic::STA, AddressingMode::AbsoluteY  , 5, Cpu::sta),
+    0x81u8 => op!(OpMnemonic::STA, AddressingMode::Indirect   , 6, Cpu::sta),
+    0x91u8 => op!(OpMnemonic::STA, AddressingMode::IndirectY  , 6, Cpu::sta),
     0xA2u8 => op!(OpMnemonic::LDX, AddressingMode::Immediate  , 2, Cpu::ldx),
     0xA6u8 => op!(OpMnemonic::LDX, AddressingMode::ZeroPage   , 2, Cpu::ldx),
     0xB6u8 => op!(OpMnemonic::LDX, AddressingMode::ZeroPageY  , 4, Cpu::ldx),
@@ -228,8 +234,8 @@ static OPCODES: phf::Map<u8, Op> = phf_map! {
     0xCAu8 => op!(OpMnemonic::DEX, AddressingMode::Implicid   , 2, Cpu::dex),
     0xC8u8 => op!(OpMnemonic::INY, AddressingMode::Implicid   , 2, Cpu::iny),
     0x88u8 => op!(OpMnemonic::DEY, AddressingMode::Implicid   , 2, Cpu::dey),
-    // 0xu8 => op!(OpMnemonic::ASL, AddressingMode::Immediate , 0, Cpu::asl),
-    // 0xu8 => op!(OpMnemonic::LSR, AddressingMode::Immediate , 0, Cpu::lsr),
+    0x0Au8 => op!(OpMnemonic::ASL, AddressingMode::Accumulator, 2, Cpu::asl),
+    0x4Au8 => op!(OpMnemonic::LSR, AddressingMode::Accumulator, 2, Cpu::lsr),
     0x2Au8 => op!(OpMnemonic::ROL, AddressingMode::Accumulator, 2, Cpu::rol),
     0x6Au8 => op!(OpMnemonic::ROR, AddressingMode::Accumulator, 2, Cpu::ror),
     0x29u8 => op!(OpMnemonic::AND, AddressingMode::Immediate  , 2, Cpu::and),
@@ -251,7 +257,7 @@ static OPCODES: phf::Map<u8, Op> = phf_map! {
     0x20u8 => op!(OpMnemonic::JSR, AddressingMode::Absolute   , 6, Cpu::jsr),
     0x60u8 => op!(OpMnemonic::RTS, AddressingMode::Implicid   , 6, Cpu::rts),
     // 0xu8 => op!(OpMnemonic::BRK, AddressingMode::Immediate , 0, Cpu::brk),
-    // 0xu8 => op!(OpMnemonic::RTI, AddressingMode::Immediate , 0, Cpu::rti),
+    0x40u8 => op!(OpMnemonic::RTI, AddressingMode::Implicid   , 6, Cpu::rti),
     0x48u8 => op!(OpMnemonic::PHA, AddressingMode::Implicid   , 3, Cpu::pha),
     0x68u8 => op!(OpMnemonic::PLA, AddressingMode::Implicid   , 4, Cpu::pla),
     0x08u8 => op!(OpMnemonic::PHP, AddressingMode::Implicid   , 3, Cpu::php),
@@ -567,27 +573,45 @@ impl Cpu {
         0
     }
 
-    // fn asl(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn asl(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
+        let (value, _) = cpu.read_operand(bus, mode, operands);
+        let result = value << 1;
+        cpu.p.set(Flags::C, (value & 0b1000_0000) != 0);
+        cpu.p.set(Flags::Z, result == 0);
+        cpu.p.set(Flags::N, (result & 0b1000_0000) != 0);
+        cpu.write_operand(bus, mode, operands, result);
+        0
+    }
 
-    // fn lsr(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn lsr(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
+        let (value, _) = cpu.read_operand(bus, mode, operands);
+        let result = value >> 1;
+        cpu.p.set(Flags::C, (value & 0b1) != 0);
+        cpu.p.set(Flags::Z, result == 0);
+        cpu.p.set(Flags::N, false);
+        cpu.write_operand(bus, mode, operands, result);
+        0
+    }
 
     fn rol(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
         let (value, _) = cpu.read_operand(bus, mode, operands);
         let carry = if cpu.p.contains(Flags::C) { 1 } else { 0 };
-        let result = (value << 1) & carry;
-        cpu.p.set(Flags::C, (value & 0b1000_0000) != 0);
+        let result = (value << 1) | carry;
+        cpu.p.set(Flags::C, ((value >> 7) & 1) != 0);
         cpu.p.set(Flags::Z, result == 0);
-        cpu.p.set(Flags::N, (result & 0b1000_0000) != 0);
+        cpu.p.set(Flags::N, (result & 0x80) != 0);
+        cpu.write_operand(bus, mode, operands, result);
         0
     }
 
     fn ror(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
         let (value, _) = cpu.read_operand(bus, mode, operands);
         let carry = if cpu.p.contains(Flags::C) { 1 } else { 0 };
-        let result = (value >> 1) & carry;
+        let result = (value >> 1) | (carry << 7);
         cpu.p.set(Flags::C, (value & 0b1) != 0);
         cpu.p.set(Flags::Z, result == 0);
         cpu.p.set(Flags::N, (result & 0b1000_0000) != 0);
+        cpu.write_operand(bus, mode, operands, result);
         0
     }
 
@@ -824,8 +848,9 @@ impl Cpu {
     }
 
     fn jsr(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
-        cpu.push_stack(bus, (cpu.pc >> 8) as u8);
-        cpu.push_stack(bus, cpu.pc as u8);
+        let pc = cpu.pc.wrapping_sub(1);
+        cpu.push_stack(bus, (pc >> 8) as u8);
+        cpu.push_stack(bus, pc as u8);
         if let OperandValue::Address(addr, _) = mode.resolve(cpu, bus, operands) {
             cpu.pc = addr;
         }
@@ -835,13 +860,22 @@ impl Cpu {
     fn rts(cpu: &mut Cpu, bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
         let lo = cpu.pop_stack(bus);
         let hi = cpu.pop_stack(bus);
-        cpu.pc = u16::from_le_bytes([lo, hi]);
+        cpu.pc = u16::from_le_bytes([lo, hi]).wrapping_add(1);
         0
     }
 
     // fn brk(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
 
-    // fn rti(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn rti(cpu: &mut Cpu, bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
+        let mut p = Flags::from_bits(cpu.pop_stack(bus)).unwrap();
+        p.remove(Flags::B);
+        p.insert(Flags::_1);
+        cpu.p = p;
+        let lo = cpu.pop_stack(bus);
+        let hi = cpu.pop_stack(bus);
+        cpu.pc = u16::from_le_bytes([lo, hi]);
+        0
+    }
 
     fn pha(cpu: &mut Cpu, bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
         cpu.push_stack(bus, cpu.a);
