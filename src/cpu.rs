@@ -246,8 +246,14 @@ static OPCODES: phf::Map<u8, Op> = phf_map! {
     0xF9u8 => op!(OpMnemonic::SBC, AddressingMode::AbsoluteY  , 4, Cpu::sbc),
     0xE1u8 => op!(OpMnemonic::SBC, AddressingMode::IndirectX  , 6, Cpu::sbc),
     0xF1u8 => op!(OpMnemonic::SBC, AddressingMode::IndirectY  , 5, Cpu::sbc),
-    // 0xu8 => op!(OpMnemonic::INC, AddressingMode::Immediate , 0, Cpu::inc),
-    // 0xu8 => op!(OpMnemonic::DEC, AddressingMode::Immediate , 0, Cpu::dec),
+    0xE6u8 => op!(OpMnemonic::INC, AddressingMode::ZeroPage   , 5, Cpu::inc),
+    0xF6u8 => op!(OpMnemonic::INC, AddressingMode::ZeroPageX  , 6, Cpu::inc),
+    0xEEu8 => op!(OpMnemonic::INC, AddressingMode::Absolute   , 6, Cpu::inc),
+    0xFEu8 => op!(OpMnemonic::INC, AddressingMode::AbsoluteX  , 7, Cpu::inc),
+    0xC6u8 => op!(OpMnemonic::DEC, AddressingMode::ZeroPage   , 5, Cpu::dec),
+    0xD6u8 => op!(OpMnemonic::DEC, AddressingMode::ZeroPageX  , 6, Cpu::dec),
+    0xCEu8 => op!(OpMnemonic::DEC, AddressingMode::Absolute   , 6, Cpu::dec),
+    0xDEu8 => op!(OpMnemonic::DEC, AddressingMode::AbsoluteX  , 7, Cpu::dec),
     0xE8u8 => op!(OpMnemonic::INX, AddressingMode::Implicid   , 2, Cpu::inx),
     0xCAu8 => op!(OpMnemonic::DEX, AddressingMode::Implicid   , 2, Cpu::dex),
     0xC8u8 => op!(OpMnemonic::INY, AddressingMode::Implicid   , 2, Cpu::iny),
@@ -297,6 +303,7 @@ static OPCODES: phf::Map<u8, Op> = phf_map! {
     0x41u8 => op!(OpMnemonic::EOR, AddressingMode::IndirectX  , 6, Cpu::eor),
     0x51u8 => op!(OpMnemonic::EOR, AddressingMode::IndirectY  , 5, Cpu::eor),
     0x24u8 => op!(OpMnemonic::BIT, AddressingMode::ZeroPage   , 3, Cpu::bit),
+    0x2Cu8 => op!(OpMnemonic::BIT, AddressingMode::Absolute   , 4, Cpu::bit),
     0xC9u8 => op!(OpMnemonic::CMP, AddressingMode::Immediate  , 2, Cpu::cmp),
     0xC5u8 => op!(OpMnemonic::CMP, AddressingMode::ZeroPage   , 3, Cpu::cmp),
     0xD5u8 => op!(OpMnemonic::CMP, AddressingMode::ZeroPageX  , 4, Cpu::cmp),
@@ -320,6 +327,7 @@ static OPCODES: phf::Map<u8, Op> = phf_map! {
     0x50u8 => op!(OpMnemonic::BVC, AddressingMode::Relative   , 2, Cpu::bvc),
     0x70u8 => op!(OpMnemonic::BVS, AddressingMode::Relative   , 2, Cpu::bvs),
     0x4Cu8 => op!(OpMnemonic::JMP, AddressingMode::Absolute   , 3, Cpu::jmp),
+    0x6Cu8 => op!(OpMnemonic::JMP, AddressingMode::Indirect   , 5, Cpu::jmp),
     0x20u8 => op!(OpMnemonic::JSR, AddressingMode::Absolute   , 6, Cpu::jsr),
     0x60u8 => op!(OpMnemonic::RTS, AddressingMode::Implicid   , 6, Cpu::rts),
     // 0xu8 => op!(OpMnemonic::BRK, AddressingMode::Immediate , 0, Cpu::brk),
@@ -560,24 +568,7 @@ impl Cpu {
         cpu.a = result;
         cpu.update_nz(cpu.a);
         cpu.p.set(Flags::C, cpu.a < old_a);
-
-        match mode {
-            AddressingMode::AbsoluteX | AddressingMode::AbsoluteY => {
-                if page_crossed {
-                    2
-                } else {
-                    1
-                }
-            }
-            AddressingMode::IndirectY => {
-                if page_crossed {
-                    4
-                } else {
-                    3
-                }
-            }
-            _ => 0,
-        }
+        if page_crossed { 1 } else { 0 }
     }
 
     fn sbc(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
@@ -591,29 +582,24 @@ impl Cpu {
         cpu.p.set(Flags::C, diff > 0xFF);
         cpu.a = result;
         cpu.update_nz(cpu.a);
-
-        match mode {
-            AddressingMode::AbsoluteX | AddressingMode::AbsoluteY => {
-                if page_crossed {
-                    2
-                } else {
-                    1
-                }
-            }
-            AddressingMode::IndirectY => {
-                if page_crossed {
-                    4
-                } else {
-                    3
-                }
-            }
-            _ => 0,
-        }
+        if page_crossed { 1 } else { 0 }
     }
 
-    // fn inc(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn inc(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
+        let (value, _) = cpu.read_operand(bus, mode, operands);
+        let result = value.wrapping_add(1);
+        cpu.write_operand(bus, mode, operands, result);
+        cpu.update_nz(result);
+        0
+    }
 
-    // fn dec(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn dec(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
+        let (value, _) = cpu.read_operand(bus, mode, operands);
+        let result = value.wrapping_sub(1);
+        cpu.write_operand(bus, mode, operands, result);
+        cpu.update_nz(result);
+        0
+    }
 
     fn inx(cpu: &mut Cpu, _bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
         cpu.x = cpu.x.wrapping_add(1);
@@ -685,69 +671,21 @@ impl Cpu {
         let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
         cpu.a &= value;
         cpu.update_nz(cpu.a);
-        match mode {
-            AddressingMode::AbsoluteX | AddressingMode::AbsoluteY => {
-                if page_crossed {
-                    2
-                } else {
-                    1
-                }
-            }
-            AddressingMode::IndirectY => {
-                if page_crossed {
-                    4
-                } else {
-                    3
-                }
-            }
-            _ => 0,
-        }
+        if page_crossed { 1 } else { 0 }
     }
 
     fn ora(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
         let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
         cpu.a |= value;
         cpu.update_nz(cpu.a);
-        match mode {
-            AddressingMode::AbsoluteX | AddressingMode::AbsoluteY => {
-                if page_crossed {
-                    2
-                } else {
-                    1
-                }
-            }
-            AddressingMode::IndirectY => {
-                if page_crossed {
-                    4
-                } else {
-                    3
-                }
-            }
-            _ => 0,
-        }
+        if page_crossed { 1 } else { 0 }
     }
 
     fn eor(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
         let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
         cpu.a ^= value;
         cpu.update_nz(cpu.a);
-        match mode {
-            AddressingMode::AbsoluteX | AddressingMode::AbsoluteY => {
-                if page_crossed {
-                    2
-                } else {
-                    1
-                }
-            }
-            AddressingMode::IndirectY => {
-                if page_crossed {
-                    4
-                } else {
-                    3
-                }
-            }
-            _ => 0,
-        }
+        if page_crossed { 1 } else { 0 }
     }
 
     fn bit(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
@@ -765,23 +703,7 @@ impl Cpu {
         cpu.p.set(Flags::C, cpu.a >= value);
         cpu.p.set(Flags::Z, cpu.a == value);
         cpu.p.set(Flags::N, result & 0b1000_0000 != 0);
-        match mode {
-            AddressingMode::AbsoluteX | AddressingMode::AbsoluteY => {
-                if page_crossed {
-                    2
-                } else {
-                    1
-                }
-            }
-            AddressingMode::IndirectY => {
-                if page_crossed {
-                    4
-                } else {
-                    3
-                }
-            }
-            _ => 0,
-        }
+        if page_crossed { 1 } else { 0 }
     }
 
     fn cpx(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
