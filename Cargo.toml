@@ -6,9 +6,10 @@ edition = "2024"
 [dependencies]
 bitflags = "2.9.4"
 bytesize = "2.1.0"
-clap = { version = "4.5.47", features = ["derive"] }
-eframe = "0.32.3"
-egui = "0.32.3"
+clap = { version = "4.5.48", features = ["derive"] }
+eframe = "0.33.0"
+egui = "0.33.0"
+egui_extras = "0.33.0"
 env_logger = "0.11.8"
 log = "0.4.28"
 modular-bitfield = { git = "https://github.com/phire/modular-bitfield", branch = "unnecessary_parentheses" } # FIXME: update to master once merged

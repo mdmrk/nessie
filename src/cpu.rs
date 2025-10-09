@@ -562,9 +562,9 @@ impl Cpu {
         let carry = if cpu.p.contains(Flags::C) { 1 } else { 0 };
         let old_a = cpu.a;
         let result = cpu.a.wrapping_add(value + carry);
+
         cpu.p
             .set(Flags::V, ((result ^ cpu.a) & (result ^ value) & 0x80) != 0);
-
         cpu.a = result;
         cpu.update_nz(cpu.a);
         cpu.p.set(Flags::C, cpu.a < old_a);
