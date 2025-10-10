@@ -224,7 +224,7 @@ static OPCODES: phf::Map<u8, Op> = phf_map! {
     0xACu8 => op!(OpMnemonic::LDY, AddressingMode::Absolute   , 4, Cpu::ldy),
     0xBCu8 => op!(OpMnemonic::LDY, AddressingMode::AbsoluteX  , 4, Cpu::ldy),
     0x84u8 => op!(OpMnemonic::STY, AddressingMode::ZeroPage   , 3, Cpu::sty),
-    0x94u8 => op!(OpMnemonic::STY, AddressingMode::ZeroPageY  , 4, Cpu::sty),
+    0x94u8 => op!(OpMnemonic::STY, AddressingMode::ZeroPageX  , 4, Cpu::sty),
     0x8Cu8 => op!(OpMnemonic::STY, AddressingMode::Absolute   , 4, Cpu::sty),
     0xAAu8 => op!(OpMnemonic::TAX, AddressingMode::Implicid   , 2, Cpu::tax),
     0x8Au8 => op!(OpMnemonic::TXA, AddressingMode::Implicid   , 2, Cpu::txa),
@@ -461,6 +461,7 @@ impl Cpu {
             Some(op) => self.execute(bus, ppu, op, opcode, debug_log),
             None => {
                 warn!("Unknown opcode: 0x{:02X}", opcode);
+                self.pc += 1;
                 true
             }
         }
@@ -561,13 +562,13 @@ impl Cpu {
         let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
         let carry = if cpu.p.contains(Flags::C) { 1 } else { 0 };
         let old_a = cpu.a;
-        let result = cpu.a.wrapping_add(value + carry);
-
+        let sum = cpu.a as u16 + value as u16 + carry as u16;
+        let result = sum as u8;
+        cpu.p.set(Flags::C, sum > 0xFF);
         cpu.p
-            .set(Flags::V, ((result ^ cpu.a) & (result ^ value) & 0x80) != 0);
+            .set(Flags::V, ((old_a ^ result) & (value ^ result) & 0x80) != 0);
         cpu.a = result;
         cpu.update_nz(cpu.a);
-        cpu.p.set(Flags::C, cpu.a < old_a);
         if page_crossed { 1 } else { 0 }
     }
 
@@ -578,7 +579,7 @@ impl Cpu {
         let result = diff as u8;
 
         cpu.p
-            .set(Flags::V, ((result ^ cpu.a) & (result ^ !value) & 0x80) != 0);
+            .set(Flags::V, ((cpu.a ^ value) & (cpu.a ^ result) & 0x80) != 0);
         cpu.p.set(Flags::C, diff > 0xFF);
         cpu.a = result;
         cpu.update_nz(cpu.a);
