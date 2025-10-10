@@ -88,7 +88,11 @@ impl Ui {
     fn draw_memory_viewer(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
             let n = usize::from_str_radix(&self.mem_search, 16).unwrap_or(0);
-            ui.label(egui::RichText::new(format!("{} 0x{:04X}", n, n)).strong());
+            ui.label(
+                egui::RichText::new(format!("{} 0x{:04X}", n, n))
+                    .strong()
+                    .text_style(egui::TextStyle::Monospace),
+            );
 
             if let Ok(bus) = self.debug_state.bus.read() {
                 TableBuilder::new(ui)
@@ -116,10 +120,17 @@ impl Ui {
 
                             body.row(20.0, |mut row| {
                                 row.col(|ui| {
-                                    ui.label(egui::RichText::new(format!("0x{:04X}", i)).strong());
+                                    ui.label(
+                                        egui::RichText::new(format!("0x{:04X}", i))
+                                            .strong()
+                                            .text_style(egui::TextStyle::Monospace),
+                                    );
                                 });
                                 row.col(|ui| {
-                                    ui.label(bytes_str.join(" "));
+                                    ui.label(
+                                        egui::RichText::new(bytes_str.join(" "))
+                                            .text_style(egui::TextStyle::Monospace),
+                                    );
                                 });
                             });
                         }
