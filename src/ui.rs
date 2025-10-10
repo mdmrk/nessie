@@ -89,7 +89,7 @@ impl Ui {
         ui.vertical(|ui| {
             let n = (match self.mem_search.starts_with("0x") {
                 true => usize::from_str_radix(&self.mem_search[2..], 16).unwrap_or(0),
-                false => usize::from_str_radix(&self.mem_search, 10).unwrap_or(0),
+                false => self.mem_search.parse::<usize>().unwrap_or(0),
             })
             .min(0xffff);
 
