@@ -87,7 +87,12 @@ impl Ui {
 
     fn draw_memory_viewer(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
-            let n = usize::from_str_radix(&self.mem_search, 16).unwrap_or(0);
+            let n = (match self.mem_search.starts_with("0x") {
+                true => usize::from_str_radix(&self.mem_search[2..], 16).unwrap_or(0),
+                false => usize::from_str_radix(&self.mem_search, 10).unwrap_or(0),
+            })
+            .min(0xffff);
+
             ui.label(
                 egui::RichText::new(format!("{} 0x{:04X}", n, n))
                     .strong()
@@ -105,7 +110,7 @@ impl Ui {
                         let bytes_per_row = 0x10;
                         let total_rows = 7;
                         let max_rows_above = lo / bytes_per_row;
-                        let rows_above = max_rows_above.min(3);
+                        let rows_above = max_rows_above.min(total_rows - 1);
                         let rows_below = total_rows - 1 - rows_above;
                         let start = lo - (rows_above * bytes_per_row);
                         let end = (lo + rows_below * bytes_per_row).min(0xffff);
@@ -138,7 +143,7 @@ impl Ui {
                 ui.shrink_width_to_current();
                 egui::TextEdit::singleline(&mut self.mem_search)
                     .hint_text("...")
-                    .char_limit(4)
+                    .char_limit(8)
                     .desired_width(f32::INFINITY)
                     .show(ui);
             }
