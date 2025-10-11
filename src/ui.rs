@@ -331,7 +331,11 @@ impl Ui {
                                     ui.label(egui::RichText::new("Trainer?").strong());
                                 });
                                 row.col(|ui| {
-                                    ui.label("✔");
+                                    ui.label(if cart_header.flags6.has_trainer() {
+                                        "✔"
+                                    } else {
+                                        "✖"
+                                    });
                                 });
                             });
                             body.row(16.0, |mut row| {
