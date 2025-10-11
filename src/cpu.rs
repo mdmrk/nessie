@@ -348,7 +348,33 @@ static OPCODES: phf::Map<u8, Op> = phf_map! {
     0xF8u8 => op!(OpMnemonic::SED, AddressingMode::Implicid   , 2, Cpu::sed, false),
     0xB8u8 => op!(OpMnemonic::CLV, AddressingMode::Implicid   , 2, Cpu::clv, false),
     0xEAu8 => op!(OpMnemonic::NOP, AddressingMode::Implicid   , 2, Cpu::nop, false),
-    0x04u8 => op!(OpMnemonic::NOP, AddressingMode::ZeroPage   , 3, Cpu::inop, true),
+    0x04u8 |
+    0x44u8 |
+    0x64u8 => op!(OpMnemonic::NOP, AddressingMode::ZeroPage   , 3, Cpu::inop, true),
+    0x0Cu8 => op!(OpMnemonic::NOP, AddressingMode::Absolute   , 4, Cpu::inop, true),
+    0x14u8 |
+    0x34u8 |
+    0x54u8 |
+    0x74u8 |
+    0xD4u8 |
+    0xF4u8 => op!(OpMnemonic::NOP, AddressingMode::ZeroPageX  , 4, Cpu::inop, true),
+    0x1Au8 |
+    0x3Au8 |
+    0x5Au8 |
+    0x7Au8 |
+    0xDAu8 |
+    0xFAu8 => op!(OpMnemonic::NOP, AddressingMode::Implicid   , 2, Cpu::inop, true),
+    0x80u8 |
+    0x82u8 |
+    0x89u8 |
+    0xC2u8 |
+    0xE2u8 => op!(OpMnemonic::NOP, AddressingMode::Immediate  , 2, Cpu::inop, true),
+    0x1Cu8 |
+    0x3Cu8 |
+    0x5Cu8 |
+    0x7Cu8 |
+    0xDCu8 |
+    0xFCu8 => op!(OpMnemonic::NOP, AddressingMode::AbsoluteX  , 4, Cpu::inop, true),
 };
 
 bitflags! {
@@ -942,7 +968,8 @@ impl Cpu {
         0
     }
 
-    fn inop(_cpu: &mut Cpu, _bus: &mut Bus, _mode: AddressingMode, _operands: &[u8]) -> u8 {
-        0
+    fn inop(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
+        let (_, page_crossed) = cpu.read_operand(bus, mode, operands);
+        if page_crossed { 1 } else { 0 }
     }
 }
