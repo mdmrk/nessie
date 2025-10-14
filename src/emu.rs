@@ -122,8 +122,7 @@ pub fn emu_thread(command_rx: mpsc::Receiver<Command>, debug_state: Arc<DebugSta
     }
 
     let fps_limit = 60;
-    let frame_interval =
-        Duration::from_micros(Duration::from_secs(1).as_micros() as u64 / fps_limit);
+    let frame_interval = Duration::from_secs(1) / fps_limit;
     let mut last_time = Instant::now();
     debug!("FPS limit: {:} FPS ({:?})", fps_limit, frame_interval);
 
