@@ -1,11 +1,75 @@
 use bytesize::ByteSize;
+use egui::{Color32, Pos2, Rect, Response, Sense, Vec2};
 use egui_extras::{Column, TableBuilder};
 use log::error;
 use std::sync::{Arc, mpsc};
 
 use crate::{cpu::Flags, debug::DebugState, emu::Command};
 
+pub struct Screen {
+    width: usize,
+    height: usize,
+    pixels: Vec<Color32>,
+}
+
+impl Screen {
+    pub fn new() -> Self {
+        let width: usize = 256;
+        let height: usize = 240;
+        let pixels: Vec<Color32> = vec![Color32::BLACK; width * height];
+        Self {
+            width,
+            height,
+            pixels,
+        }
+    }
+
+    fn get_pixel(&self, x: usize, y: usize) -> Color32 {
+        self.pixels[y * self.width + x]
+    }
+
+    pub fn show(&self, ui: &mut egui::Ui) -> Response {
+        let available = ui.available_size();
+        let aspect_ratio = self.width as f32 / self.height as f32;
+
+        let fitted_size = if available.x / available.y > aspect_ratio {
+            Vec2::new(available.y * aspect_ratio, available.y)
+        } else {
+            Vec2::new(available.x, available.x / aspect_ratio)
+        };
+
+        let (rect, response) = ui.allocate_exact_size(available, Sense::hover());
+
+        let offset = (available - fitted_size) * 0.5;
+        let content_rect = Rect::from_min_size(rect.min + offset, fitted_size);
+
+        let painter = ui.painter();
+
+        painter.rect_filled(rect, 0.0, Color32::from_gray(20));
+
+        let pixel_width = content_rect.width() / self.width as f32;
+        let pixel_height = content_rect.height() / self.height as f32;
+
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let color = self.get_pixel(x, y);
+                let pixel_rect = Rect::from_min_size(
+                    Pos2::new(
+                        content_rect.min.x + x as f32 * pixel_width,
+                        content_rect.min.y + y as f32 * pixel_height,
+                    ),
+                    Vec2::new(pixel_width, pixel_height),
+                );
+                painter.rect_filled(pixel_rect, 0.0, color);
+            }
+        }
+
+        response
+    }
+}
+
 pub struct Ui {
+    screen: Screen,
     command_tx: mpsc::Sender<Command>,
 
     debug_state: Arc<DebugState>,
@@ -19,6 +83,7 @@ pub struct Ui {
 impl Ui {
     pub fn new(command_tx: mpsc::Sender<Command>, debug_state: Arc<DebugState>) -> Self {
         Self {
+            screen: Screen::new(),
             command_tx,
             debug_state,
             mem_search: "".into(),
@@ -382,6 +447,10 @@ impl Ui {
         });
     }
 
+    fn draw_screen(&mut self, ui: &mut egui::Ui) {
+        self.screen.show(ui);
+    }
+
     pub fn draw(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::TopBottomPanel::top("menubar")
             .resizable(false)
@@ -414,7 +483,9 @@ impl Ui {
                     self.draw_rom_details(ui);
                 });
             });
-        egui::CentralPanel::default().show(ctx, |ui| {});
+        egui::CentralPanel::default().show(ctx, |ui| {
+            self.draw_screen(ui);
+        });
         ctx.request_repaint();
     }
 }

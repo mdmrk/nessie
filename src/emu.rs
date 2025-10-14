@@ -65,7 +65,6 @@ impl Emu {
                     self.bus.write(0xC000, data); // mirror (16KB)
                     self.cpu.pc = 0xC000; // FIXME: TEST Only
                 } else if size == 2 {
-                    info!("{}", cart.prg_data.len());
                     let data = cart.prg_data.get(0..16 * 1024).unwrap();
                     self.bus.write(0x8000, data);
                     let data2 = cart.prg_data.get(16 * 1024..2 * 16 * 1024).unwrap();
