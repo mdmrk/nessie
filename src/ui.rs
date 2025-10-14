@@ -367,16 +367,19 @@ impl Ui {
     }
 
     fn draw_log_reader(&mut self, ui: &mut egui::Ui) {
-        egui::ScrollArea::vertical()
-            .stick_to_bottom(true)
-            .auto_shrink(false)
-            .show(ui, |ui| {
-                if let Ok(cpu_log) = self.debug_state.cpu_log.read() {
-                    let start = cpu_log.len().saturating_sub(3000);
-                    let slice = &cpu_log[start..];
-                    ui.label(egui::RichText::new(slice).text_style(egui::TextStyle::Monospace));
-                }
-            });
+        ui.vertical(|ui| {
+            ui.label(egui::RichText::new("Log").strong());
+            egui::ScrollArea::vertical()
+                .stick_to_bottom(true)
+                .auto_shrink(false)
+                .show(ui, |ui| {
+                    if let Ok(cpu_log) = self.debug_state.cpu_log.read() {
+                        let start = cpu_log.len().saturating_sub(3000);
+                        let slice = &cpu_log[start..];
+                        ui.label(egui::RichText::new(slice).text_style(egui::TextStyle::Monospace));
+                    }
+                });
+        });
     }
 
     pub fn draw(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -386,10 +389,12 @@ impl Ui {
                 self.draw_menubar(ui);
             });
         egui::TopBottomPanel::bottom("bottom_panel")
-            .resizable(false)
+            .resizable(true)
             .show(ctx, |ui| {
-                ui.horizontal_centered(|ui| {
+                ui.horizontal_top(|ui| {
                     self.draw_memory_viewer(ui);
+                    ui.separator();
+                    self.draw_log_reader(ui);
                 });
             });
         egui::SidePanel::left("left_panel")
@@ -409,9 +414,7 @@ impl Ui {
                     self.draw_rom_details(ui);
                 });
             });
-        egui::CentralPanel::default().show(ctx, |ui| {
-            self.draw_log_reader(ui);
-        });
+        egui::CentralPanel::default().show(ctx, |ui| {});
         ctx.request_repaint();
     }
 }
