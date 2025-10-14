@@ -59,10 +59,20 @@ impl Emu {
         if let Some(cart) = Cart::insert(rom_path) {
             if cart.header.get_mapper() == 0 {
                 let size = cart.header.prg_rom_size as usize;
-                let data = cart.prg_data.get(0..size * 16 * 1024).unwrap();
-                self.bus.write(0x8000, data);
-                self.bus.write(0xC000, data); // mirror (16KB)
-                self.cpu.pc = 0xC000; // FIXME: TEST Only
+                if size == 1 {
+                    let data = cart.prg_data.get(0..16 * 1024).unwrap();
+                    self.bus.write(0x8000, data);
+                    self.bus.write(0xC000, data); // mirror (16KB)
+                    self.cpu.pc = 0xC000; // FIXME: TEST Only
+                } else if size == 2 {
+                    info!("{}", cart.prg_data.len());
+                    let data = cart.prg_data.get(0..16 * 1024).unwrap();
+                    self.bus.write(0x8000, data);
+                    let data2 = cart.prg_data.get(16 * 1024..2 * 16 * 1024).unwrap();
+                    self.bus.write(0xC000, data2);
+                    let reset_vector = self.bus.read(0xFFFC, 2);
+                    self.cpu.pc = u16::from_le_bytes([reset_vector[0], reset_vector[1]]); // FIXME: TEST Only
+                }
             } else if cart.header.get_mapper() == 1 {
                 let size = cart.header.prg_rom_size as usize;
                 let data = cart.prg_data.get(0..16 * 1024).unwrap();
