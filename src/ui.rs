@@ -484,7 +484,7 @@ impl Ui {
                 });
             });
         egui::CentralPanel::default().show(ctx, |ui| {
-            self.draw_screen(ui);
+            // self.draw_screen(ui);
         });
         ctx.request_repaint();
     }

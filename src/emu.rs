@@ -1,4 +1,8 @@
-use std::sync::{Arc, mpsc};
+use std::{
+    sync::{Arc, mpsc},
+    thread,
+    time::{Duration, Instant},
+};
 
 use log::info;
 
@@ -114,6 +118,9 @@ pub fn emu_thread(command_rx: mpsc::Receiver<Command>, debug_state: Arc<DebugSta
         emu.debug_log = Some(DebugLog::new(logfile));
     }
 
+    let frame_interval = Duration::from_micros(Duration::from_secs(1).as_micros() as u64 / 60);
+    let mut last_time = Instant::now();
+
     loop {
         while let Ok(command) = command_rx.try_recv() {
             match command {
@@ -141,5 +148,11 @@ pub fn emu_thread(command_rx: mpsc::Receiver<Command>, debug_state: Arc<DebugSta
             emu.want_step = false;
         }
         debug_state.update(&mut emu);
+
+        let elapsed = last_time.elapsed();
+        if elapsed < frame_interval {
+            thread::sleep(frame_interval - elapsed);
+        }
+        last_time = Instant::now();
     }
 }
