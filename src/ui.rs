@@ -6,6 +6,7 @@ use std::sync::{Arc, mpsc};
 
 use crate::{cpu::Flags, debug::DebugState, emu::Command};
 
+#[derive(Default)]
 pub struct Screen {
     width: usize,
     height: usize,
