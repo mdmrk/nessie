@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use log::info;
+use log::{debug, info, trace};
 
 use crate::{
     args::Args,
@@ -117,9 +117,15 @@ pub fn emu_thread(command_rx: mpsc::Receiver<Command>, debug_state: Arc<DebugSta
     if let Some(logfile) = &args.logfile {
         emu.debug_log = Some(DebugLog::new(logfile));
     }
+    if args.pause {
+        emu.pause();
+    }
 
-    let frame_interval = Duration::from_micros(Duration::from_secs(1).as_micros() as u64 / 60);
+    let fps_limit = 60;
+    let frame_interval =
+        Duration::from_micros(Duration::from_secs(1).as_micros() as u64 / fps_limit);
     let mut last_time = Instant::now();
+    debug!("FPS limit: {:} FPS ({:?})", fps_limit, frame_interval);
 
     loop {
         while let Ok(command) = command_rx.try_recv() {
