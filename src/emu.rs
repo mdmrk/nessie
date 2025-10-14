@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use log::{debug, info, trace};
+use log::{debug, info};
 
 use crate::{
     args::Args,
