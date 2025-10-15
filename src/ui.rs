@@ -1,71 +1,56 @@
 use bytesize::ByteSize;
-use egui::{Color32, Pos2, Rect, Response, Sense, Vec2};
+use egui::Color32;
 use egui_extras::{Column, TableBuilder};
 use log::error;
+use rand::prelude::*;
 use std::sync::{Arc, mpsc};
 
 use crate::{cpu::Flags, debug::DebugState, emu::Command};
 
 #[derive(Default)]
 pub struct Screen {
-    width: usize,
-    height: usize,
+    pub width: usize,
+    pub height: usize,
     pixels: Vec<Color32>,
+    pub texture_handle: Option<egui::TextureHandle>,
 }
 
 impl Screen {
     pub fn new() -> Self {
         let width: usize = 256;
         let height: usize = 240;
-        let pixels: Vec<Color32> = vec![Color32::BLACK; width * height];
+        let mut rng = rand::rng();
+        let mut pixels: Vec<Color32> = vec![Color32::BLACK; width * height];
+        for i in 0..width {
+            for j in 0..height {
+                let n = j * width + i;
+                pixels[n] =
+                    Color32::from_rgb(rng.random::<u8>(), rng.random::<u8>(), rng.random::<u8>());
+            }
+        }
         Self {
             width,
             height,
             pixels,
+            texture_handle: None,
         }
     }
 
-    fn get_pixel(&self, x: usize, y: usize) -> Color32 {
-        self.pixels[y * self.width + x]
-    }
-
-    pub fn show(&self, ui: &mut egui::Ui) -> Response {
+    pub fn update_texture(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         let available = ui.available_size();
         let aspect_ratio = self.width as f32 / self.height as f32;
 
         let fitted_size = if available.x / available.y > aspect_ratio {
-            Vec2::new(available.y * aspect_ratio, available.y)
+            egui::Vec2::new(available.y * aspect_ratio, available.y)
         } else {
-            Vec2::new(available.x, available.x / aspect_ratio)
+            egui::Vec2::new(available.x, available.x / aspect_ratio)
         };
+        let image = egui::ColorImage::new([self.width, self.height], self.pixels.clone());
 
-        let (rect, response) = ui.allocate_exact_size(available, Sense::hover());
-
-        let offset = (available - fitted_size) * 0.5;
-        let content_rect = Rect::from_min_size(rect.min + offset, fitted_size);
-
-        let painter = ui.painter();
-
-        painter.rect_filled(rect, 0.0, Color32::from_gray(20));
-
-        let pixel_width = content_rect.width() / self.width as f32;
-        let pixel_height = content_rect.height() / self.height as f32;
-
-        for y in 0..self.height {
-            for x in 0..self.width {
-                let color = self.get_pixel(x, y);
-                let pixel_rect = Rect::from_min_size(
-                    Pos2::new(
-                        content_rect.min.x + x as f32 * pixel_width,
-                        content_rect.min.y + y as f32 * pixel_height,
-                    ),
-                    Vec2::new(pixel_width, pixel_height),
-                );
-                painter.rect_filled(pixel_rect, 0.0, color);
-            }
-        }
-
-        response
+        let texture: &mut egui::TextureHandle = self.texture_handle.get_or_insert_with(|| {
+            ctx.load_texture("screen", image.clone(), egui::TextureOptions::NEAREST)
+        });
+        ui.image((texture.id(), fitted_size));
     }
 }
 
@@ -448,8 +433,8 @@ impl Ui {
         });
     }
 
-    fn draw_screen(&mut self, ui: &mut egui::Ui) {
-        self.screen.show(ui);
+    fn draw_screen(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+        self.screen.update_texture(ctx, ui);
     }
 
     pub fn draw(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -485,7 +470,9 @@ impl Ui {
                 });
             });
         egui::CentralPanel::default().show(ctx, |ui| {
-            self.draw_screen(ui);
+            ui.centered_and_justified(|ui| {
+                self.draw_screen(ctx, ui);
+            });
         });
         ctx.request_repaint();
     }
