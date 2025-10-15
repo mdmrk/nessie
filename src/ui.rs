@@ -445,6 +445,8 @@ impl Ui {
             });
         egui::TopBottomPanel::bottom("bottom_panel")
             .resizable(true)
+            .default_height(100.0)
+            .height_range(100.0..=500.0)
             .show(ctx, |ui| {
                 ui.horizontal_top(|ui| {
                     self.draw_memory_viewer(ui);
