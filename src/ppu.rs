@@ -91,7 +91,7 @@ pub struct PpuScroll(u8);
 
 pub struct PpuAddr(u16);
 
-pub struct PpuData(u8)
+pub struct PpuData(u8);
 
 pub struct OamDma(u8);
 
@@ -118,48 +118,47 @@ impl Ppu {
         self.scanline %= 262;
     }
 
-// pub fn set_ppu_ctrl (&self,value:u8)  {
-    
-// }
+    // pub fn set_ppu_ctrl (&self,value:u8)  {
 
-// pub fn set_ppu_mask (&self,value:u8)  {
-    
-// }
+    // }
 
-// pub fn get_ppu_status (&self) -> u8 {
-    
-// }
+    // pub fn set_ppu_mask (&self,value:u8)  {
 
-// pub fn set_oam_addr(&self,value:u8)  {
-    
-// }
+    // }
 
-// pub fn set_oam_data(&self,value:u8)  {
-    
-// }
+    // pub fn get_ppu_status (&self) -> u8 {
 
-// pub fn get_oam_data(&self) -> u8 {
-    
-// }
+    // }
 
-// pub fn set_ppu_scroll(&self,value:u8)  {
-    
-// }
+    // pub fn set_oam_addr(&self,value:u8)  {
 
-// pub fn set_ppu_addr(&self,value:u8) {
-    
-// }
+    // }
 
-// pub fn set_ppu_data(&self,value:u8){
-    
-// }
+    // pub fn set_oam_data(&self,value:u8)  {
 
-// pub fn get_ppu_data(&self) -> u8 {
-    
-// }
+    // }
 
-// pub fn set_oam_dma(&self,value:u8) {
-    
-// }
+    // pub fn get_oam_data(&self) -> u8 {
 
+    // }
+
+    // pub fn set_ppu_scroll(&self,value:u8)  {
+
+    // }
+
+    // pub fn set_ppu_addr(&self,value:u8) {
+
+    // }
+
+    // pub fn set_ppu_data(&self,value:u8){
+
+    // }
+
+    // pub fn get_ppu_data(&self) -> u8 {
+
+    // }
+
+    // pub fn set_oam_dma(&self,value:u8) {
+
+    // }
 }
