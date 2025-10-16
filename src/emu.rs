@@ -1,10 +1,6 @@
-use std::{
-    sync::{Arc, mpsc},
-    thread,
-    time::{Duration, Instant},
-};
+use std::sync::{Arc, mpsc};
 
-use log::{debug, info};
+use log::info;
 
 use crate::{
     args::Args,
