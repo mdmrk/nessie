@@ -121,11 +121,6 @@ pub fn emu_thread(command_rx: mpsc::Receiver<Command>, debug_state: Arc<DebugSta
         emu.pause();
     }
 
-    let fps_limit = 60;
-    let frame_interval = Duration::from_secs(1) / fps_limit;
-    let mut last_time = Instant::now();
-    debug!("FPS limit: {:} FPS ({:?})", fps_limit, frame_interval);
-
     loop {
         while let Ok(command) = command_rx.try_recv() {
             match command {
@@ -153,11 +148,5 @@ pub fn emu_thread(command_rx: mpsc::Receiver<Command>, debug_state: Arc<DebugSta
             emu.want_step = false;
         }
         debug_state.update(&mut emu);
-
-        let elapsed = last_time.elapsed();
-        if elapsed < frame_interval {
-            thread::sleep(frame_interval - elapsed);
-        }
-        last_time = Instant::now();
     }
 }
