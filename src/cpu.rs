@@ -206,12 +206,12 @@ static OPCODES: phf::Map<u8, Op> = phf_map! {
     0xB9u8 => op!(OpMnemonic::LDA, AddressingMode::AbsoluteY  , 4, Cpu::lda, false),
     0xA1u8 => op!(OpMnemonic::LDA, AddressingMode::IndirectX  , 6, Cpu::lda, false),
     0xB1u8 => op!(OpMnemonic::LDA, AddressingMode::IndirectY  , 5, Cpu::lda, false),
-    0xA3u8 => op!(OpMnemonic::LAX, AddressingMode::IndirectX  , 6, Cpu::ilda, true),
-    0xA7u8 => op!(OpMnemonic::LAX, AddressingMode::ZeroPage   , 3, Cpu::ilda, true),
-    0xAFu8 => op!(OpMnemonic::LAX, AddressingMode::Absolute   , 4, Cpu::ilda, true),
-    0xB3u8 => op!(OpMnemonic::LAX, AddressingMode::IndirectY  , 5, Cpu::ilda, true),
-    0xB7u8 => op!(OpMnemonic::LAX, AddressingMode::ZeroPageY  , 4, Cpu::ilda, true),
-    0xBFu8 => op!(OpMnemonic::LAX, AddressingMode::AbsoluteY  , 4, Cpu::ilda, true),
+    0xA3u8 => op!(OpMnemonic::LAX, AddressingMode::IndirectX  , 6, Cpu::lax, true),
+    0xA7u8 => op!(OpMnemonic::LAX, AddressingMode::ZeroPage   , 3, Cpu::lax, true),
+    0xAFu8 => op!(OpMnemonic::LAX, AddressingMode::Absolute   , 4, Cpu::lax, true),
+    0xB3u8 => op!(OpMnemonic::LAX, AddressingMode::IndirectY  , 5, Cpu::lax, true),
+    0xB7u8 => op!(OpMnemonic::LAX, AddressingMode::ZeroPageY  , 4, Cpu::lax, true),
+    0xBFu8 => op!(OpMnemonic::LAX, AddressingMode::AbsoluteY  , 4, Cpu::lax, true),
     0x85u8 => op!(OpMnemonic::STA, AddressingMode::ZeroPage   , 3, Cpu::sta, false),
     0x95u8 => op!(OpMnemonic::STA, AddressingMode::ZeroPageX  , 4, Cpu::sta, false),
     0x8Du8 => op!(OpMnemonic::STA, AddressingMode::Absolute   , 4, Cpu::sta, false),
@@ -542,7 +542,7 @@ impl Cpu {
         if page_crossed { 1 } else { 0 }
     }
 
-    fn ilda(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
+    fn lax(cpu: &mut Cpu, bus: &mut Bus, mode: AddressingMode, operands: &[u8]) -> u8 {
         let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
         cpu.a = value;
         cpu.update_nz(cpu.a);
