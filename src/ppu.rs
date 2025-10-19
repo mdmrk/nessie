@@ -13,8 +13,8 @@ pub enum PpuMode {
 }
 
 #[bitfield(bytes = 1)]
-#[derive(Debug, Clone)]
-struct PpuCtrl {
+#[derive(Debug, Clone, Default, Copy)]
+pub struct PpuCtrl {
     pub base_nametable_addr: B2,
     pub vram_addr_inc: B1, // VRAM address increment per CPU read/write of PPUDATA
     pub sprite_pattern_table_addr: B1, // for 8x8 sprites; ignored in 8x16 mode
@@ -58,10 +58,14 @@ impl PpuCtrl {
             _ => unreachable!(),
         }
     }
+
+    pub fn set(&mut self, value: u8) {
+        *self = Self::from_bytes([value]);
+    }
 }
 
 #[bitfield(bytes = 1)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct PpuMask {
     pub greyscale: bool,         // (0: normal color, 1: greyscale)
     pub show_background: bool,   // in leftmost 8 pixels of screen, 0: Hide
@@ -73,32 +77,148 @@ pub struct PpuMask {
     pub emphasize_blue: bool,
 }
 
+impl PpuMask {
+    pub fn set(&mut self, value: u8) {
+        *self = Self::from_bytes([value]);
+    }
+}
+
 #[bitfield(bytes = 1)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct PpuStatus {
     pub open_bus: B5, // https://www.nesdev.org/wiki/Open_bus_behavior#PPU_open_bus
     pub sprite_overflow: bool, // https://www.nesdev.org/wiki/PPU_sprite_evaluation#Sprite_overflow_bug
     pub sprite_0_hit: bool,    // https://www.nesdev.org/wiki/PPU_OAM#Sprite_zero_hits
-    pub vblanki: bool,
+    pub vblank: bool,
 }
 
-pub struct OamAddr(u8);
+impl PpuStatus {
+    pub fn set(&mut self, value: u8) {
+        *self = Self::from_bytes([value]);
+    }
+}
 
-pub struct OamData(u8);
+#[derive(Default, Clone, Debug)]
+pub struct OamAddr {
+    pub addr: u8,
+}
+
+impl OamAddr {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn set(&mut self, value: u8) {
+        self.addr = value;
+    }
+}
+
+#[derive(Default, Clone, Debug)]
+pub struct OamData {
+    pub data: u8,
+}
+
+impl OamData {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn set(&mut self, value: u8) {
+        self.data = value;
+    }
+}
 
 // https://www.nesdev.org/wiki/PPU_scrolling
-pub struct PpuScroll(u8);
+#[derive(Default, Clone, Debug)]
+pub struct PpuScroll {
+    pub x_scroll: u8,
+    pub y_scroll: u8,
+}
 
-pub struct PpuAddr(u16);
+impl PpuScroll {
+    pub fn new() -> Self {
+        Self {
+            x_scroll: 0,
+            y_scroll: 0,
+        }
+    }
 
-pub struct PpuData(u8);
+    pub fn set(&mut self, value: u8, toggle: &mut bool) {
+        if *toggle {
+            self.y_scroll = value;
+        } else {
+            self.x_scroll = value;
+        }
+        *toggle = !*toggle;
+    }
+}
 
-pub struct OamDma(u8);
+#[derive(Default, Clone, Debug)]
+pub struct PpuAddr {
+    pub addr: u16,
+}
 
-#[derive(Default)]
+impl PpuAddr {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn set(&mut self, value: u8, toggle: &mut bool) {
+        if *toggle {
+            self.addr &= value as u16;
+        } else {
+            self.addr &= (value as u16) << 8;
+        }
+        *toggle = !*toggle;
+    }
+}
+
+#[derive(Default, Clone, Debug)]
+pub struct PpuData {
+    pub data: u8,
+}
+
+impl PpuData {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn set(&mut self, value: u8) {
+        self.data = value;
+    }
+}
+
+#[derive(Default, Clone, Debug)]
+pub struct OamDma {
+    pub dma: u8,
+}
+
+impl OamDma {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn set(&mut self, value: u8) {
+        self.dma = value;
+    }
+}
+
+#[derive(Default, Clone)]
 pub struct Ppu {
     pub scanline: usize,
     pub h_pixel: usize,
+
+    pub ppu_ctrl: PpuCtrl,
+    pub ppu_mask: PpuMask,
+    pub ppu_status: PpuStatus,
+    pub oam_addr: OamAddr,
+    pub oam_data: OamData,
+    pub ppu_scroll: PpuScroll,
+    pub ppu_addr: PpuAddr,
+    pub ppu_data: PpuData,
+    pub oam_dma: OamDma,
+
+    pub write_toggle: bool,
 }
 
 impl Ppu {
@@ -106,6 +226,18 @@ impl Ppu {
         Self {
             scanline: 0,
             h_pixel: 21, // FIXME?: may be initialized at init state / reset
+
+            ppu_ctrl: PpuCtrl::new(),
+            ppu_mask: PpuMask::new(),
+            ppu_status: PpuStatus::new(),
+            oam_addr: OamAddr::new(),
+            oam_data: OamData::new(),
+            ppu_scroll: PpuScroll::new(),
+            ppu_addr: PpuAddr::new(),
+            ppu_data: PpuData::new(),
+            oam_dma: OamDma::new(),
+
+            write_toggle: false, // if false we write to first byte / x scroll
         }
     }
 
@@ -117,48 +249,4 @@ impl Ppu {
         self.h_pixel %= 341;
         self.scanline %= 262;
     }
-
-    // pub fn set_ppu_ctrl (&self,value:u8)  {
-
-    // }
-
-    // pub fn set_ppu_mask (&self,value:u8)  {
-
-    // }
-
-    // pub fn get_ppu_status (&self) -> u8 {
-
-    // }
-
-    // pub fn set_oam_addr(&self,value:u8)  {
-
-    // }
-
-    // pub fn set_oam_data(&self,value:u8)  {
-
-    // }
-
-    // pub fn get_oam_data(&self) -> u8 {
-
-    // }
-
-    // pub fn set_ppu_scroll(&self,value:u8)  {
-
-    // }
-
-    // pub fn set_ppu_addr(&self,value:u8) {
-
-    // }
-
-    // pub fn set_ppu_data(&self,value:u8){
-
-    // }
-
-    // pub fn get_ppu_data(&self) -> u8 {
-
-    // }
-
-    // pub fn set_oam_dma(&self,value:u8) {
-
-    // }
 }

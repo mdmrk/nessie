@@ -7,6 +7,37 @@ use std::sync::{Arc, mpsc};
 
 use crate::{cpu::Flags, debug::DebugState, emu::Command};
 
+macro_rules! make_rows {
+    ($body:expr, $( $label:expr => $value:expr ),+ $(,)?) => {
+        $(
+            $body.row(16.0, |mut row| {
+                row.col(|ui| {
+                    ui.label(egui::RichText::new($label).strong());
+                });
+                row.col(|ui| {
+                    ui.label($value);
+                });
+            });
+        )+
+    };
+
+    ($body:expr, $( $label:expr => $value1:expr, $value2:expr ),+ $(,)?) => {
+        $(
+            $body.row(16.0, |mut row| {
+                row.col(|ui| {
+                    ui.label(egui::RichText::new($label).strong());
+                });
+                row.col(|ui| {
+                    ui.label($value1);
+                });
+                row.col(|ui| {
+                    ui.label($value2);
+                });
+            });
+        )+
+    };
+}
+
 #[derive(Default)]
 pub struct Screen {
     pub width: usize,
@@ -212,145 +243,214 @@ impl Ui {
                 .column(Column::remainder())
                 .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
                 .body(|mut body| {
-                    body.row(16.0, |mut row| {
-                        row.col(|ui| {
-                            ui.label(egui::RichText::new("sp").strong());
-                        });
-                        row.col(|ui| {
-                            ui.label(format!("{}", cpu.sp + 0x100));
-                        });
-                        row.col(|ui| {
-                            ui.label(format!("0x{:04X}", cpu.sp + 0x100));
-                        });
-                    });
-                    body.row(16.0, |mut row| {
-                        row.col(|ui| {
-                            ui.label(egui::RichText::new("pc").strong());
-                        });
-                        row.col(|ui| {
-                            ui.label(format!("{}", cpu.pc));
-                        });
-                        row.col(|ui| {
-                            ui.label(format!("0x{:04X}", cpu.pc));
-                        });
-                    });
-                    body.row(16.0, |mut row| {
-                        row.col(|ui| {
-                            ui.label(egui::RichText::new("a").strong());
-                        });
-                        row.col(|ui| {
-                            ui.label(format!("{}", cpu.a));
-                        });
-                        row.col(|ui| {
-                            ui.label(format!("0x{:02X}", cpu.a));
-                        });
-                    });
-                    body.row(16.0, |mut row| {
-                        row.col(|ui| {
-                            ui.label(egui::RichText::new("x").strong());
-                        });
-                        row.col(|ui| {
-                            ui.label(format!("{}", cpu.x));
-                        });
-                        row.col(|ui| {
-                            ui.label(format!("0x{:02X}", cpu.x));
-                        });
-                    });
-                    body.row(16.0, |mut row| {
-                        row.col(|ui| {
-                            ui.label(egui::RichText::new("y").strong());
-                        });
-                        row.col(|ui| {
-                            ui.label(format!("{}", cpu.y));
-                        });
-                        row.col(|ui| {
-                            ui.label(format!("0x{:02X}", cpu.y));
-                        });
-                    });
-                    body.row(16.0, |mut row| {
-                        row.col(|ui| {
-                            ui.label(egui::RichText::new("p").strong());
-                        });
-                        row.col(|ui| {
-                            ui.label(format!("{}", cpu.p.bits()));
-                        });
-                        row.col(|ui| {
-                            ui.label(format!("0x{:02X}", cpu.p.bits()));
-                        });
-                    });
+                    make_rows!(body,
+                        "sp" => format!("{}", cpu.sp + 0x100), format!("0x{:04X}", cpu.sp + 0x100),
+                        "pc" => format!("{}", cpu.pc), format!("0x{:04X}", cpu.pc),
+                        "a" => format!("{}", cpu.a), format!("0x{:02X}", cpu.a),
+                        "x" => format!("{}", cpu.x), format!("0x{:02X}", cpu.x),
+                        "y" => format!("{}", cpu.y), format!("0x{:02X}", cpu.y),
+                        "p" => format!("{}", cpu.p.bits()), format!("0x{:02X}", cpu.p.bits()),
+                    );
                 });
 
-            let flags = [
-                (Flags::N, "N"),
-                (Flags::V, "V"),
-                (Flags::B, "B"),
-                (Flags::D, "D"),
-                (Flags::I, "I"),
-                (Flags::Z, "Z"),
-                (Flags::C, "C"),
+            let mut flags = [
+                (Flags::N, "N", false),
+                (Flags::V, "V", false),
+                (Flags::B, "B", false),
+                (Flags::D, "D", false),
+                (Flags::I, "I", false),
+                (Flags::Z, "Z", false),
+                (Flags::C, "C", false),
             ];
-            TableBuilder::new(ui)
-                .id_salt("flags")
-                .column(Column::remainder())
-                .column(Column::remainder())
-                .column(Column::remainder())
-                .column(Column::remainder())
-                .column(Column::remainder())
-                .column(Column::remainder())
-                .column(Column::remainder())
-                .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                .body(|mut body| {
-                    body.row(14.0, |mut row| {
-                        for flag in &flags {
-                            row.col(|ui| {
-                                ui.label(flag.1);
-                            });
-                        }
-                    });
-                    body.row(14.0, |mut row| {
-                        for flag in flags {
-                            if cpu.p.contains(flag.0) {
+
+            egui::CollapsingHeader::new("Flags").show(ui, |ui| {
+                TableBuilder::new(ui)
+                    .id_salt("flags")
+                    .column(Column::remainder())
+                    .column(Column::remainder())
+                    .column(Column::remainder())
+                    .column(Column::remainder())
+                    .column(Column::remainder())
+                    .column(Column::remainder())
+                    .column(Column::remainder())
+                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                    .body(|mut body| {
+                        body.row(16.0, |mut row| {
+                            for flag in &mut flags {
+                                flag.2 = cpu.p.contains(flag.0);
                                 row.col(|ui| {
-                                    ui.label("✔");
-                                });
-                            } else {
-                                row.col(|ui| {
-                                    ui.label("-");
+                                    ui.add_enabled(false, egui::Checkbox::new(&mut flag.2, flag.1));
                                 });
                             }
-                        }
-                    })
-                });
+                        })
+                    });
+            });
         }
 
-        ui.label(egui::RichText::new("Stack").strong());
-        if let Ok(bus) = self.debug_state.bus.read() {
-            egui::ScrollArea::vertical() // FIXME: optimize this
-                .max_height(200.0)
-                .show(ui, |ui| {
+        egui::CollapsingHeader::new("Stack").show(ui, |ui| {
+            if let Ok(bus) = self.debug_state.bus.read() {
+                egui::ScrollArea::vertical() // FIXME: optimize this
+                    .max_height(200.0)
+                    .show(ui, |ui| {
+                        TableBuilder::new(ui)
+                            .id_salt("stack")
+                            .striped(true)
+                            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                            .column(Column::auto())
+                            .column(Column::auto())
+                            .column(Column::remainder())
+                            .body(|mut body| {
+                                for i in (0x100..0x1FF).rev() {
+                                    make_rows!(body,
+                                        format!("0x{:04X}", i) =>
+                                            format!("{}", bus.read_byte(i)),
+                                            format!("0x{:02X}", bus.read_byte(i)));
+                                }
+                            });
+                    });
+            }
+        });
+    }
+
+    fn draw_ppu_inspector(&mut self, ui: &mut egui::Ui) {
+        if let Ok(ppu) = self.debug_state.ppu.read() {
+            ui.label(egui::RichText::new("PPU").strong());
+            egui::ScrollArea::vertical().show(ui, |ui|{
+                egui::CollapsingHeader::new("PPU Ctrl").show(ui, |ui| {
+                TableBuilder::new(ui)
+                    .id_salt("ppuctrl")
+                    .striped(true)
+                    .column(Column::auto())
+                    .column(Column::remainder())
+                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                    .body(|mut body| {
+                        make_rows!(body,
+                            "Base nametable addr" => format!("0x{:04X}", ppu.ppu_ctrl.get_base_nametable_addr()),
+                            "VRAM addr inc per CPU r/w of PPUDATA" => format!("{}", ppu.ppu_ctrl.get_vram_addr_inc()),
+                            "Sprite pattern table addr for 8x8 sprites" => format!("0x{:04X}", ppu.ppu_ctrl.get_sprite_pattern_table_addr()),
+                            "Background pattern table address" => format!("0x{:04X}", ppu.ppu_ctrl.get_bg_pattern_table_addr()),
+                            "Sprite size" => format!("{:?}", ppu.ppu_ctrl.sprite_size()),
+                            "PPU master/slave select" => format!("{:?}", ppu.ppu_ctrl.mode()),
+                            "Vblank NMI enable" => format!("{}", ppu.ppu_ctrl.vblank())
+                        );
+                    });
+            });
+            egui::CollapsingHeader::new("PPU Mask").show(ui, |ui| {
+                TableBuilder::new(ui)
+                    .id_salt("ppumask")
+                    .striped(true)
+                    .column(Column::auto())
+                    .column(Column::remainder())
+                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                    .body(|mut body| {
+                        make_rows!(body,
+                            "Greyscale (0: normal color, 1: greyscale)" => format!("{}", ppu.ppu_mask.greyscale()),
+                            "Show background in leftmost 8 pixels of screen, 0: Hide" => format!("{}", ppu.ppu_mask.show_background()),
+                            "Show sprites in leftmost 8 pixels of screen, 0: Hide" => format!("{}", ppu.ppu_mask.show_sprites()),
+                            "Enable background rendering" => format!("{}", ppu.ppu_mask.enable_background()),
+                            "Enable sprite rendering" => format!("{}", ppu.ppu_mask.enable_sprite()),
+                            "Emphasize red (green on PAL/Dendy)" => format!("{}", ppu.ppu_mask.emphasize_red()),
+                            "Emphasize green (red on PAL/Dendy)" => format!("{}", ppu.ppu_mask.emphasize_green()),
+                            "Emphasize blue" => format!("{}", ppu.ppu_mask.emphasize_blue()),
+                        );
+                    });
+            });
+            egui::CollapsingHeader::new("PPU Status").show(ui, |ui| {
+                TableBuilder::new(ui)
+                    .id_salt("ppustatus")
+                    .striped(true)
+                    .column(Column::auto())
+                    .column(Column::remainder())
+                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                    .body(|mut body| {
+                        make_rows!(body,
+                            "PPU open bus or 2C05 PPU identifier" => format!("0x{:02X}", ppu.ppu_status.open_bus()),
+                            "Sprite overflow flag" => format!("{}", ppu.ppu_status.sprite_overflow()),
+                            "Sprite 0 hit flag" => format!("{}", ppu.ppu_status.sprite_0_hit()),
+                            "Vblank flag, cleared on read. Unreliable" => format!("{}", ppu.ppu_status.vblank()),
+                        );
+                    });
+                });
+                egui::CollapsingHeader::new("OAM Address").show(ui, |ui| {
                     TableBuilder::new(ui)
-                        .id_salt("cpu")
+                        .id_salt("oamaddr")
                         .striped(true)
-                        .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                        .column(Column::auto())
                         .column(Column::auto())
                         .column(Column::remainder())
+                        .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
                         .body(|mut body| {
-                            for i in (0x100..0x1FF).rev() {
-                                body.row(16.0, |mut row| {
-                                    row.col(|ui| {
-                                        ui.label(format!("0x{:04X}", i));
-                                    });
-                                    row.col(|ui| {
-                                        ui.label(format!("{}", bus.read_byte(i)));
-                                    });
-                                    row.col(|ui| {
-                                        ui.label(format!("0x{:02X}", bus.read_byte(i)));
-                                    });
-                                });
-                            }
+                            make_rows!(body,
+                                "OAM Address" => format!("0x{:04X}", ppu.oam_addr.addr),
+                            );
                         });
                 });
+                egui::CollapsingHeader::new("OAM Data").show(ui, |ui| {
+                    TableBuilder::new(ui)
+                        .id_salt("oamdata")
+                        .striped(true)
+                        .column(Column::auto())
+                        .column(Column::remainder())
+                        .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                        .body(|mut body| {
+                            make_rows!(body,
+                                "OAM Data" => format!("{}", ppu.oam_data.data),
+                            );
+                        });
+                });
+                egui::CollapsingHeader::new("PPU Scroll").show(ui, |ui| {
+                    TableBuilder::new(ui)
+                        .id_salt("ppuscroll")
+                        .striped(true)
+                        .column(Column::auto())
+                        .column(Column::remainder())
+                        .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                        .body(|mut body| {
+                            make_rows!(body,
+                                "X scroll" => format!("{}", ppu.ppu_scroll.x_scroll),
+                                "Y scroll" => format!("{}", ppu.ppu_scroll.y_scroll),
+                            );
+                        });
+                });
+                egui::CollapsingHeader::new("PPU Address").show(ui, |ui| {
+                    TableBuilder::new(ui)
+                        .id_salt("ppuaddr")
+                        .striped(true)
+                        .column(Column::auto())
+                        .column(Column::remainder())
+                        .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                        .body(|mut body| {
+                            make_rows!(body,
+                                "PPU address" => format!("0x{:04X}", ppu.ppu_addr.addr),
+                            );
+                        });
+                });
+                egui::CollapsingHeader::new("PPU Data").show(ui, |ui| {
+                    TableBuilder::new(ui)
+                        .id_salt("ppudata")
+                        .striped(true)
+                        .column(Column::auto())
+                        .column(Column::remainder())
+                        .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                        .body(|mut body| {
+                            make_rows!(body,
+                                "PPU Data" => format!("{}", ppu.ppu_data.data),
+                            );
+                        });
+                });
+                egui::CollapsingHeader::new("OAM Dma").show(ui, |ui| {
+                    TableBuilder::new(ui)
+                        .id_salt("oamdma")
+                        .striped(true)
+                        .column(Column::auto())
+                        .column(Column::remainder())
+                        .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                        .body(|mut body| {
+                            make_rows!(body,
+                                "OAM Dma" => format!("{}", ppu.oam_dma.dma),
+                            );
+                        });
+                });
+            });
         }
     }
 
@@ -365,49 +465,20 @@ impl Ui {
                         .column(Column::auto())
                         .column(Column::remainder())
                         .body(|mut body| {
-                            body.row(16.0, |mut row| {
-                                row.col(|ui| {
-                                    ui.label(egui::RichText::new("Magic").strong());
-                                });
-                                row.col(|ui| {
-                                    ui.label(
-                                        String::from_utf8(cart_header.magic.to_vec())
-                                            .unwrap_or("".to_string())
-                                            .to_string(),
-                                    );
-                                });
-                            });
-                            body.row(16.0, |mut row| {
-                                row.col(|ui| {
-                                    ui.label(egui::RichText::new("Trainer?").strong());
-                                });
-                                row.col(|ui| {
-                                    ui.label(if cart_header.flags6.has_trainer() {
+                            make_rows!(body,
+                                "Magic" =>
+                                    String::from_utf8(cart_header.magic.to_vec())
+                                        .unwrap_or("".to_string())
+                                        .to_string(),
+                                "Trainer?" =>
+                                    if cart_header.flags6.has_trainer() {
                                         "✔"
                                     } else {
                                         "✖"
-                                    });
-                                });
-                            });
-                            body.row(16.0, |mut row| {
-                                row.col(|ui| {
-                                    ui.label(egui::RichText::new("PRG ROM Size").strong());
-                                });
-                                row.col(|ui| {
-                                    ui.label(format!(
-                                        "{}",
-                                        ByteSize::kib(16) * cart_header.prg_rom_size
-                                    ));
-                                });
-                            });
-                            body.row(16.0, |mut row| {
-                                row.col(|ui| {
-                                    ui.label(egui::RichText::new("Mapper").strong());
-                                });
-                                row.col(|ui| {
-                                    ui.label(format!("{}", cart_header.get_mapper()));
-                                });
-                            });
+                                    },
+                                "PRG ROM Size" =>
+                                    format!("{}", ByteSize::kib(16) * cart_header.prg_rom_size),
+                                "Mapper" => format!("{}", cart_header.get_mapper()));
                         });
                 }
                 None => {
@@ -460,6 +531,8 @@ impl Ui {
             .show(ctx, |ui| {
                 ui.vertical(|ui| {
                     self.draw_cpu_inspector(ui);
+                    ui.separator();
+                    self.draw_ppu_inspector(ui);
                 });
             });
         egui::SidePanel::right("right_panel")
