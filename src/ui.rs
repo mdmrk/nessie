@@ -5,7 +5,7 @@ use log::error;
 use rand::prelude::*;
 use std::sync::{Arc, mpsc};
 
-use crate::{cpu::Flags, debug::DebugState, emu::Command};
+use crate::{cpu::Flags, debug::DebugState, emu::Command, mapper::MapperIcon};
 
 macro_rules! make_rows {
     ($body:expr, $( $label:expr => $value:expr ),+ $(,)?) => {
@@ -459,6 +459,10 @@ impl Ui {
         if let Ok(cart_header_opt) = self.debug_state.cart_header.read() {
             match &*cart_header_opt {
                 Some(cart_header) => {
+                    let icon = egui::Image::from_bytes(
+                        "lol",
+                        MapperIcon::from_mapper_number(cart_header.mapper_number()).bytes(),
+                    );
                     TableBuilder::new(ui)
                         .striped(true)
                         .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
@@ -471,14 +475,19 @@ impl Ui {
                                         .unwrap_or("".to_string())
                                         .to_string(),
                                 "Trainer?" =>
-                                    if cart_header.flags6.has_trainer() {
-                                        "✔"
-                                    } else {
-                                        "✖"
-                                    },
+                                    format!("{}", cart_header.flags6.has_trainer()),
                                 "PRG ROM Size" =>
                                     format!("{}", ByteSize::kib(16) * cart_header.prg_rom_size),
-                                "Mapper" => format!("{}", cart_header.get_mapper()));
+                            );
+                            body.row(16.0, |mut row| {
+                                row.col(|ui| {
+                                    ui.label(egui::RichText::new("Mapper").strong());
+                                });
+                                row.col(|ui| {
+                                    ui.label(format!("{}", cart_header.mapper_number()));
+                                    ui.add(icon);
+                                });
+                            });
                         });
                 }
                 None => {

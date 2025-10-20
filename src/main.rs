@@ -13,6 +13,9 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "Nessie",
         options,
-        Box::new(|_cc| Ok(Box::new(App::new(&args)))),
+        Box::new(|cc| {
+            egui_extras::install_image_loaders(&cc.egui_ctx);
+            Ok(Box::new(App::new(&args)))
+        }),
     )
 }

@@ -1,6 +1,8 @@
 use modular_bitfield::prelude::*;
 
-#[derive(Clone, Copy, Debug, Specifier)]
+use crate::mapper::{Mapper, Mapper0, Mirroring};
+
+#[derive(Clone, Copy, Debug, Specifier, PartialEq)]
 pub enum NametableArrangement {
     Vertical = 0,
     Horitzontal = 1,
@@ -72,16 +74,29 @@ pub struct Header {
 }
 
 impl Header {
-    pub fn get_mapper(&self) -> u8 {
+    pub fn mapper_number(&self) -> u8 {
         self.flags7.mapper_upper() << 4 | self.flags6.mapper_lower()
+    }
+
+    pub fn make_mapper(
+        &self,
+        prg_rom: Vec<u8>,
+        chr_rom: Vec<u8>,
+        mirroring: Mirroring,
+    ) -> Box<dyn Mapper> {
+        let mapper_num = self.mapper_number();
+
+        match mapper_num {
+            0 => Box::new(Mapper0::new(prg_rom, chr_rom, mirroring)),
+            _ => panic!("Unsupported mapper ({})", mapper_num),
+        }
     }
 }
 
-#[derive(Clone)]
 pub struct Cart {
     pub header: Header,
     pub rom: Vec<u8>,
-    pub prg_data: Vec<u8>,
+    pub mapper: Box<dyn Mapper>,
 }
 
 impl Cart {
@@ -90,18 +105,28 @@ impl Cart {
             Ok(contents) => {
                 let header = unsafe { std::ptr::read(contents.as_ptr() as *const Header) };
                 let rom = contents.clone();
-                let prg_data_size = 16 * 1024 * header.prg_rom_size as usize;
-                let prg_data_offset = if header.flags6.has_trainer() {
+                let prg_rom_size = 16 * 1024 * header.prg_rom_size as usize;
+                let prg_rom_offset = if header.flags6.has_trainer() {
                     size_of::<Header>() + 512
                 } else {
                     size_of::<Header>()
                 };
-                let prg_data = rom[prg_data_offset..prg_data_offset + prg_data_size].to_vec();
+                let prg_rom = rom[prg_rom_offset..prg_rom_offset + prg_rom_size].to_vec();
+                let chr_rom_size = 8 * 1024 * header.chr_rom_size as usize;
+                let chr_rom_offset = prg_rom_offset + prg_rom_size;
+                let chr_rom = rom[chr_rom_offset..chr_rom_offset + chr_rom_size].to_vec();
+                let mirroring =
+                    if header.flags6.nametable_arrangement() == NametableArrangement::Vertical {
+                        Mirroring::Vertical
+                    } else {
+                        Mirroring::Horizontal
+                    };
+                let mapper = header.make_mapper(prg_rom, chr_rom, mirroring);
 
                 Some(Self {
                     header,
                     rom,
-                    prg_data,
+                    mapper,
                 })
             }
             Err(_) => None,
