@@ -517,7 +517,7 @@ impl Ui {
         egui::TopBottomPanel::bottom("bottom_panel")
             .resizable(true)
             .default_height(100.0)
-            .height_range(100.0..=500.0)
+            .height_range(..=500.0)
             .show(ctx, |ui| {
                 ui.horizontal_top(|ui| {
                     self.draw_memory_viewer(ui);
@@ -526,8 +526,9 @@ impl Ui {
                 });
             });
         egui::SidePanel::left("left_panel")
-            .resizable(false)
+            .resizable(true)
             .default_width(180.0)
+            .width_range(..=500.0)
             .show(ctx, |ui| {
                 ui.vertical(|ui| {
                     self.draw_cpu_inspector(ui);
@@ -538,7 +539,7 @@ impl Ui {
         egui::SidePanel::right("right_panel")
             .resizable(true)
             .default_width(180.0)
-            .width_range(80.0..=200.0)
+            .width_range(..=200.0)
             .show(ctx, |ui| {
                 ui.vertical(|ui| {
                     self.draw_rom_details(ui);
