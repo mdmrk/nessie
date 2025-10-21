@@ -424,9 +424,19 @@ impl Cpu {
             a: 0,
             x: 0,
             y: 0,
-            cycle_count: 7, // FIXME: do proper init state / reset
+            cycle_count: 7,
             log: "".into(),
         }
+    }
+
+    pub fn reset(&mut self, bus: &mut Bus) {
+        let lo = bus.read_byte(0xFFFC);
+        let hi = bus.read_byte(0xFFFD);
+        self.pc = u16::from_le_bytes([lo, hi]);
+
+        self.sp = 0xFD;
+        self.p = Flags::I | Flags::_1;
+        self.cycle_count = 7;
     }
 
     fn fetch(&self, bus: &Bus) -> u8 {
@@ -446,7 +456,7 @@ impl Cpu {
         debug_log: &mut Option<DebugLog>,
     ) -> bool {
         let operand_bytes = op.mode.operand_bytes();
-        let operands = bus.read(self.pc + 1, operand_bytes as u16).to_vec(); // FIXME: should not clone
+        let operands = bus.read(self.pc + 1, operand_bytes as u16);
 
         let debug_str = format!(
             "{:04X}  {:02X} {:6}{}{} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:{:3},{:3} CYC:{}\n",

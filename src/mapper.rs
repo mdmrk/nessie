@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MapperIcon {
     Bad,
@@ -82,6 +84,7 @@ pub trait Mapper {
     fn read_chr(&self, addr: u16) -> u8;
     fn write_chr(&mut self, addr: u16, value: u8);
     fn mirroring(&self) -> Mirroring;
+    fn clone_mapper(&self) -> Box<dyn Mapper>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -93,14 +96,16 @@ pub enum Mirroring {
     FourScreen,
 }
 
+#[derive(Clone, Debug)]
 pub struct Mapper0 {
-    prg_rom: Vec<u8>,
-    chr_rom: Vec<u8>,
+    prg_rom: Arc<Vec<u8>>,
+    chr_rom: Arc<Vec<u8>>,
     mirroring: Mirroring,
 }
 
+#[derive(Clone, Debug)]
 impl Mapper0 {
-    pub fn new(prg_rom: Vec<u8>, chr_rom: Vec<u8>, mirroring: Mirroring) -> Self {
+    pub fn new(prg_rom: Arc<Vec<u8>>, chr_rom: Arc<Vec<u8>>, mirroring: Mirroring) -> Self {
         Self {
             prg_rom,
             chr_rom,
@@ -132,5 +137,9 @@ impl Mapper for Mapper0 {
 
     fn mirroring(&self) -> Mirroring {
         self.mirroring
+    }
+
+    fn clone_mapper(&self) -> Box<dyn Mapper> {
+        Box::new(self.clone())
     }
 }

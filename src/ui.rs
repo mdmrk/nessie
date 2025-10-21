@@ -459,10 +459,6 @@ impl Ui {
         if let Ok(cart_header_opt) = self.debug_state.cart_header.read() {
             match &*cart_header_opt {
                 Some(cart_header) => {
-                    let icon = egui::Image::from_bytes(
-                        "lol",
-                        MapperIcon::from_mapper_number(cart_header.mapper_number()).bytes(),
-                    );
                     TableBuilder::new(ui)
                         .striped(true)
                         .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
@@ -478,14 +474,23 @@ impl Ui {
                                     format!("{}", cart_header.flags6.has_trainer()),
                                 "PRG ROM Size" =>
                                     format!("{}", ByteSize::kib(16) * cart_header.prg_rom_size),
+                                "CHR ROM Size" =>
+                                    format!("{}", ByteSize::kib(8) * cart_header.chr_rom_size),
                             );
                             body.row(16.0, |mut row| {
                                 row.col(|ui| {
                                     ui.label(egui::RichText::new("Mapper").strong());
                                 });
                                 row.col(|ui| {
-                                    ui.label(format!("{}", cart_header.mapper_number()));
+                                    let mapper_num = cart_header.mapper_number();
+
+                                    let icon = egui::Image::from_bytes(
+                                        format!("mapper_icon_{}", mapper_num),
+                                        MapperIcon::from_mapper_number(mapper_num).bytes(),
+                                    );
+
                                     ui.add(icon);
+                                    ui.label(format!("{}", cart_header.mapper_number()));
                                 });
                             });
                         });

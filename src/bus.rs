@@ -1,10 +1,11 @@
 use log::warn;
 
-use crate::ppu::Ppu;
+use crate::{cart::Cart, ppu::Ppu};
 
 #[derive(Clone)]
 pub struct Bus {
     mem: [u8; 0x10000],
+    cart: Option<Cart>,
 }
 
 impl Default for Bus {
@@ -15,15 +16,31 @@ impl Default for Bus {
 
 impl Bus {
     pub fn new() -> Self {
-        Self { mem: [0; 0x10000] }
+        Self {
+            mem: [0; 0x10000],
+            cart: None,
+        }
     }
 
     pub fn read_byte(&self, addr: usize) -> u8 {
-        self.mem[addr]
+        match addr {
+            0x6000..=0xFFFF => {
+                if let Some(cart) = &self.cart {
+                    cart.mapper.read_prg(addr as u16)
+                } else {
+                    0
+                }
+            }
+            _ => self.mem[addr],
+        }
     }
 
-    pub fn read(&self, addr: u16, bytes: u16) -> &[u8] {
-        &self.mem[addr as usize..addr as usize + bytes as usize]
+    pub fn read(&self, addr: u16, bytes: u16) -> Vec<u8> {
+        let mut result = Vec::with_capacity(bytes as usize);
+        for i in 0..bytes {
+            result.push(self.read_byte((addr + i) as usize));
+        }
+        result
     }
 
     pub fn cpu_write_byte(&mut self, ppu: &mut Ppu, addr: usize, value: u8) {
@@ -45,15 +62,33 @@ impl Bus {
                 }
             }
             0x4014 => ppu.oam_dma.set(value),
-            _ => {}
+            0x6000..=0xFFFF => {
+                if let Some(cart) = &mut self.cart {
+                    cart.mapper.write_prg(addr as u16, value);
+                }
+            }
+            _ => self.mem[addr] = value,
         }
     }
 
     pub fn write_byte(&mut self, addr: usize, value: u8) {
-        self.mem[addr] = value;
+        match addr {
+            0x6000..=0xFFFF => {
+                if let Some(cart) = &mut self.cart {
+                    cart.mapper.write_prg(addr as u16, value);
+                }
+            }
+            _ => self.mem[addr] = value,
+        }
     }
 
     pub fn write(&mut self, addr: usize, value: &[u8]) {
-        self.mem[addr..value.len() + addr].copy_from_slice(value);
+        for (i, &byte) in value.iter().enumerate() {
+            self.write_byte(addr + i, byte);
+        }
+    }
+
+    pub fn insert_cartridge(&mut self, cart: Cart) {
+        self.cart = Some(cart);
     }
 }

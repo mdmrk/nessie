@@ -57,8 +57,9 @@ impl Emu {
 
     pub fn load_rom(&mut self, rom_path: &String) {
         if let Some(cart) = Cart::insert(rom_path) {
-            self.cart = Some(cart);
+            self.bus.insert_cartridge(cart);
             info!("Rom \"{}\" loaded", rom_path);
+            self.cpu.reset(&mut self.bus);
         }
     }
 

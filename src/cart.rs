@@ -133,3 +133,13 @@ impl Cart {
         }
     }
 }
+
+impl Clone for Cart {
+    fn clone(&self) -> Self {
+        Self {
+            header: self.header.clone(),
+            rom: self.rom.clone(),
+            mapper: self.mapper.clone_mapper(),
+        }
+    }
+}
