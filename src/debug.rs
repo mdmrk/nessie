@@ -51,7 +51,7 @@ impl DebugState {
             *ppu = emu.ppu.clone();
         }
         if let Ok(mut cart_header) = self.cart_header.write() {
-            *cart_header = emu.cart.as_ref().map(|cart| cart.header.clone())
+            *cart_header = emu.bus.cart.as_ref().map(|cart| cart.header.clone())
         }
         if let Ok(mut cpu_log) = self.cpu_log.write() {
             cpu_log.push_str(&emu.cpu.log);

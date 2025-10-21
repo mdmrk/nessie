@@ -5,7 +5,7 @@ use crate::{cart::Cart, ppu::Ppu};
 #[derive(Clone)]
 pub struct Bus {
     mem: [u8; 0x10000],
-    cart: Option<Cart>,
+    pub cart: Option<Cart>,
 }
 
 impl Default for Bus {
