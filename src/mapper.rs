@@ -40,7 +40,7 @@ impl MapperIcon {
     pub fn bytes(&self) -> &'static [u8] {
         macro_rules! icon_path {
             ($file:literal) => {
-                include_bytes!(concat!("./img/mappers/", $file))
+                include_bytes!(concat!("./icon/mappers/", $file))
             };
         }
 
