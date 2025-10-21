@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MapperIcon {
     Bad,
@@ -98,14 +96,13 @@ pub enum Mirroring {
 
 #[derive(Clone, Debug)]
 pub struct Mapper0 {
-    prg_rom: Arc<Vec<u8>>,
-    chr_rom: Arc<Vec<u8>>,
+    prg_rom: Vec<u8>,
+    chr_rom: Vec<u8>,
     mirroring: Mirroring,
 }
 
-#[derive(Clone, Debug)]
 impl Mapper0 {
-    pub fn new(prg_rom: Arc<Vec<u8>>, chr_rom: Arc<Vec<u8>>, mirroring: Mirroring) -> Self {
+    pub fn new(prg_rom: Vec<u8>, chr_rom: Vec<u8>, mirroring: Mirroring) -> Self {
         Self {
             prg_rom,
             chr_rom,

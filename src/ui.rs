@@ -167,70 +167,71 @@ impl Ui {
         });
     }
 
-    fn draw_memory_viewer(&mut self, ui: &mut egui::Ui) {
-        ui.vertical(|ui| {
-            let n = (match self.mem_search.starts_with("0x") {
-                true => usize::from_str_radix(&self.mem_search[2..], 16).unwrap_or(0),
-                false => self.mem_search.parse::<usize>().unwrap_or(0),
-            })
-            .min(0xffff);
+    // FIXME
+    // fn draw_memory_viewer(&mut self, ui: &mut egui::Ui) {
+    //     ui.vertical(|ui| {
+    //         let n = (match self.mem_search.starts_with("0x") {
+    //             true => usize::from_str_radix(&self.mem_search[2..], 16).unwrap_or(0),
+    //             false => self.mem_search.parse::<usize>().unwrap_or(0),
+    //         })
+    //         .min(0xffff);
 
-            ui.label(
-                egui::RichText::new(format!("{} 0x{:04X}", n, n))
-                    .strong()
-                    .text_style(egui::TextStyle::Monospace),
-            );
+    //         ui.label(
+    //             egui::RichText::new(format!("{} 0x{:04X}", n, n))
+    //                 .strong()
+    //                 .text_style(egui::TextStyle::Monospace),
+    //         );
 
-            if let Ok(bus) = self.debug_state.bus.read() {
-                TableBuilder::new(ui)
-                    .striped(true)
-                    .column(Column::auto())
-                    .column(Column::auto())
-                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                    .body(|mut body| {
-                        let lo = n & 0xfff0;
-                        let bytes_per_row = 0x10;
-                        let total_rows = 7;
-                        let max_rows_above = lo / bytes_per_row;
-                        let rows_above = max_rows_above.min(total_rows - 1);
-                        let rows_below = total_rows - 1 - rows_above;
-                        let start = lo - (rows_above * bytes_per_row);
-                        let end = (lo + rows_below * bytes_per_row).min(0xffff);
+    //         if let Ok(bus) = self.debug_state.bus.read() {
+    //             TableBuilder::new(ui)
+    //                 .striped(true)
+    //                 .column(Column::auto())
+    //                 .column(Column::auto())
+    //                 .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+    //                 .body(|mut body| {
+    //                     let lo = n & 0xfff0;
+    //                     let bytes_per_row = 0x10;
+    //                     let total_rows = 7;
+    //                     let max_rows_above = lo / bytes_per_row;
+    //                     let rows_above = max_rows_above.min(total_rows - 1);
+    //                     let rows_below = total_rows - 1 - rows_above;
+    //                     let start = lo - (rows_above * bytes_per_row);
+    //                     let end = (lo + rows_below * bytes_per_row).min(0xffff);
 
-                        for i in (start..=end).step_by(bytes_per_row) {
-                            let bytes_str: Vec<String> = bus
-                                .read(i as u16, 0x10)
-                                .to_vec()
-                                .iter()
-                                .map(|b| format!("{:02X}", b))
-                                .collect();
+    //                     for i in (start..=end).step_by(bytes_per_row) {
+    //                         let bytes_str: Vec<String> = bus
+    //                             .read(i as u16, 0x10)
+    //                             .to_vec()
+    //                             .iter()
+    //                             .map(|b| format!("{:02X}", b))
+    //                             .collect();
 
-                            body.row(20.0, |mut row| {
-                                row.col(|ui| {
-                                    ui.label(
-                                        egui::RichText::new(format!("0x{:04X}", i))
-                                            .strong()
-                                            .text_style(egui::TextStyle::Monospace),
-                                    );
-                                });
-                                row.col(|ui| {
-                                    ui.label(
-                                        egui::RichText::new(bytes_str.join(" "))
-                                            .text_style(egui::TextStyle::Monospace),
-                                    );
-                                });
-                            });
-                        }
-                    });
-                ui.shrink_width_to_current();
-                egui::TextEdit::singleline(&mut self.mem_search)
-                    .hint_text("...")
-                    .char_limit(8)
-                    .desired_width(f32::INFINITY)
-                    .show(ui);
-            }
-        });
-    }
+    //                         body.row(20.0, |mut row| {
+    //                             row.col(|ui| {
+    //                                 ui.label(
+    //                                     egui::RichText::new(format!("0x{:04X}", i))
+    //                                         .strong()
+    //                                         .text_style(egui::TextStyle::Monospace),
+    //                                 );
+    //                             });
+    //                             row.col(|ui| {
+    //                                 ui.label(
+    //                                     egui::RichText::new(bytes_str.join(" "))
+    //                                         .text_style(egui::TextStyle::Monospace),
+    //                                 );
+    //                             });
+    //                         });
+    //                     }
+    //                 });
+    //             ui.shrink_width_to_current();
+    //             egui::TextEdit::singleline(&mut self.mem_search)
+    //                 .hint_text("...")
+    //                 .char_limit(8)
+    //                 .desired_width(f32::INFINITY)
+    //                 .show(ui);
+    //         }
+    //     });
+    // }
 
     fn draw_cpu_inspector(&mut self, ui: &mut egui::Ui) {
         if let Ok(cpu) = self.debug_state.cpu.read() {
@@ -287,29 +288,30 @@ impl Ui {
             });
         }
 
-        egui::CollapsingHeader::new("Stack").show(ui, |ui| {
-            if let Ok(bus) = self.debug_state.bus.read() {
-                egui::ScrollArea::vertical() // FIXME: optimize this
-                    .max_height(200.0)
-                    .show(ui, |ui| {
-                        TableBuilder::new(ui)
-                            .id_salt("stack")
-                            .striped(true)
-                            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                            .column(Column::auto())
-                            .column(Column::auto())
-                            .column(Column::remainder())
-                            .body(|mut body| {
-                                for i in (0x100..0x1FF).rev() {
-                                    make_rows!(body,
-                                        format!("0x{:04X}", i) =>
-                                            format!("{}", bus.read_byte(i)),
-                                            format!("0x{:02X}", bus.read_byte(i)));
-                                }
-                            });
-                    });
-            }
-        });
+        // FIXME
+        // egui::CollapsingHeader::new("Stack").show(ui, |ui| {
+        //     if let Ok(bus) = self.debug_state.bus.read() {
+        //         egui::ScrollArea::vertical() // FIXME: optimize this
+        //             .max_height(200.0)
+        //             .show(ui, |ui| {
+        //                 TableBuilder::new(ui)
+        //                     .id_salt("stack")
+        //                     .striped(true)
+        //                     .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+        //                     .column(Column::auto())
+        //                     .column(Column::auto())
+        //                     .column(Column::remainder())
+        //                     .body(|mut body| {
+        //                         for i in (0x100..0x1FF).rev() {
+        //                             make_rows!(body,
+        //                                 format!("0x{:04X}", i) =>
+        //                                     format!("{}", bus.read_byte(i)),
+        //                                     format!("0x{:02X}", bus.read_byte(i)));
+        //                         }
+        //                     });
+        //             });
+        //     }
+        // });
     }
 
     fn draw_ppu_inspector(&mut self, ui: &mut egui::Ui) {
@@ -534,7 +536,7 @@ impl Ui {
             .height_range(..=500.0)
             .show(ctx, |ui| {
                 ui.horizontal_top(|ui| {
-                    self.draw_memory_viewer(ui);
+                    // self.draw_memory_viewer(ui);
                     ui.separator();
                     self.draw_log_reader(ui);
                 });

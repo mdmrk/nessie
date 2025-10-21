@@ -1,6 +1,6 @@
 use std::sync::RwLock;
 
-use crate::{bus::Bus, cart::Header, cpu::Cpu, emu::Emu, ppu::Ppu};
+use crate::{cart::Header, cpu::Cpu, emu::Emu, ppu::Ppu};
 
 #[derive(Default)]
 pub struct DebugLog {
@@ -29,7 +29,6 @@ impl DebugLog {
 pub struct DebugState {
     pub cpu: RwLock<Cpu>,
     pub ppu: RwLock<Ppu>,
-    pub bus: RwLock<Bus>,
     pub cart_header: RwLock<Option<Header>>,
     pub cpu_log: RwLock<String>,
 }
@@ -39,7 +38,6 @@ impl DebugState {
         Self {
             cpu: RwLock::new(Cpu::new()),
             ppu: RwLock::new(Ppu::new()),
-            bus: RwLock::new(Bus::new()),
             cart_header: RwLock::new(None),
             cpu_log: RwLock::new("".into()),
         }
@@ -51,9 +49,6 @@ impl DebugState {
         }
         if let Ok(mut ppu) = self.ppu.write() {
             *ppu = emu.ppu.clone();
-        }
-        if let Ok(mut bus) = self.bus.write() {
-            *bus = emu.bus.clone();
         }
         if let Ok(mut cart_header) = self.cart_header.write() {
             *cart_header = emu.cart.as_ref().map(|cart| cart.header.clone())
