@@ -153,6 +153,7 @@ impl Ui {
 
         self.command_tx = Some(command_tx);
         self.event_rx = Some(event_rx);
+        let event_tx_clone = event_tx.clone();
 
         let handle = thread::Builder::new()
             .name("emu_thread".to_string())
@@ -163,6 +164,7 @@ impl Ui {
 
                 if let Err(e) = result {
                     error!("Emulator thread panicked: {:?}", e);
+                    _ = event_tx_clone.send(Event::Crashed);
                 }
             })
             .expect("Failed to spawn emu thread");

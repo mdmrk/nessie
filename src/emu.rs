@@ -126,7 +126,8 @@ pub fn emu_thread(
                 emu.pause();
             }
             emu.want_step = false;
-        } else if !emu.running {
+        }
+        if !emu.running {
             break;
         }
         debug_state.update(&mut emu);
