@@ -1,3 +1,4 @@
+use log::error;
 use std::{
     sync::{Arc, mpsc},
     thread,
@@ -18,37 +19,51 @@ pub struct App {
 
 impl App {
     pub fn new(args: &Args) -> Self {
-        let (command_tx, command_rx) = mpsc::channel();
-
         let debug_state = Arc::new(DebugState::new());
 
-        let debug_clone = debug_state.clone();
-        let args_clone = args.clone();
-        thread::spawn(move || {
-            emu_thread(command_rx, debug_clone, &args_clone);
-        });
-
-        let mut ui = Ui::new(command_tx, debug_state);
-        if args.pause {
-            ui.emu_pause();
+        let mut ui = Ui::new(debug_state, args.clone());
+        if let Some(rom) = &args.rom {
+            ui.spawn_emu_thread(rom);
+            if args.pause {
+                ui.emu_pause();
+            }
         }
 
         Self { ui }
     }
 
     fn listen_shortcuts(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let shortcuts: &[Shortcut] = &[Shortcut {
-            name: "step",
-            keyboard_shortcut: KeyboardShortcut {
-                modifiers: Default::default(),
-                logical_key: Key::ArrowRight,
+        let shortcuts: &[Shortcut] = &[
+            Shortcut {
+                name: "step",
+                keyboard_shortcut: KeyboardShortcut {
+                    modifiers: Default::default(),
+                    logical_key: Key::Enter,
+                },
             },
-        }];
+            Shortcut {
+                name: "pause/resume",
+                keyboard_shortcut: KeyboardShortcut {
+                    modifiers: Default::default(),
+                    logical_key: Key::Space,
+                },
+            },
+        ];
 
         ctx.input_mut(|i| {
             for shortcut in shortcuts {
                 if i.consume_shortcut(&shortcut.keyboard_shortcut) && shortcut.name == "step" {
-                    self.ui.emu_step();
+                    if self.ui.is_paused() {
+                        self.ui.emu_step();
+                    }
+                } else if i.consume_shortcut(&shortcut.keyboard_shortcut)
+                    && shortcut.name == "pause/resume"
+                {
+                    if self.ui.is_paused() {
+                        self.ui.emu_resume()
+                    } else {
+                        self.ui.emu_pause();
+                    }
                 }
             }
         });
@@ -58,6 +73,7 @@ impl App {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.listen_shortcuts(ctx, frame);
+        self.ui.handle_emu_events(ctx, frame);
         self.ui.draw(ctx, frame);
     }
 }

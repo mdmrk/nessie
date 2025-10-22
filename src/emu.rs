@@ -1,6 +1,6 @@
 use std::sync::{Arc, mpsc};
 
-use log::info;
+use log::{error, info, warn};
 
 use crate::{
     args::Args,
@@ -32,16 +32,11 @@ pub struct Emu {
     pub paused: bool,
     pub want_step: bool,
     pub debug_log: Option<DebugLog>,
-}
-
-impl Default for Emu {
-    fn default() -> Self {
-        Self::new()
-    }
+    pub event_tx: mpsc::Sender<Event>,
 }
 
 impl Emu {
-    pub fn new() -> Self {
+    pub fn new(event_tx: mpsc::Sender<Event>) -> Self {
         Self {
             cpu: Cpu::new(),
             ppu: Ppu::new(),
@@ -50,6 +45,13 @@ impl Emu {
             paused: false,
             want_step: false,
             debug_log: None,
+            event_tx,
+        }
+    }
+
+    pub fn send_event(&self, event: Event) {
+        if let Err(e) = self.event_tx.send(event) {
+            error!("{e}");
         }
     }
 
@@ -63,14 +65,17 @@ impl Emu {
 
     pub fn stop(&mut self) {
         self.running = false;
+        self.send_event(Event::Stopped);
     }
 
     pub fn pause(&mut self) {
         self.paused = true;
+        self.send_event(Event::Paused);
     }
 
     pub fn resume(&mut self) {
         self.paused = false;
+        self.send_event(Event::Resumed);
     }
 
     pub fn step(&mut self) {
@@ -78,12 +83,16 @@ impl Emu {
     }
 }
 
-pub fn emu_thread(command_rx: mpsc::Receiver<Command>, debug_state: Arc<DebugState>, args: &Args) {
-    let mut emu = Emu::new();
+pub fn emu_thread(
+    command_rx: mpsc::Receiver<Command>,
+    event_tx: mpsc::Sender<Event>,
+    debug_state: Arc<DebugState>,
+    args: &Args,
+    rom: &String,
+) {
+    let mut emu = Emu::new(event_tx);
 
-    if let Some(rom) = &args.rom {
-        emu.load_rom(rom);
-    }
+    emu.load_rom(rom);
     if let Some(logfile) = &args.logfile {
         emu.debug_log = Some(DebugLog::new(logfile));
     }
@@ -111,12 +120,15 @@ pub fn emu_thread(command_rx: mpsc::Receiver<Command>, debug_state: Arc<DebugSta
 
         let should_run = !emu.paused || emu.want_step;
         if should_run {
-            let ok = emu.cpu.step(&mut emu.bus, &mut emu.ppu, &mut emu.debug_log);
-            if !ok {
+            if let Err(e) = emu.cpu.step(&mut emu.bus, &mut emu.ppu, &mut emu.debug_log) {
+                warn!("{e}");
                 emu.pause();
             }
             emu.want_step = false;
+        } else if !emu.running {
+            break;
         }
         debug_state.update(&mut emu);
     }
+    info!("Stopping emulation");
 }

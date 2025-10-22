@@ -3,9 +3,18 @@ use egui::Color32;
 use egui_extras::{Column, TableBuilder};
 use log::error;
 use rand::prelude::*;
-use std::sync::{Arc, mpsc};
+use std::{
+    sync::{Arc, mpsc},
+    thread,
+};
 
-use crate::{cpu::Flags, debug::DebugState, emu::Command, mapper::MapperIcon};
+use crate::{
+    args::Args,
+    cpu::Flags,
+    debug::DebugState,
+    emu::{Command, Event, emu_thread},
+    mapper::MapperIcon,
+};
 
 macro_rules! make_rows {
     ($body:expr, $( $label:expr => $value:expr ),+ $(,)?) => {
@@ -88,8 +97,12 @@ impl Screen {
 pub struct Ui {
     screen: Screen,
     command_tx: mpsc::Sender<Command>,
+    event_rx: mpsc::Receiver<Event>,
+    command_rx: Option<mpsc::Receiver<Command>>,
+    event_tx: Option<mpsc::Sender<Event>>,
 
-    debug_state: Arc<DebugState>,
+    pub debug_state: Arc<DebugState>,
+    args: Args,
 
     mem_search: String,
 
@@ -98,15 +111,43 @@ pub struct Ui {
 }
 
 impl Ui {
-    pub fn new(command_tx: mpsc::Sender<Command>, debug_state: Arc<DebugState>) -> Self {
+    pub fn new(debug_state: Arc<DebugState>, args: Args) -> Self {
+        let (command_tx, command_rx) = mpsc::channel();
+        let (event_tx, event_rx) = mpsc::channel();
+
         Self {
             screen: Screen::new(),
             command_tx,
+            event_rx,
+            command_rx: Some(command_rx),
+            event_tx: Some(event_tx),
             debug_state,
+            args,
             mem_search: "".into(),
             running: true,
             paused: false,
         }
+    }
+
+    pub fn spawn_emu_thread(&mut self, rom: &String) {
+        let args = self.args.clone();
+        let rom = rom.clone();
+        let debug_state = self.debug_state.clone();
+        let command_rx = self.command_rx.take().expect("Emulator already spawned");
+        let event_tx = self.event_tx.take().expect("Emulator already spawned");
+
+        _ = thread::Builder::new()
+            .name("emu_thread".to_string())
+            .spawn(move || {
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    emu_thread(command_rx, event_tx, debug_state, &args, &rom);
+                }));
+
+                if let Err(e) = result {
+                    error!("Emulator thread panicked: {:?}", e);
+                }
+            })
+            .expect("Failed to spawn emu thread");
     }
 
     pub fn send_command(&self, command: Command) {
@@ -130,9 +171,12 @@ impl Ui {
     }
 
     pub fn emu_stop(&mut self) {
-        // TODO: define stop ??
         self.send_command(Command::Stop);
         self.running = false;
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.paused
     }
 
     fn draw_menubar(&mut self, ui: &mut egui::Ui) {
@@ -143,22 +187,22 @@ impl Ui {
                 }
             });
             ui.menu_button("Emulator", |ui| {
-                ui.add_enabled_ui(self.paused, |ui| {
+                ui.add_enabled_ui(self.running && self.paused, |ui| {
                     if ui.button("⤵ Step").clicked() {
                         self.emu_step();
                     }
                 });
-                ui.add_enabled_ui(self.paused, |ui| {
+                ui.add_enabled_ui(self.running && self.paused, |ui| {
                     if ui.button("⏸ Resume").clicked() {
                         self.emu_resume();
                     }
                 });
-                ui.add_enabled_ui(!self.paused, |ui| {
+                ui.add_enabled_ui(self.running && !self.paused, |ui| {
                     if ui.button("⏵ Pause").clicked() {
                         self.emu_pause();
                     }
                 });
-                ui.add_enabled_ui(self.running, |ui| {
+                ui.add_enabled_ui(self.running && self.running, |ui| {
                     if ui.button("⏹ Stop").clicked() {
                         self.emu_stop();
                     }
@@ -524,48 +568,76 @@ impl Ui {
         self.screen.update_texture(ctx, ui);
     }
 
+    fn draw_start_screen(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+        ui.label("Load a rom");
+    }
+
     pub fn draw(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::TopBottomPanel::top("menubar")
             .resizable(false)
             .show(ctx, |ui| {
                 self.draw_menubar(ui);
             });
-        egui::TopBottomPanel::bottom("bottom_panel")
-            .resizable(true)
-            .default_height(100.0)
-            .height_range(..=500.0)
-            .show(ctx, |ui| {
-                ui.horizontal_top(|ui| {
-                    // self.draw_memory_viewer(ui);
-                    ui.separator();
-                    self.draw_log_reader(ui);
+        if self.running {
+            egui::TopBottomPanel::bottom("bottom_panel")
+                .resizable(true)
+                .default_height(100.0)
+                .height_range(..=500.0)
+                .show(ctx, |ui| {
+                    ui.horizontal_top(|ui| {
+                        // self.draw_memory_viewer(ui);
+                        ui.separator();
+                        self.draw_log_reader(ui);
+                    });
+                });
+            egui::SidePanel::left("left_panel")
+                .resizable(true)
+                .default_width(180.0)
+                .width_range(..=500.0)
+                .show(ctx, |ui| {
+                    ui.vertical(|ui| {
+                        self.draw_cpu_inspector(ui);
+                        ui.separator();
+                        self.draw_ppu_inspector(ui);
+                    });
+                });
+            egui::SidePanel::right("right_panel")
+                .resizable(true)
+                .default_width(180.0)
+                .width_range(..=200.0)
+                .show(ctx, |ui| {
+                    ui.vertical(|ui| {
+                        self.draw_rom_details(ui);
+                    });
+                });
+            egui::CentralPanel::default().show(ctx, |ui| {
+                ui.centered_and_justified(|ui| {
+                    self.draw_screen(ctx, ui);
                 });
             });
-        egui::SidePanel::left("left_panel")
-            .resizable(true)
-            .default_width(180.0)
-            .width_range(..=500.0)
-            .show(ctx, |ui| {
-                ui.vertical(|ui| {
-                    self.draw_cpu_inspector(ui);
-                    ui.separator();
-                    self.draw_ppu_inspector(ui);
+        } else {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                ui.centered_and_justified(|ui| {
+                    self.draw_start_screen(ctx, ui);
                 });
             });
-        egui::SidePanel::right("right_panel")
-            .resizable(true)
-            .default_width(180.0)
-            .width_range(..=200.0)
-            .show(ctx, |ui| {
-                ui.vertical(|ui| {
-                    self.draw_rom_details(ui);
-                });
-            });
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.centered_and_justified(|ui| {
-                self.draw_screen(ctx, ui);
-            });
-        });
+        }
         ctx.request_repaint();
+    }
+
+    pub fn handle_emu_events(&mut self, _ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        while let Ok(event) = self.event_rx.try_recv() {
+            match event {
+                Event::Paused => {
+                    self.paused = true;
+                }
+                Event::Resumed => {
+                    self.paused = false;
+                }
+                Event::Stopped => {
+                    self.running = false;
+                }
+            }
+        }
     }
 }

@@ -1,7 +1,6 @@
 use core::fmt;
 
 use bitflags::bitflags;
-use log::warn;
 use phf::phf_map;
 
 use crate::{bus::Bus, debug::DebugLog, ppu::Ppu};
@@ -499,17 +498,24 @@ impl Cpu {
         }
     }
 
-    pub fn step(&mut self, bus: &mut Bus, ppu: &mut Ppu, debug_log: &mut Option<DebugLog>) -> bool {
+    pub fn step(
+        &mut self,
+        bus: &mut Bus,
+        ppu: &mut Ppu,
+        debug_log: &mut Option<DebugLog>,
+    ) -> Result<(), String> {
         let opcode = self.fetch(bus);
         let op = self.decode(opcode);
 
         match op {
-            Some(op) => self.execute(bus, ppu, op, opcode, debug_log),
-            None => {
-                warn!("Unknown opcode: 0x{:02X}", opcode);
-                self.pc += 1;
-                true
+            Some(op) => {
+                self.execute(bus, ppu, op, opcode, debug_log);
+                Ok(())
             }
+            None => Err(format!(
+                "Unknown opcode: 0x{:02X}. Emulator will be paused.",
+                opcode
+            )),
         }
     }
 
