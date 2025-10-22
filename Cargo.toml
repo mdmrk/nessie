@@ -15,6 +15,7 @@ log = "0.4.28"
 modular-bitfield = "0.13.0"
 phf = { version = "0.13.1", features = ["macros"] }
 rand = "0.9.2"
+rfd = "0.15.4"
 
 [profile.release]
 lto = true

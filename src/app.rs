@@ -1,12 +1,8 @@
-use log::error;
-use std::{
-    sync::{Arc, mpsc},
-    thread,
-};
+use std::sync::Arc;
 
 use egui::{Key, KeyboardShortcut};
 
-use crate::{args::Args, debug::DebugState, emu::emu_thread, ui::Ui};
+use crate::{args::Args, debug::DebugState, ui::Ui};
 
 struct Shortcut {
     name: &'static str,
@@ -42,7 +38,7 @@ impl App {
                 },
             },
             Shortcut {
-                name: "pause/resume",
+                name: "pauseresume",
                 keyboard_shortcut: KeyboardShortcut {
                     modifiers: Default::default(),
                     logical_key: Key::Space,
@@ -56,8 +52,8 @@ impl App {
                     if self.ui.is_paused() {
                         self.ui.emu_step();
                     }
-                } else if i.consume_shortcut(&shortcut.keyboard_shortcut)
-                    && shortcut.name == "pause/resume"
+                }
+                if i.consume_shortcut(&shortcut.keyboard_shortcut) && shortcut.name == "pauseresume"
                 {
                     if self.ui.is_paused() {
                         self.ui.emu_resume()

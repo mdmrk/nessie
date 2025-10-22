@@ -3,6 +3,7 @@ use egui::Color32;
 use egui_extras::{Column, TableBuilder};
 use log::error;
 use rand::prelude::*;
+use rfd::FileDialog;
 use std::{
     sync::{Arc, mpsc},
     thread,
@@ -100,7 +101,6 @@ pub struct Ui {
     event_rx: mpsc::Receiver<Event>,
     command_rx: Option<mpsc::Receiver<Command>>,
     event_tx: Option<mpsc::Sender<Event>>,
-
     pub debug_state: Arc<DebugState>,
     args: Args,
 
@@ -124,7 +124,7 @@ impl Ui {
             debug_state,
             args,
             mem_search: "".into(),
-            running: true,
+            running: false,
             paused: false,
         }
     }
@@ -148,6 +148,7 @@ impl Ui {
                 }
             })
             .expect("Failed to spawn emu thread");
+        self.running = true;
     }
 
     pub fn send_command(&self, command: Command) {
@@ -182,6 +183,14 @@ impl Ui {
     fn draw_menubar(&mut self, ui: &mut egui::Ui) {
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button("File", |ui| {
+                if ui.button("🔥 Select rom...").clicked() {
+                    if let Some(rom) = FileDialog::new()
+                        .add_filter("NES rom", &["nes"])
+                        .pick_file()
+                    {
+                        self.spawn_emu_thread(&rom.into_os_string().into_string().unwrap());
+                    }
+                }
                 if ui.button("✖ Quit").clicked() {
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                 }
