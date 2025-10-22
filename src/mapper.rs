@@ -32,7 +32,7 @@ pub enum MapperIcon {
 impl MapperIcon {
     pub fn from_mapper_number(mapper_num: u8) -> Self {
         match mapper_num {
-            0 => MapperIcon::Nintendo,
+            0 | 1 => MapperIcon::Nintendo,
             _ => unreachable!(),
         }
     }
@@ -134,6 +134,53 @@ impl Mapper for Mapper0 {
 
     fn mirroring(&self) -> Mirroring {
         self.mirroring
+    }
+
+    fn clone_mapper(&self) -> Box<dyn Mapper> {
+        Box::new(self.clone())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Mapper1 {
+    prg_rom: Vec<u8>,
+    chr_rom: Vec<u8>,
+    mirroring: Mirroring,
+}
+
+impl Mapper1 {
+    pub fn new(prg_rom: Vec<u8>, chr_rom: Vec<u8>, mirroring: Mirroring) -> Self {
+        Self {
+            prg_rom,
+            chr_rom,
+            mirroring,
+        }
+    }
+}
+
+impl Mapper for Mapper1 {
+    fn read_prg(&self, addr: u16) -> u8 {
+        match addr {
+            0x6000..=0x7FFF => 0,
+            0x8000..=0xFFFF => self.prg_rom[(addr as usize - 0x8000) % self.prg_rom.len()],
+            _ => 0,
+        }
+    }
+
+    fn write_prg(&mut self, addr: u16, value: u8) {
+        todo!()
+    }
+
+    fn read_chr(&self, addr: u16) -> u8 {
+        todo!()
+    }
+
+    fn write_chr(&mut self, addr: u16, value: u8) {
+        todo!()
+    }
+
+    fn mirroring(&self) -> Mirroring {
+        todo!()
     }
 
     fn clone_mapper(&self) -> Box<dyn Mapper> {

@@ -1,6 +1,6 @@
 use modular_bitfield::prelude::*;
 
-use crate::mapper::{Mapper, Mapper0, Mirroring};
+use crate::mapper::{Mapper, Mapper0, Mapper1, Mirroring};
 
 #[derive(Clone, Copy, Debug, Specifier, PartialEq)]
 pub enum NametableArrangement {
@@ -88,6 +88,7 @@ impl Header {
 
         match mapper_num {
             0 => Box::new(Mapper0::new(prg_rom, chr_rom, mirroring)),
+            1 => Box::new(Mapper1::new(prg_rom, chr_rom, mirroring)),
             _ => panic!("Unsupported mapper ({})", mapper_num),
         }
     }
