@@ -6,7 +6,7 @@ use rand::prelude::*;
 use rfd::FileDialog;
 use std::{
     sync::{Arc, mpsc},
-    thread,
+    thread::{self, JoinHandle},
 };
 
 use crate::{
@@ -97,12 +97,11 @@ impl Screen {
 
 pub struct Ui {
     screen: Screen,
-    command_tx: mpsc::Sender<Command>,
-    event_rx: mpsc::Receiver<Event>,
-    command_rx: Option<mpsc::Receiver<Command>>,
-    event_tx: Option<mpsc::Sender<Event>>,
+    command_tx: Option<mpsc::Sender<Command>>,
+    event_rx: Option<mpsc::Receiver<Event>>,
     pub debug_state: Arc<DebugState>,
     args: Args,
+    emu_thread_handle: Option<JoinHandle<()>>,
 
     mem_search: String,
 
@@ -111,32 +110,51 @@ pub struct Ui {
 }
 
 impl Ui {
-    pub fn new(debug_state: Arc<DebugState>, args: Args) -> Self {
-        let (command_tx, command_rx) = mpsc::channel();
-        let (event_tx, event_rx) = mpsc::channel();
-
+    pub fn new(debug_state: Arc<DebugState>, args: &Args) -> Self {
         Self {
             screen: Screen::new(),
-            command_tx,
-            event_rx,
-            command_rx: Some(command_rx),
-            event_tx: Some(event_tx),
+            command_tx: None,
+            event_rx: None,
             debug_state,
-            args,
+            args: args.clone(),
+            emu_thread_handle: None,
             mem_search: "".into(),
             running: false,
             paused: false,
         }
     }
 
+    fn stop_emu_thread(&mut self) {
+        if let Some(command_tx) = self.command_tx.take() {
+            let _ = command_tx.send(Command::Stop);
+
+            if let Some(handle) = self.emu_thread_handle.take() {
+                let _ = handle.join();
+            }
+        }
+
+        self.event_rx = None;
+        self.running = false;
+        self.paused = false;
+    }
+
     pub fn spawn_emu_thread(&mut self, rom: &String) {
+        if self.running {
+            self.stop_emu_thread();
+        }
+
         let args = self.args.clone();
         let rom = rom.clone();
+        let pause = args.pause;
         let debug_state = self.debug_state.clone();
-        let command_rx = self.command_rx.take().expect("Emulator already spawned");
-        let event_tx = self.event_tx.take().expect("Emulator already spawned");
 
-        _ = thread::Builder::new()
+        let (command_tx, command_rx) = mpsc::channel();
+        let (event_tx, event_rx) = mpsc::channel();
+
+        self.command_tx = Some(command_tx);
+        self.event_rx = Some(event_rx);
+
+        let handle = thread::Builder::new()
             .name("emu_thread".to_string())
             .spawn(move || {
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -148,32 +166,42 @@ impl Ui {
                 }
             })
             .expect("Failed to spawn emu thread");
+
+        self.emu_thread_handle = Some(handle);
         self.running = true;
+        self.paused = pause;
     }
 
-    pub fn send_command(&self, command: Command) {
-        if let Err(e) = self.command_tx.send(command) {
-            error!("{e}");
+    fn send_command(&self, command: Command) {
+        if let Some(command_tx) = &self.command_tx {
+            if let Err(e) = command_tx.send(command) {
+                error!("{e}");
+            }
         }
     }
 
     pub fn emu_step(&mut self) {
-        self.send_command(Command::Step);
+        if self.running && self.paused {
+            self.send_command(Command::Step);
+        }
     }
 
     pub fn emu_resume(&mut self) {
-        self.paused = false;
-        self.send_command(Command::Resume);
+        if self.running && self.paused {
+            self.send_command(Command::Resume);
+        }
     }
 
     pub fn emu_pause(&mut self) {
-        self.paused = true;
-        self.send_command(Command::Pause);
+        if self.running && !self.paused {
+            self.send_command(Command::Pause);
+        }
     }
 
     pub fn emu_stop(&mut self) {
-        self.send_command(Command::Stop);
-        self.running = false;
+        if self.running {
+            self.stop_emu_thread();
+        }
     }
 
     pub fn is_paused(&self) -> bool {
@@ -183,7 +211,7 @@ impl Ui {
     fn draw_menubar(&mut self, ui: &mut egui::Ui) {
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button("File", |ui| {
-                if ui.button("🔥 Select rom...").clicked() {
+                if ui.button("📥 Select rom...").clicked() {
                     if let Some(rom) = FileDialog::new()
                         .add_filter("NES rom", &["nes"])
                         .pick_file()
@@ -202,16 +230,16 @@ impl Ui {
                     }
                 });
                 ui.add_enabled_ui(self.running && self.paused, |ui| {
-                    if ui.button("⏸ Resume").clicked() {
+                    if ui.button("▶ Resume").clicked() {
                         self.emu_resume();
                     }
                 });
                 ui.add_enabled_ui(self.running && !self.paused, |ui| {
-                    if ui.button("⏵ Pause").clicked() {
+                    if ui.button("⏸ Pause").clicked() {
                         self.emu_pause();
                     }
                 });
-                ui.add_enabled_ui(self.running && self.running, |ui| {
+                ui.add_enabled_ui(self.running, |ui| {
                     if ui.button("⏹ Stop").clicked() {
                         self.emu_stop();
                     }
@@ -577,7 +605,7 @@ impl Ui {
         self.screen.update_texture(ctx, ui);
     }
 
-    fn draw_start_screen(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+    fn draw_start_screen(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
         ui.label("Load a rom");
     }
 
@@ -594,7 +622,6 @@ impl Ui {
                 .height_range(..=500.0)
                 .show(ctx, |ui| {
                     ui.horizontal_top(|ui| {
-                        // self.draw_memory_viewer(ui);
                         ui.separator();
                         self.draw_log_reader(ui);
                     });
@@ -635,18 +662,31 @@ impl Ui {
     }
 
     pub fn handle_emu_events(&mut self, _ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        while let Ok(event) = self.event_rx.try_recv() {
-            match event {
-                Event::Paused => {
-                    self.paused = true;
-                }
-                Event::Resumed => {
-                    self.paused = false;
-                }
-                Event::Stopped => {
-                    self.running = false;
+        if let Some(event_rx) = &self.event_rx {
+            while let Ok(event) = event_rx.try_recv() {
+                match event {
+                    Event::Paused => {
+                        self.paused = true;
+                    }
+                    Event::Resumed => {
+                        self.paused = false;
+                    }
+                    Event::Stopped => {
+                        self.running = false;
+                        self.paused = false;
+                    }
+                    Event::Crashed => {
+                        self.running = false;
+                        self.paused = false;
+                    }
                 }
             }
         }
+    }
+}
+
+impl Drop for Ui {
+    fn drop(&mut self) {
+        self.stop_emu_thread();
     }
 }

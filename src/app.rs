@@ -17,12 +17,9 @@ impl App {
     pub fn new(args: &Args) -> Self {
         let debug_state = Arc::new(DebugState::new());
 
-        let mut ui = Ui::new(debug_state, args.clone());
+        let mut ui = Ui::new(debug_state, args);
         if let Some(rom) = &args.rom {
             ui.spawn_emu_thread(rom);
-            if args.pause {
-                ui.emu_pause();
-            }
         }
 
         Self { ui }
@@ -48,17 +45,21 @@ impl App {
 
         ctx.input_mut(|i| {
             for shortcut in shortcuts {
-                if i.consume_shortcut(&shortcut.keyboard_shortcut) && shortcut.name == "step" {
-                    if self.ui.is_paused() {
-                        self.ui.emu_step();
-                    }
-                }
-                if i.consume_shortcut(&shortcut.keyboard_shortcut) && shortcut.name == "pauseresume"
-                {
-                    if self.ui.is_paused() {
-                        self.ui.emu_resume()
-                    } else {
-                        self.ui.emu_pause();
+                if i.consume_shortcut(&shortcut.keyboard_shortcut) {
+                    match shortcut.name {
+                        "step" => {
+                            if self.ui.is_paused() {
+                                self.ui.emu_step();
+                            }
+                        }
+                        "pauseresume" => {
+                            if self.ui.is_paused() {
+                                self.ui.emu_resume();
+                            } else {
+                                self.ui.emu_pause();
+                            }
+                        }
+                        _ => {}
                     }
                 }
             }

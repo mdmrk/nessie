@@ -22,6 +22,7 @@ pub enum Event {
     Stopped,
     Paused,
     Resumed,
+    Crashed,
 }
 
 pub struct Emu {
