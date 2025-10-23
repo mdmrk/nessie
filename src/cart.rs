@@ -1,3 +1,4 @@
+use log::error;
 use modular_bitfield::prelude::*;
 
 use crate::mapper::{Mapper, Mapper0, Mapper1, Mirroring};
@@ -130,7 +131,10 @@ impl Cart {
                     mapper,
                 })
             }
-            Err(_) => None,
+            Err(e) => {
+                error!("{e}");
+                None
+            }
         }
     }
 }
