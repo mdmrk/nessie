@@ -175,11 +175,10 @@ impl Ui {
     }
 
     fn send_command(&self, command: Command) {
-        if let Some(command_tx) = &self.command_tx {
-            if let Err(e) = command_tx.send(command) {
+        if let Some(command_tx) = &self.command_tx
+            && let Err(e) = command_tx.send(command) {
                 error!("{e}");
             }
-        }
     }
 
     pub fn emu_step(&mut self) {
@@ -213,14 +212,13 @@ impl Ui {
     fn draw_menubar(&mut self, ui: &mut egui::Ui) {
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button("File", |ui| {
-                if ui.button("📥 Select rom...").clicked() {
-                    if let Some(rom) = FileDialog::new()
+                if ui.button("📥 Select rom...").clicked()
+                    && let Some(rom) = FileDialog::new()
                         .add_filter("NES rom", &["nes"])
                         .pick_file()
                     {
                         self.spawn_emu_thread(&rom.into_os_string().into_string().unwrap());
                     }
-                }
                 if ui.button("✖ Quit").clicked() {
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                 }

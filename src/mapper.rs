@@ -145,7 +145,13 @@ impl Mapper for Mapper0 {
 pub struct Mapper1 {
     prg_rom: Vec<u8>,
     chr_rom: Vec<u8>,
-    mirroring: Mirroring,
+    prg_ram: Vec<u8>,
+    shift_register: u8,
+    write_count: u8,
+    control: u8,
+    chr_bank_0: u8,
+    chr_bank_1: u8,
+    prg_bank: u8,
 }
 
 impl Mapper1 {
@@ -153,7 +159,13 @@ impl Mapper1 {
         Self {
             prg_rom,
             chr_rom,
-            mirroring,
+            prg_ram: vec![0; 0x2000],
+            shift_register: 0x10,
+            write_count: 0,
+            control: 0x0C,
+            chr_bank_0: 0,
+            chr_bank_1: 0,
+            prg_bank: 0,
         }
     }
 }
@@ -161,26 +173,138 @@ impl Mapper1 {
 impl Mapper for Mapper1 {
     fn read_prg(&self, addr: u16) -> u8 {
         match addr {
-            0x6000..=0x7FFF => 0,
-            0x8000..=0xFFFF => self.prg_rom[(addr as usize - 0x8000) % self.prg_rom.len()],
+            0x6000..=0x7FFF => self.prg_ram[(addr - 0x6000) as usize],
+            0x8000..=0xFFFF => {
+                let prg_mode = (self.control >> 2) & 0x03;
+                let prg_bank = self.prg_bank & 0x0F;
+                let num_banks = (self.prg_rom.len() / 0x4000) as u8;
+
+                let bank = match prg_mode {
+                    0 | 1 => {
+                        if addr < 0xC000 {
+                            (prg_bank & 0xFE) as usize
+                        } else {
+                            ((prg_bank & 0xFE) + 1) as usize
+                        }
+                    }
+                    2 => {
+                        if addr < 0xC000 {
+                            0
+                        } else {
+                            prg_bank as usize
+                        }
+                    }
+                    3 => {
+                        if addr < 0xC000 {
+                            prg_bank as usize
+                        } else {
+                            (num_banks - 1) as usize
+                        }
+                    }
+                    _ => unreachable!(),
+                };
+
+                let offset = ((addr & 0x3FFF) as usize) + (bank * 0x4000);
+                self.prg_rom[offset % self.prg_rom.len()]
+            }
             _ => 0,
         }
     }
 
     fn write_prg(&mut self, addr: u16, value: u8) {
-        todo!()
+        match addr {
+            0x6000..=0x7FFF => {
+                self.prg_ram[(addr - 0x6000) as usize] = value;
+            }
+            0x8000..=0xFFFF => {
+                if value & 0x80 != 0 {
+                    self.shift_register = 0x10;
+                    self.write_count = 0;
+                    self.control |= 0x0C;
+                } else {
+                    let bit = value & 0x01;
+                    self.shift_register >>= 1;
+                    self.shift_register |= bit << 4;
+                    self.write_count += 1;
+
+                    if self.write_count == 5 {
+                        let reg_value = self.shift_register;
+
+                        match addr {
+                            0x8000..=0x9FFF => self.control = reg_value,
+                            0xA000..=0xBFFF => self.chr_bank_0 = reg_value,
+                            0xC000..=0xDFFF => self.chr_bank_1 = reg_value,
+                            0xE000..=0xFFFF => self.prg_bank = reg_value,
+                            _ => {}
+                        }
+
+                        self.shift_register = 0x10;
+                        self.write_count = 0;
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 
     fn read_chr(&self, addr: u16) -> u8 {
-        todo!()
+        let chr_mode = (self.control >> 4) & 0x01;
+
+        let bank = if chr_mode == 0 {
+            if addr < 0x1000 {
+                (self.chr_bank_0 & 0x1E) as usize
+            } else {
+                ((self.chr_bank_0 & 0x1E) + 1) as usize
+            }
+        } else if addr < 0x1000 {
+            self.chr_bank_0 as usize
+        } else {
+            self.chr_bank_1 as usize
+        };
+
+        let bank_size = if chr_mode == 0 { 0x1000 } else { 0x1000 };
+        let offset = (addr as usize & (bank_size - 1)) + (bank * bank_size);
+
+        if self.chr_rom.is_empty() {
+            0
+        } else {
+            self.chr_rom[offset % self.chr_rom.len()]
+        }
     }
 
     fn write_chr(&mut self, addr: u16, value: u8) {
-        todo!()
+        if !self.chr_rom.is_empty() {
+            let chr_mode = (self.control >> 4) & 0x01;
+
+            let bank = if chr_mode == 0 {
+                if addr < 0x1000 {
+                    (self.chr_bank_0 & 0x1E) as usize
+                } else {
+                    ((self.chr_bank_0 & 0x1E) + 1) as usize
+                }
+            } else if addr < 0x1000 {
+                self.chr_bank_0 as usize
+            } else {
+                self.chr_bank_1 as usize
+            };
+
+            let bank_size = if chr_mode == 0 { 0x1000 } else { 0x1000 };
+            let offset = (addr as usize & (bank_size - 1)) + (bank * bank_size);
+
+            if offset < self.chr_rom.len() {
+                self.chr_rom[offset] = value;
+            }
+        }
     }
 
     fn mirroring(&self) -> Mirroring {
-        todo!()
+        match self.control & 0x03 {
+            0 => Mirroring::SingleScreenLower,
+            1 => Mirroring::SingleScreenUpper,
+            2 => Mirroring::Vertical,
+            3 => Mirroring::Horizontal,
+            _ => unreachable!(),
+        }
     }
 
     fn clone_mapper(&self) -> Box<dyn Mapper> {
