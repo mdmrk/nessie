@@ -103,7 +103,7 @@ pub struct Ui {
     args: Args,
     emu_thread_handle: Option<JoinHandle<()>>,
 
-    mem_search: String,
+    _mem_search: String,
 
     running: bool,
     paused: bool,
@@ -118,7 +118,7 @@ impl Ui {
             debug_state,
             args: args.clone(),
             emu_thread_handle: None,
-            mem_search: "".into(),
+            _mem_search: "".into(),
             running: false,
             paused: false,
         }
@@ -138,13 +138,13 @@ impl Ui {
         self.paused = false;
     }
 
-    pub fn spawn_emu_thread(&mut self, rom: &String) {
+    pub fn spawn_emu_thread(&mut self, rom: &str) {
         if self.running {
             self.stop_emu_thread();
         }
 
         let args = self.args.clone();
-        let rom = rom.clone();
+        let rom = rom.to_owned();
         let pause = args.pause;
         let debug_state = self.debug_state.clone();
 
@@ -176,9 +176,10 @@ impl Ui {
 
     fn send_command(&self, command: Command) {
         if let Some(command_tx) = &self.command_tx
-            && let Err(e) = command_tx.send(command) {
-                error!("{e}");
-            }
+            && let Err(e) = command_tx.send(command)
+        {
+            error!("{e}");
+        }
     }
 
     pub fn emu_step(&mut self) {
@@ -216,9 +217,9 @@ impl Ui {
                     && let Some(rom) = FileDialog::new()
                         .add_filter("NES rom", &["nes"])
                         .pick_file()
-                    {
-                        self.spawn_emu_thread(&rom.into_os_string().into_string().unwrap());
-                    }
+                {
+                    self.spawn_emu_thread(&rom.into_os_string().into_string().unwrap());
+                }
                 if ui.button("✖ Quit").clicked() {
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                 }

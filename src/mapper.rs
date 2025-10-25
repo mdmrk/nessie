@@ -155,7 +155,7 @@ pub struct Mapper1 {
 }
 
 impl Mapper1 {
-    pub fn new(prg_rom: Vec<u8>, chr_rom: Vec<u8>, mirroring: Mirroring) -> Self {
+    pub fn new(prg_rom: Vec<u8>, chr_rom: Vec<u8>, _mirroring: Mirroring) -> Self {
         Self {
             prg_rom,
             chr_rom,
@@ -262,7 +262,7 @@ impl Mapper for Mapper1 {
             self.chr_bank_1 as usize
         };
 
-        let bank_size = if chr_mode == 0 { 0x1000 } else { 0x1000 };
+        let bank_size = 0x1000;
         let offset = (addr as usize & (bank_size - 1)) + (bank * bank_size);
 
         if self.chr_rom.is_empty() {
@@ -288,7 +288,7 @@ impl Mapper for Mapper1 {
                 self.chr_bank_1 as usize
             };
 
-            let bank_size = if chr_mode == 0 { 0x1000 } else { 0x1000 };
+            let bank_size = 0x1000;
             let offset = (addr as usize & (bank_size - 1)) + (bank * bank_size);
 
             if offset < self.chr_rom.len() {

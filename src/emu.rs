@@ -56,7 +56,7 @@ impl Emu {
         }
     }
 
-    pub fn load_rom(&mut self, rom_path: &String) {
+    pub fn load_rom(&mut self, rom_path: &str) {
         if let Some(cart) = Cart::insert(rom_path) {
             self.bus.insert_cartridge(cart);
             info!("Rom \"{}\" loaded", rom_path);
@@ -89,7 +89,7 @@ pub fn emu_thread(
     event_tx: mpsc::Sender<Event>,
     debug_state: Arc<DebugState>,
     args: &Args,
-    rom: &String,
+    rom: &str,
 ) {
     let mut emu = Emu::new(event_tx);
 

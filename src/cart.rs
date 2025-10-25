@@ -102,7 +102,7 @@ pub struct Cart {
 }
 
 impl Cart {
-    pub fn insert(rom_path: &String) -> Option<Self> {
+    pub fn insert(rom_path: &str) -> Option<Self> {
         match std::fs::read(rom_path) {
             Ok(contents) => {
                 let header = unsafe { std::ptr::read(contents.as_ptr() as *const Header) };
