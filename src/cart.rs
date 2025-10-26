@@ -1,4 +1,4 @@
-use log::error;
+use log::{error, warn};
 use modular_bitfield::prelude::*;
 
 use crate::mapper::{Mapper, Mapper0, Mapper1, Mirroring};
@@ -106,6 +106,10 @@ impl Cart {
         match std::fs::read(rom_path) {
             Ok(contents) => {
                 let header = unsafe { std::ptr::read(contents.as_ptr() as *const Header) };
+                let header_magic = [0x4E, 0x45, 0x53, 0x1A]; // (ASCII "NES" followed by MS-DOS end-of-file)
+                if header.magic != header_magic {
+                    warn!("Wrong ROM magic number");
+                }
                 let rom = contents.clone();
                 let prg_rom_size = 16 * 1024 * header.prg_rom_size as usize;
                 let prg_rom_offset = if header.flags6.has_trainer() {
