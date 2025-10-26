@@ -242,18 +242,30 @@ impl Ppu {
     }
 
     pub fn step(&mut self, cycles: usize) {
+        let old_scanline = self.scanline;
+
         self.h_pixel += 3 * cycles;
-        if self.h_pixel > 340 {
+
+        while self.h_pixel > 340 {
+            self.h_pixel -= 341;
             self.scanline += 1;
+
+            if self.scanline > 261 {
+                self.scanline = 0;
+            }
         }
-        self.h_pixel %= 341;
-        self.scanline %= 262;
+
+        if old_scanline < 241 && self.scanline >= 241 {
+            self.ppu_status.set_vblank(true);
+        }
+
+        if self.scanline == 261 {
+            self.ppu_status.set_vblank(false);
+            self.ppu_status.set_sprite_0_hit(false);
+        }
     }
 
     pub fn check_nmi(&self) -> bool {
-        if self.scanline == 241 && self.h_pixel == 1 {
-            return self.ppu_ctrl.vblank();
-        }
-        false
+        self.ppu_status.vblank() && self.ppu_ctrl.vblank()
     }
 }
