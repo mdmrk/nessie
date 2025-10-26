@@ -380,30 +380,29 @@ impl Ui {
             });
         }
 
-        // FIXME
-        // egui::CollapsingHeader::new("Stack").show(ui, |ui| {
-        //     if let Ok(bus) = self.debug_state.bus.read() {
-        //         egui::ScrollArea::vertical() // FIXME: optimize this
-        //             .max_height(200.0)
-        //             .show(ui, |ui| {
-        //                 TableBuilder::new(ui)
-        //                     .id_salt("stack")
-        //                     .striped(true)
-        //                     .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-        //                     .column(Column::auto())
-        //                     .column(Column::auto())
-        //                     .column(Column::remainder())
-        //                     .body(|mut body| {
-        //                         for i in (0x100..0x1FF).rev() {
-        //                             make_rows!(body,
-        //                                 format!("0x{:04X}", i) =>
-        //                                     format!("{}", bus.read_byte(i)),
-        //                                     format!("0x{:02X}", bus.read_byte(i)));
-        //                         }
-        //                     });
-        //             });
-        //     }
-        // });
+        egui::CollapsingHeader::new("Stack").show(ui, |ui| {
+            if let Ok(stack) = self.debug_state.stack.read() {
+                egui::ScrollArea::vertical() // FIXME: optimize this
+                    .max_height(200.0)
+                    .show(ui, |ui| {
+                        TableBuilder::new(ui)
+                            .id_salt("stack")
+                            .striped(true)
+                            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                            .column(Column::auto())
+                            .column(Column::auto())
+                            .column(Column::remainder())
+                            .body(|mut body| {
+                                for (i, n) in stack.iter().enumerate().rev() {
+                                    make_rows!(body,
+                                        format!("0x{:04X}", i + 0x100) =>
+                                            format!("{}", n),
+                                            format!("0x{:02X}",n));
+                                }
+                            });
+                    });
+            }
+        });
     }
 
     fn draw_ppu_inspector(&mut self, ui: &mut egui::Ui) {
