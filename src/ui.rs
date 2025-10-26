@@ -103,7 +103,8 @@ pub struct Ui {
     args: Args,
     emu_thread_handle: Option<JoinHandle<()>>,
 
-    _mem_search: String,
+    mem_search: String,
+    prev_mem_search_addr: usize,
 
     running: bool,
     paused: bool,
@@ -118,7 +119,8 @@ impl Ui {
             debug_state,
             args: args.clone(),
             emu_thread_handle: None,
-            _mem_search: "".into(),
+            mem_search: "".into(),
+            prev_mem_search_addr: 0,
             running: false,
             paused: false,
         }
@@ -249,71 +251,79 @@ impl Ui {
         });
     }
 
-    // FIXME
-    // fn draw_memory_viewer(&mut self, ui: &mut egui::Ui) {
-    //     ui.vertical(|ui| {
-    //         let n = (match self.mem_search.starts_with("0x") {
-    //             true => usize::from_str_radix(&self.mem_search[2..], 16).unwrap_or(0),
-    //             false => self.mem_search.parse::<usize>().unwrap_or(0),
-    //         })
-    //         .min(0xffff);
+    fn draw_memory_viewer(&mut self, ui: &mut egui::Ui) {
+        ui.vertical(|ui| {
+            let n = (match self.mem_search.starts_with("0x") {
+                true => usize::from_str_radix(&self.mem_search[2..], 16).unwrap_or(0),
+                false => self.mem_search.parse::<usize>().unwrap_or(0),
+            })
+            .min(0xffff);
 
-    //         ui.label(
-    //             egui::RichText::new(format!("{} 0x{:04X}", n, n))
-    //                 .strong()
-    //                 .text_style(egui::TextStyle::Monospace),
-    //         );
+            const BYTES_PER_ROW: usize = 0x10;
+            const ROWS_TO_SHOW: usize = 7;
+            const ROWS_ABOVE_CURRENT: usize = ROWS_TO_SHOW / 2;
+            const MAX_ROW: usize = 0xFFFF / BYTES_PER_ROW;
 
-    //         if let Ok(bus) = self.debug_state.bus.read() {
-    //             TableBuilder::new(ui)
-    //                 .striped(true)
-    //                 .column(Column::auto())
-    //                 .column(Column::auto())
-    //                 .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-    //                 .body(|mut body| {
-    //                     let lo = n & 0xfff0;
-    //                     let bytes_per_row = 0x10;
-    //                     let total_rows = 7;
-    //                     let max_rows_above = lo / bytes_per_row;
-    //                     let rows_above = max_rows_above.min(total_rows - 1);
-    //                     let rows_below = total_rows - 1 - rows_above;
-    //                     let start = lo - (rows_above * bytes_per_row);
-    //                     let end = (lo + rows_below * bytes_per_row).min(0xffff);
+            let current_row = (n & 0xFFF0) / BYTES_PER_ROW;
+            let mut start_row = current_row.saturating_sub(ROWS_ABOVE_CURRENT);
+            if start_row + ROWS_TO_SHOW - 1 > MAX_ROW {
+                start_row = (MAX_ROW + 1).saturating_sub(ROWS_TO_SHOW);
+            }
+            let start_addr = start_row * BYTES_PER_ROW;
+            if start_addr != self.prev_mem_search_addr {
+                self.send_command(Command::MemoryAddress(start_addr));
+                self.prev_mem_search_addr = start_addr;
+            }
 
-    //                     for i in (start..=end).step_by(bytes_per_row) {
-    //                         let bytes_str: Vec<String> = bus
-    //                             .read(i as u16, 0x10)
-    //                             .to_vec()
-    //                             .iter()
-    //                             .map(|b| format!("{:02X}", b))
-    //                             .collect();
+            ui.label(
+                egui::RichText::new(format!("0x{:04X} {}", n, n))
+                    .strong()
+                    .text_style(egui::TextStyle::Monospace),
+            );
 
-    //                         body.row(20.0, |mut row| {
-    //                             row.col(|ui| {
-    //                                 ui.label(
-    //                                     egui::RichText::new(format!("0x{:04X}", i))
-    //                                         .strong()
-    //                                         .text_style(egui::TextStyle::Monospace),
-    //                                 );
-    //                             });
-    //                             row.col(|ui| {
-    //                                 ui.label(
-    //                                     egui::RichText::new(bytes_str.join(" "))
-    //                                         .text_style(egui::TextStyle::Monospace),
-    //                                 );
-    //                             });
-    //                         });
-    //                     }
-    //                 });
-    //             ui.shrink_width_to_current();
-    //             egui::TextEdit::singleline(&mut self.mem_search)
-    //                 .hint_text("...")
-    //                 .char_limit(8)
-    //                 .desired_width(f32::INFINITY)
-    //                 .show(ui);
-    //         }
-    //     });
-    // }
+            if let Ok(mem_chunk) = self.debug_state.mem_chunk.read() {
+                TableBuilder::new(ui)
+                    .striped(true)
+                    .column(Column::auto())
+                    .column(Column::auto())
+                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                    .body(|mut body| {
+                        for (i, lines) in mem_chunk
+                            .chunks(BYTES_PER_ROW)
+                            .take(ROWS_TO_SHOW)
+                            .enumerate()
+                        {
+                            let bytes_str: Vec<String> =
+                                lines.iter().map(|b| format!("{:02X}", b)).collect();
+
+                            let row_addr = start_addr + (i * BYTES_PER_ROW);
+
+                            body.row(20.0, |mut row| {
+                                row.col(|ui| {
+                                    ui.label(
+                                        egui::RichText::new(format!("0x{:04X}", row_addr))
+                                            .strong()
+                                            .text_style(egui::TextStyle::Monospace),
+                                    );
+                                });
+                                row.col(|ui| {
+                                    ui.label(
+                                        egui::RichText::new(bytes_str.join(" "))
+                                            .text_style(egui::TextStyle::Monospace),
+                                    );
+                                });
+                            });
+                        }
+                    });
+                ui.shrink_width_to_current();
+                egui::TextEdit::singleline(&mut self.mem_search)
+                    .hint_text("27, 0xD0D0, ...")
+                    .char_limit(8)
+                    .desired_width(f32::INFINITY)
+                    .show(ui);
+            }
+        });
+    }
 
     fn draw_cpu_inspector(&mut self, ui: &mut egui::Ui) {
         if let Ok(cpu) = self.debug_state.cpu.read() {
@@ -623,6 +633,7 @@ impl Ui {
                 .height_range(..=500.0)
                 .show(ctx, |ui| {
                     ui.horizontal_top(|ui| {
+                        self.draw_memory_viewer(ui);
                         ui.separator();
                         self.draw_log_reader(ui);
                     });

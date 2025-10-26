@@ -16,6 +16,7 @@ pub enum Command {
     Pause,
     Resume,
     Step,
+    MemoryAddress(usize),
 }
 
 pub enum Event {
@@ -34,6 +35,7 @@ pub struct Emu {
     pub want_step: bool,
     pub debug_log: Option<DebugLog>,
     pub event_tx: mpsc::Sender<Event>,
+    pub mem_chunk_addr: usize,
 }
 
 impl Emu {
@@ -47,6 +49,7 @@ impl Emu {
             want_step: false,
             debug_log: None,
             event_tx,
+            mem_chunk_addr: 0,
         }
     }
 
@@ -115,6 +118,9 @@ pub fn emu_thread(
                 }
                 Command::Step => {
                     emu.step();
+                }
+                Command::MemoryAddress(addr) => {
+                    emu.mem_chunk_addr = addr;
                 }
             }
         }
