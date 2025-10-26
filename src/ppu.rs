@@ -249,4 +249,11 @@ impl Ppu {
         self.h_pixel %= 341;
         self.scanline %= 262;
     }
+
+    pub fn check_nmi(&self) -> bool {
+        if self.scanline == 241 && self.h_pixel == 1 {
+            return self.ppu_ctrl.vblank();
+        }
+        false
+    }
 }

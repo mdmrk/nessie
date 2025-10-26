@@ -1,6 +1,7 @@
 use core::fmt;
 
 use bitflags::bitflags;
+use log::debug;
 use phf::phf_map;
 
 use crate::{bus::Bus, debug::DebugLog, ppu::Ppu};
@@ -337,7 +338,7 @@ static OPCODES: phf::Map<u8, Op> = phf_map! {
     0x6Cu8 => op!(OpMnemonic::JMP, AddrMode::Indirect   , 5, Cpu::jmp, false),
     0x20u8 => op!(OpMnemonic::JSR, AddrMode::Absolute   , 6, Cpu::jsr, false),
     0x60u8 => op!(OpMnemonic::RTS, AddrMode::Implicid   , 6, Cpu::rts, false),
-    // 0xu8 => op!(OpMnemonic::BRK, AddressingMode::Immediate , 0, Cpu::brk, false),
+    0x00u8 => op!(OpMnemonic::BRK, AddrMode::Immediate  , 7, Cpu::brk, false),
     0x40u8 => op!(OpMnemonic::RTI, AddrMode::Implicid   , 6, Cpu::rti, false),
     0x48u8 => op!(OpMnemonic::PHA, AddrMode::Implicid   , 3, Cpu::pha, false),
     0x68u8 => op!(OpMnemonic::PLA, AddrMode::Implicid   , 4, Cpu::pla, false),
@@ -406,6 +407,8 @@ pub struct Cpu {
     pub y: u8,
     pub cycle_count: usize,
     pub log: String,
+    pub nmi_pending: bool,
+    pub irq_pending: bool,
 }
 
 impl Default for Cpu {
@@ -425,6 +428,8 @@ impl Cpu {
             y: 0,
             cycle_count: 7,
             log: "".into(),
+            nmi_pending: false,
+            irq_pending: false,
         }
     }
 
@@ -482,7 +487,9 @@ impl Cpu {
         let extra_cycles = (op.execute)(self, bus, ppu, op.mode, &operands);
         let total_cycles = op.base_cycles + extra_cycles as usize;
         self.cycle_count += total_cycles;
+
         ppu.step(total_cycles);
+        self.nmi_pending = ppu.check_nmi();
 
         self.log.push_str(&debug_str);
         if let Some(debug_log) = debug_log {
@@ -504,6 +511,16 @@ impl Cpu {
         ppu: &mut Ppu,
         debug_log: &mut Option<DebugLog>,
     ) -> Result<(), String> {
+        if self.nmi_pending {
+            debug!("NMI triggered");
+            self.handle_nmi(bus, ppu);
+            self.nmi_pending = false;
+        } else if self.irq_pending {
+            debug!("IRQ triggered");
+            self.handle_irq(bus, ppu);
+            self.irq_pending = false;
+        }
+
         let opcode = self.fetch(bus);
         let op = self.decode(opcode);
 
@@ -517,6 +534,46 @@ impl Cpu {
                 opcode
             )),
         }
+    }
+
+    fn handle_nmi(&mut self, bus: &mut Bus, ppu: &mut Ppu) {
+        self.push_stack(bus, (self.pc >> 8) as u8);
+        self.push_stack(bus, self.pc as u8);
+
+        let mut p = self.p;
+        p.remove(Flags::B);
+        p.insert(Flags::_1);
+        self.push_stack(bus, p.bits());
+
+        self.p.insert(Flags::I);
+
+        let lo = bus.read_byte(0xFFFA);
+        let hi = bus.read_byte(0xFFFB);
+        self.pc = u16::from_le_bytes([lo, hi]);
+
+        let cycles = 7;
+        self.cycle_count += cycles;
+        ppu.step(cycles);
+    }
+
+    fn handle_irq(&mut self, bus: &mut Bus, ppu: &mut Ppu) {
+        self.push_stack(bus, (self.pc >> 8) as u8);
+        self.push_stack(bus, self.pc as u8);
+
+        let mut p = self.p;
+        p.remove(Flags::B);
+        p.insert(Flags::_1);
+        self.push_stack(bus, p.bits());
+
+        self.p.insert(Flags::I);
+
+        let lo = bus.read_byte(0xFFFE);
+        let hi = bus.read_byte(0xFFFF);
+        self.pc = u16::from_le_bytes([lo, hi]);
+
+        let cycles = 7;
+        self.cycle_count += cycles;
+        ppu.step(cycles);
     }
 
     fn update_nz(&mut self, value: u8) {
@@ -920,7 +977,20 @@ impl Cpu {
         0
     }
 
-    // fn brk(cpu: &mut Cpu, bus: &mut Bus,_ppu: &mut Ppu, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn brk(cpu: &mut Cpu, bus: &mut Bus, _ppu: &mut Ppu, _mode: AddrMode, _operands: &[u8]) -> u8 {
+        cpu.push_stack(bus, (cpu.pc >> 8) as u8);
+        cpu.push_stack(bus, cpu.pc as u8);
+
+        let p = cpu.p | Flags::B | Flags::_1;
+        cpu.push_stack(bus, p.bits());
+
+        cpu.p.insert(Flags::I);
+
+        let lo = bus.read_byte(0xFFFE);
+        let hi = bus.read_byte(0xFFFB);
+        cpu.pc = u16::from_le_bytes([lo, hi]);
+        0
+    }
 
     fn rti(cpu: &mut Cpu, bus: &mut Bus, _ppu: &mut Ppu, _mode: AddrMode, _operands: &[u8]) -> u8 {
         let mut p = Flags::from_bits(cpu.pop_stack(bus)).unwrap();
