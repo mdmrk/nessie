@@ -348,7 +348,7 @@ static OPCODES: phf::Map<u8, Op> = phf_map! {
     0xBAu8 => op!(OpMnemonic::TSX, AddrMode::Implicid   , 2, Cpu::tsx, false),
     0x18u8 => op!(OpMnemonic::CLC, AddrMode::Implicid   , 2, Cpu::clc, false),
     0x38u8 => op!(OpMnemonic::SEC, AddrMode::Implicid   , 2, Cpu::sec, false),
-    // 0xu8 => op!(OpMnemonic::CLI, AddressingMode::Immediate , 0, Cpu::cli, false),
+    0x58u8 => op!(OpMnemonic::CLI, AddrMode::Implicid   , 2, Cpu::cli, false),
     0x78u8 => op!(OpMnemonic::SEI, AddrMode::Implicid   , 2, Cpu::sei, false),
     0xD8u8 => op!(OpMnemonic::CLD, AddrMode::Implicid   , 2, Cpu::cld, false),
     0xF8u8 => op!(OpMnemonic::SED, AddrMode::Implicid   , 2, Cpu::sed, false),
@@ -458,11 +458,11 @@ impl Cpu {
         op: &Op,
         opcode: u8,
         debug_log: &mut Option<DebugLog>,
-    ) -> bool {
+    ) -> Result<(), String> {
         let operand_bytes = op.mode.operand_bytes();
         let operands = bus.read(self.pc + 1, operand_bytes as u16);
 
-        let debug_str = format!(
+        let step_str = format!(
             "{:04X}  {:02X} {:6}{}{} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:{:3},{:3} CYC:{}\n",
             self.pc,
             opcode,
@@ -491,18 +491,18 @@ impl Cpu {
         ppu.step(total_cycles);
         self.nmi_pending = ppu.check_nmi();
 
-        self.log.push_str(&debug_str);
+        self.log.push_str(&step_str);
         if let Some(debug_log) = debug_log {
-            let ok = debug_log.compare(&debug_str);
-            if !ok {
+            let log_matches = debug_log.compare(&step_str);
+
+            if !log_matches {
                 let mut log = debug_log.log[debug_log.line - 1].clone();
                 log.push_str(" [ACTUAL LOG]");
                 self.log.push_str(&log);
+                return Err("Emulator output differs from actual log".into());
             }
-            ok
-        } else {
-            true
         }
+        Ok(())
     }
 
     pub fn step(
@@ -525,10 +525,7 @@ impl Cpu {
         let op = self.decode(opcode);
 
         match op {
-            Some(op) => {
-                self.execute(bus, ppu, op, opcode, debug_log);
-                Ok(())
-            }
+            Some(op) => self.execute(bus, ppu, op, opcode, debug_log),
             None => Err(format!(
                 "Unknown opcode: 0x{:02X}. Emulator will be paused.",
                 opcode
@@ -987,7 +984,7 @@ impl Cpu {
         cpu.p.insert(Flags::I);
 
         let lo = bus.read_byte(0xFFFE);
-        let hi = bus.read_byte(0xFFFB);
+        let hi = bus.read_byte(0xFFFF);
         cpu.pc = u16::from_le_bytes([lo, hi]);
         0
     }
@@ -1049,7 +1046,10 @@ impl Cpu {
         0
     }
 
-    // fn cli(cpu: &mut Cpu, bus: &mut Bus,_ppu: &mut Ppu, mode: AddressingMode, operands: &[u8]) -> u8 {}
+    fn cli(cpu: &mut Cpu, _bus: &mut Bus, _ppu: &mut Ppu, _mode: AddrMode, _operands: &[u8]) -> u8 {
+        cpu.p.set(Flags::I, false);
+        0
+    }
 
     fn sei(cpu: &mut Cpu, _bus: &mut Bus, _ppu: &mut Ppu, _mode: AddrMode, _operands: &[u8]) -> u8 {
         cpu.p.set(Flags::I, true);
