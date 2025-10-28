@@ -526,10 +526,7 @@ impl Cpu {
 
         match op {
             Some(op) => self.execute(bus, ppu, op, opcode, debug_log),
-            None => Err(format!(
-                "Unknown opcode: 0x{:02X}. Emulator will be paused.",
-                opcode
-            )),
+            None => Err(format!("Unknown opcode: 0x{:02X}", opcode)),
         }
     }
 

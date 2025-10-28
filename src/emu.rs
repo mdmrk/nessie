@@ -128,7 +128,7 @@ pub fn emu_thread(
         let should_run = !emu.paused || emu.want_step;
         if should_run {
             if let Err(e) = emu.cpu.step(&mut emu.bus, &mut emu.ppu, &mut emu.debug_log) {
-                warn!("{e}");
+                warn!("{e}. Emulator will be paused");
                 emu.pause();
             }
             emu.want_step = false;
