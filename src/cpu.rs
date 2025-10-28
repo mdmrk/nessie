@@ -179,7 +179,7 @@ impl fmt::Display for OpMnemonic {
 pub struct Op {
     pub mnemonic: OpMnemonic,
     pub mode: AddrMode,
-    pub base_cycles: usize,
+    pub base_cycles: u8,
     pub execute: fn(&mut Cpu, &mut Bus, &mut Ppu, AddrMode, &[u8]) -> u8,
     pub illegal: bool,
 }
@@ -485,8 +485,8 @@ impl Cpu {
 
         self.pc += 1 + operand_bytes as u16;
         let extra_cycles = (op.execute)(self, bus, ppu, op.mode, &operands);
-        let total_cycles = op.base_cycles + extra_cycles as usize;
-        self.cycle_count += total_cycles;
+        let total_cycles = op.base_cycles + extra_cycles;
+        self.cycle_count += total_cycles as usize;
 
         ppu.step(total_cycles);
         self.nmi_pending = ppu.check_nmi();
@@ -545,8 +545,8 @@ impl Cpu {
         let hi = bus.read_byte(0xFFFB);
         self.pc = u16::from_le_bytes([lo, hi]);
 
-        let cycles = 7;
-        self.cycle_count += cycles;
+        let cycles: u8 = 7;
+        self.cycle_count += cycles as usize;
         ppu.step(cycles);
     }
 
@@ -565,8 +565,8 @@ impl Cpu {
         let hi = bus.read_byte(0xFFFF);
         self.pc = u16::from_le_bytes([lo, hi]);
 
-        let cycles = 7;
-        self.cycle_count += cycles;
+        let cycles: u8 = 7;
+        self.cycle_count += cycles as usize;
         ppu.step(cycles);
     }
 

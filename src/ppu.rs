@@ -241,10 +241,10 @@ impl Ppu {
         }
     }
 
-    pub fn step(&mut self, cycles: usize) {
+    pub fn step(&mut self, cycles: u8) {
         let old_scanline = self.scanline;
 
-        self.h_pixel += 3 * cycles;
+        self.h_pixel += 3 * cycles as usize;
 
         while self.h_pixel > 340 {
             self.h_pixel -= 341;
