@@ -8,14 +8,14 @@ use crate::{bus::Bus, debug::DebugLog, ppu::Ppu};
 
 #[derive(Debug)]
 pub enum OperandValue {
-    Implicid,
+    Implied,
     Address(u16, bool),
     Value(u8),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum AddrMode {
-    Implicid,
+    Implied,
     Accumulator,
     Immediate,
     ZeroPage,
@@ -33,7 +33,7 @@ pub enum AddrMode {
 impl AddrMode {
     pub fn resolve(&self, cpu: &Cpu, bus: &Bus, operands: &[u8]) -> OperandValue {
         match self {
-            AddrMode::Implicid | AddrMode::Accumulator => OperandValue::Implicid,
+            AddrMode::Implied | AddrMode::Accumulator => OperandValue::Implied,
             AddrMode::Immediate => OperandValue::Value(operands[0]),
             AddrMode::ZeroPage => OperandValue::Address(operands[0] as u16, false),
             AddrMode::ZeroPageX => {
@@ -94,7 +94,7 @@ impl AddrMode {
 
     pub fn operand_bytes(&self) -> u8 {
         match self {
-            AddrMode::Implicid | AddrMode::Accumulator => 0,
+            AddrMode::Implied | AddrMode::Accumulator => 0,
             AddrMode::Immediate
             | AddrMode::ZeroPage
             | AddrMode::ZeroPageX
@@ -234,10 +234,10 @@ static OPCODES: phf::Map<u8, Op> = phf_map! {
     0x84u8 => op!(OpMnemonic::STY, AddrMode::ZeroPage   , 3, Cpu::sty, false),
     0x94u8 => op!(OpMnemonic::STY, AddrMode::ZeroPageX  , 4, Cpu::sty, false),
     0x8Cu8 => op!(OpMnemonic::STY, AddrMode::Absolute   , 4, Cpu::sty, false),
-    0xAAu8 => op!(OpMnemonic::TAX, AddrMode::Implicid   , 2, Cpu::tax, false),
-    0x8Au8 => op!(OpMnemonic::TXA, AddrMode::Implicid   , 2, Cpu::txa, false),
-    0xA8u8 => op!(OpMnemonic::TAY, AddrMode::Implicid   , 2, Cpu::tay, false),
-    0x98u8 => op!(OpMnemonic::TYA, AddrMode::Implicid   , 2, Cpu::tya, false),
+    0xAAu8 => op!(OpMnemonic::TAX, AddrMode::Implied    , 2, Cpu::tax, false),
+    0x8Au8 => op!(OpMnemonic::TXA, AddrMode::Implied    , 2, Cpu::txa, false),
+    0xA8u8 => op!(OpMnemonic::TAY, AddrMode::Implied    , 2, Cpu::tay, false),
+    0x98u8 => op!(OpMnemonic::TYA, AddrMode::Implied    , 2, Cpu::tya, false),
     0x69u8 => op!(OpMnemonic::ADC, AddrMode::Immediate  , 2, Cpu::adc, false),
     0x65u8 => op!(OpMnemonic::ADC, AddrMode::ZeroPage   , 3, Cpu::adc, false),
     0x75u8 => op!(OpMnemonic::ADC, AddrMode::ZeroPageX  , 4, Cpu::adc, false),
@@ -262,10 +262,10 @@ static OPCODES: phf::Map<u8, Op> = phf_map! {
     0xD6u8 => op!(OpMnemonic::DEC, AddrMode::ZeroPageX  , 6, Cpu::dec, false),
     0xCEu8 => op!(OpMnemonic::DEC, AddrMode::Absolute   , 6, Cpu::dec, false),
     0xDEu8 => op!(OpMnemonic::DEC, AddrMode::AbsoluteX  , 7, Cpu::dec, false),
-    0xE8u8 => op!(OpMnemonic::INX, AddrMode::Implicid   , 2, Cpu::inx, false),
-    0xCAu8 => op!(OpMnemonic::DEX, AddrMode::Implicid   , 2, Cpu::dex, false),
-    0xC8u8 => op!(OpMnemonic::INY, AddrMode::Implicid   , 2, Cpu::iny, false),
-    0x88u8 => op!(OpMnemonic::DEY, AddrMode::Implicid   , 2, Cpu::dey, false),
+    0xE8u8 => op!(OpMnemonic::INX, AddrMode::Implied    , 2, Cpu::inx, false),
+    0xCAu8 => op!(OpMnemonic::DEX, AddrMode::Implied    , 2, Cpu::dex, false),
+    0xC8u8 => op!(OpMnemonic::INY, AddrMode::Implied    , 2, Cpu::iny, false),
+    0x88u8 => op!(OpMnemonic::DEY, AddrMode::Implied    , 2, Cpu::dey, false),
     0x0Au8 => op!(OpMnemonic::ASL, AddrMode::Accumulator, 2, Cpu::asl, false),
     0x06u8 => op!(OpMnemonic::ASL, AddrMode::ZeroPage   , 5, Cpu::asl, false),
     0x16u8 => op!(OpMnemonic::ASL, AddrMode::ZeroPageX  , 6, Cpu::asl, false),
@@ -337,23 +337,23 @@ static OPCODES: phf::Map<u8, Op> = phf_map! {
     0x4Cu8 => op!(OpMnemonic::JMP, AddrMode::Absolute   , 3, Cpu::jmp, false),
     0x6Cu8 => op!(OpMnemonic::JMP, AddrMode::Indirect   , 5, Cpu::jmp, false),
     0x20u8 => op!(OpMnemonic::JSR, AddrMode::Absolute   , 6, Cpu::jsr, false),
-    0x60u8 => op!(OpMnemonic::RTS, AddrMode::Implicid   , 6, Cpu::rts, false),
+    0x60u8 => op!(OpMnemonic::RTS, AddrMode::Implied    , 6, Cpu::rts, false),
     0x00u8 => op!(OpMnemonic::BRK, AddrMode::Immediate  , 7, Cpu::brk, false),
-    0x40u8 => op!(OpMnemonic::RTI, AddrMode::Implicid   , 6, Cpu::rti, false),
-    0x48u8 => op!(OpMnemonic::PHA, AddrMode::Implicid   , 3, Cpu::pha, false),
-    0x68u8 => op!(OpMnemonic::PLA, AddrMode::Implicid   , 4, Cpu::pla, false),
-    0x08u8 => op!(OpMnemonic::PHP, AddrMode::Implicid   , 3, Cpu::php, false),
-    0x28u8 => op!(OpMnemonic::PLP, AddrMode::Implicid   , 4, Cpu::plp, false),
-    0x9Au8 => op!(OpMnemonic::TXS, AddrMode::Implicid   , 2, Cpu::txs, false),
-    0xBAu8 => op!(OpMnemonic::TSX, AddrMode::Implicid   , 2, Cpu::tsx, false),
-    0x18u8 => op!(OpMnemonic::CLC, AddrMode::Implicid   , 2, Cpu::clc, false),
-    0x38u8 => op!(OpMnemonic::SEC, AddrMode::Implicid   , 2, Cpu::sec, false),
-    0x58u8 => op!(OpMnemonic::CLI, AddrMode::Implicid   , 2, Cpu::cli, false),
-    0x78u8 => op!(OpMnemonic::SEI, AddrMode::Implicid   , 2, Cpu::sei, false),
-    0xD8u8 => op!(OpMnemonic::CLD, AddrMode::Implicid   , 2, Cpu::cld, false),
-    0xF8u8 => op!(OpMnemonic::SED, AddrMode::Implicid   , 2, Cpu::sed, false),
-    0xB8u8 => op!(OpMnemonic::CLV, AddrMode::Implicid   , 2, Cpu::clv, false),
-    0xEAu8 => op!(OpMnemonic::NOP, AddrMode::Implicid   , 2, Cpu::nop, false),
+    0x40u8 => op!(OpMnemonic::RTI, AddrMode::Implied    , 6, Cpu::rti, false),
+    0x48u8 => op!(OpMnemonic::PHA, AddrMode::Implied    , 3, Cpu::pha, false),
+    0x68u8 => op!(OpMnemonic::PLA, AddrMode::Implied    , 4, Cpu::pla, false),
+    0x08u8 => op!(OpMnemonic::PHP, AddrMode::Implied    , 3, Cpu::php, false),
+    0x28u8 => op!(OpMnemonic::PLP, AddrMode::Implied    , 4, Cpu::plp, false),
+    0x9Au8 => op!(OpMnemonic::TXS, AddrMode::Implied    , 2, Cpu::txs, false),
+    0xBAu8 => op!(OpMnemonic::TSX, AddrMode::Implied    , 2, Cpu::tsx, false),
+    0x18u8 => op!(OpMnemonic::CLC, AddrMode::Implied    , 2, Cpu::clc, false),
+    0x38u8 => op!(OpMnemonic::SEC, AddrMode::Implied    , 2, Cpu::sec, false),
+    0x58u8 => op!(OpMnemonic::CLI, AddrMode::Implied    , 2, Cpu::cli, false),
+    0x78u8 => op!(OpMnemonic::SEI, AddrMode::Implied    , 2, Cpu::sei, false),
+    0xD8u8 => op!(OpMnemonic::CLD, AddrMode::Implied    , 2, Cpu::cld, false),
+    0xF8u8 => op!(OpMnemonic::SED, AddrMode::Implied    , 2, Cpu::sed, false),
+    0xB8u8 => op!(OpMnemonic::CLV, AddrMode::Implied    , 2, Cpu::clv, false),
+    0xEAu8 => op!(OpMnemonic::NOP, AddrMode::Implied    , 2, Cpu::nop, false),
     0x04u8 |
     0x44u8 |
     0x64u8 => op!(OpMnemonic::NOP, AddrMode::ZeroPage   , 3, Cpu::inop, true),
@@ -369,7 +369,7 @@ static OPCODES: phf::Map<u8, Op> = phf_map! {
     0x5Au8 |
     0x7Au8 |
     0xDAu8 |
-    0xFAu8 => op!(OpMnemonic::NOP, AddrMode::Implicid   , 2, Cpu::inop, true),
+    0xFAu8 => op!(OpMnemonic::NOP, AddrMode::Implied    , 2, Cpu::inop, true),
     0x80u8 |
     0x82u8 |
     0x89u8 |
@@ -592,7 +592,7 @@ impl Cpu {
         match mode.resolve(self, bus, operands) {
             OperandValue::Value(v) => (v, false),
             OperandValue::Address(addr, crossed) => (bus.read_byte(addr as usize), crossed),
-            OperandValue::Implicid => (self.a, false),
+            OperandValue::Implied => (self.a, false),
         }
     }
 
@@ -606,7 +606,7 @@ impl Cpu {
     ) {
         match mode.resolve(self, bus, operands) {
             OperandValue::Address(addr, _) => bus.cpu_write_byte(ppu, addr as usize, value),
-            OperandValue::Implicid => self.a = value,
+            OperandValue::Implied => self.a = value,
             _ => panic!("Cannot write to this addressing mode"),
         }
     }
