@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bitflags = "2.9.4"
+bitflags = "2.10.0"
 bytesize = "2.1.0"
-clap = { version = "4.5.48", features = ["derive"] }
+clap = { version = "4.5.51", features = ["derive"] }
 eframe = "0.33.0"
 egui = "0.33.0"
 egui_extras = { version = "0.33.0", features = ["image"] }
