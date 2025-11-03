@@ -408,6 +408,17 @@ impl Ui {
     fn draw_ppu_inspector(&mut self, ui: &mut egui::Ui) {
         if let Ok(ppu) = self.debug_state.ppu.read() {
             ui.label(egui::RichText::new("PPU").strong());
+            TableBuilder::new(ui)
+                .id_salt("ppu")
+                .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                .column(Column::auto())
+                .column(Column::remainder())
+                .body(|mut body| {
+                    make_rows!(body,
+                        "H. Pixel" => format!("{}", ppu.h_pixel),
+                        "Scanline" => format!("{}", ppu.scanline),
+                    );
+                });
             egui::ScrollArea::vertical().show(ui, |ui|{
                 egui::CollapsingHeader::new("PPU Ctrl").show(ui, |ui| {
                 TableBuilder::new(ui)
