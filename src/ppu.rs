@@ -16,8 +16,8 @@ pub enum PpuMode {
 #[derive(Debug, Clone, Default, Copy)]
 pub struct PpuCtrl {
     pub base_nametable_addr: B2,
-    pub vram_addr_inc: B1, // VRAM address increment per CPU read/write of PPUDATA
-    pub sprite_pattern_table_addr: B1, // for 8x8 sprites; ignored in 8x16 mode
+    pub vram_addr_inc: B1,
+    pub sprite_pattern_table_addr: B1,
     pub bg_pattern_table_addr: B1,
     pub sprite_size: SpriteSize,
     pub mode: PpuMode,
@@ -67,13 +67,13 @@ impl PpuCtrl {
 #[bitfield(bytes = 1)]
 #[derive(Debug, Clone, Default)]
 pub struct PpuMask {
-    pub greyscale: bool,         // (0: normal color, 1: greyscale)
-    pub show_background: bool,   // in leftmost 8 pixels of screen, 0: Hide
-    pub show_sprites: bool,      // in leftmost 8 pixels of screen, 0: Hide
-    pub enable_background: bool, // rendering
-    pub enable_sprite: bool,     // rendering
-    pub emphasize_red: bool,     // (green on PAL/Dendy)
-    pub emphasize_green: bool,   // (red on PAL/Dendy)
+    pub greyscale: bool,
+    pub show_background: bool,
+    pub show_sprites: bool,
+    pub enable_background: bool,
+    pub enable_sprite: bool,
+    pub emphasize_red: bool,
+    pub emphasize_green: bool,
     pub emphasize_blue: bool,
 }
 
@@ -86,9 +86,9 @@ impl PpuMask {
 #[bitfield(bytes = 1)]
 #[derive(Debug, Clone, Default)]
 pub struct PpuStatus {
-    pub open_bus: B5, // https://www.nesdev.org/wiki/Open_bus_behavior#PPU_open_bus
-    pub sprite_overflow: bool, // https://www.nesdev.org/wiki/PPU_sprite_evaluation#Sprite_overflow_bug
-    pub sprite_0_hit: bool,    // https://www.nesdev.org/wiki/PPU_OAM#Sprite_zero_hits
+    pub open_bus: B5,
+    pub sprite_overflow: bool,
+    pub sprite_0_hit: bool,
     pub vblank: bool,
 }
 
@@ -128,7 +128,6 @@ impl OamData {
     }
 }
 
-// https://www.nesdev.org/wiki/PPU_scrolling
 #[derive(Default, Clone, Debug)]
 pub struct PpuScroll {
     pub x_scroll: u8,
@@ -219,13 +218,16 @@ pub struct Ppu {
     pub oam_dma: OamDma,
 
     pub write_toggle: bool,
+    pub nmi_occurred: bool,
+    pub nmi_output: bool,
+    pub nmi_pending: bool,
 }
 
 impl Ppu {
     pub fn new() -> Self {
         Self {
             scanline: 0,
-            h_pixel: 21, // FIXME?: may be initialized at init state / reset
+            h_pixel: 21,
 
             ppu_ctrl: PpuCtrl::new(),
             ppu_mask: PpuMask::new(),
@@ -237,35 +239,65 @@ impl Ppu {
             ppu_data: PpuData::new(),
             oam_dma: OamDma::new(),
 
-            write_toggle: false, // if false we write to first byte / x scroll
+            write_toggle: false,
+            nmi_occurred: false,
+            nmi_output: false,
+            nmi_pending: false,
         }
     }
 
-    pub fn step(&mut self, cycles: u8) {
-        let old_scanline = self.scanline;
+    pub fn step(&mut self, cpu_cycles: u8) {
+        for _ in 0..cpu_cycles {
+            self.h_pixel += 3;
 
-        self.h_pixel += 3 * cycles as usize;
+            if self.h_pixel >= 341 {
+                self.h_pixel -= 341;
+                self.scanline += 1;
 
-        while self.h_pixel > 340 {
-            self.h_pixel -= 341;
-            self.scanline += 1;
-
-            if self.scanline > 261 {
-                self.scanline = 0;
+                if self.scanline > 261 {
+                    self.scanline = 0;
+                }
             }
-        }
 
-        if old_scanline < 241 && self.scanline >= 241 {
-            self.ppu_status.set_vblank(true);
-        }
+            if self.scanline == 241 && self.h_pixel >= 1 && self.h_pixel < 4 {
+                self.ppu_status.set_vblank(true);
+                self.nmi_occurred = true;
+                if self.nmi_output {
+                    self.nmi_pending = true;
+                }
+            }
 
-        if self.scanline == 261 {
-            self.ppu_status.set_vblank(false);
-            self.ppu_status.set_sprite_0_hit(false);
+            if self.scanline == 261 && self.h_pixel >= 1 && self.h_pixel < 4 {
+                self.ppu_status.set_vblank(false);
+                self.ppu_status.set_sprite_0_hit(false);
+                self.ppu_status.set_sprite_overflow(false);
+                self.nmi_occurred = false;
+                self.nmi_pending = false;
+            }
         }
     }
 
     pub fn check_nmi(&self) -> bool {
-        self.ppu_status.vblank() && self.ppu_ctrl.vblank()
+        self.nmi_pending
+    }
+
+    pub fn write_ctrl(&mut self, value: u8) {
+        let old_nmi_output = self.nmi_output;
+        self.ppu_ctrl.set(value);
+        self.nmi_output = self.ppu_ctrl.vblank();
+
+        if !old_nmi_output && self.nmi_output && self.nmi_occurred {
+            self.nmi_pending = true;
+        }
+    }
+
+    pub fn read_status(&mut self) -> u8 {
+        let status = self.ppu_status.bytes[0];
+
+        self.ppu_status.set_vblank(false);
+        self.write_toggle = false;
+        self.nmi_occurred = false;
+
+        status
     }
 }

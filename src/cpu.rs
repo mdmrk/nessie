@@ -585,10 +585,18 @@ impl Cpu {
         bus.read_byte(0x100 + self.sp)
     }
 
-    fn read_operand(&self, bus: &Bus, mode: AddrMode, operands: &[u8]) -> (u8, bool) {
+    fn read_operand(
+        &self,
+        bus: &mut Bus,
+        ppu: &mut Ppu,
+        mode: AddrMode,
+        operands: &[u8],
+    ) -> (u8, bool) {
         match mode.resolve(self, bus, operands) {
             OperandValue::Value(v) => (v, false),
-            OperandValue::Address(addr, crossed) => (bus.read_byte(addr as usize), crossed),
+            OperandValue::Address(addr, crossed) => {
+                (bus.cpu_read_byte(ppu, addr as usize), crossed)
+            }
             OperandValue::Implied => (self.a, false),
         }
     }
@@ -608,15 +616,15 @@ impl Cpu {
         }
     }
 
-    fn lda(cpu: &mut Cpu, bus: &mut Bus, _ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
-        let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
+    fn lda(cpu: &mut Cpu, bus: &mut Bus, ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
+        let (value, page_crossed) = cpu.read_operand(bus, ppu, mode, operands);
         cpu.a = value;
         cpu.update_nz(cpu.a);
         if page_crossed { 1 } else { 0 }
     }
 
     fn lax(cpu: &mut Cpu, bus: &mut Bus, ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
-        let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
+        let (value, page_crossed) = cpu.read_operand(bus, ppu, mode, operands);
         cpu.a = value;
         cpu.update_nz(cpu.a);
         Cpu::tax(cpu, bus, ppu, mode, operands);
@@ -628,8 +636,8 @@ impl Cpu {
         0
     }
 
-    fn ldx(cpu: &mut Cpu, bus: &mut Bus, _ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
-        let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
+    fn ldx(cpu: &mut Cpu, bus: &mut Bus, ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
+        let (value, page_crossed) = cpu.read_operand(bus, ppu, mode, operands);
         cpu.x = value;
         cpu.update_nz(cpu.x);
         if page_crossed { 1 } else { 0 }
@@ -640,8 +648,8 @@ impl Cpu {
         0
     }
 
-    fn ldy(cpu: &mut Cpu, bus: &mut Bus, _ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
-        let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
+    fn ldy(cpu: &mut Cpu, bus: &mut Bus, ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
+        let (value, page_crossed) = cpu.read_operand(bus, ppu, mode, operands);
         cpu.y = value;
         cpu.update_nz(cpu.y);
         if page_crossed { 1 } else { 0 }
@@ -676,8 +684,8 @@ impl Cpu {
         0
     }
 
-    fn adc(cpu: &mut Cpu, bus: &mut Bus, _ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
-        let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
+    fn adc(cpu: &mut Cpu, bus: &mut Bus, ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
+        let (value, page_crossed) = cpu.read_operand(bus, ppu, mode, operands);
         let carry = if cpu.p.contains(Flags::C) { 1 } else { 0 };
         let old_a = cpu.a;
         let sum = cpu.a as u16 + value as u16 + carry as u16;
@@ -690,8 +698,8 @@ impl Cpu {
         if page_crossed { 1 } else { 0 }
     }
 
-    fn sbc(cpu: &mut Cpu, bus: &mut Bus, _ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
-        let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
+    fn sbc(cpu: &mut Cpu, bus: &mut Bus, ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
+        let (value, page_crossed) = cpu.read_operand(bus, ppu, mode, operands);
         let carry = if cpu.p.contains(Flags::C) { 1 } else { 0 };
         let diff = cpu.a as u16 + (!value as u16) + carry as u16;
         let result = diff as u8;
@@ -705,7 +713,7 @@ impl Cpu {
     }
 
     fn inc(cpu: &mut Cpu, bus: &mut Bus, ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
-        let (value, _) = cpu.read_operand(bus, mode, operands);
+        let (value, _) = cpu.read_operand(bus, ppu, mode, operands);
         let result = value.wrapping_add(1);
         cpu.write_operand(bus, ppu, mode, operands, result);
         cpu.update_nz(result);
@@ -713,7 +721,7 @@ impl Cpu {
     }
 
     fn dec(cpu: &mut Cpu, bus: &mut Bus, ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
-        let (value, _) = cpu.read_operand(bus, mode, operands);
+        let (value, _) = cpu.read_operand(bus, ppu, mode, operands);
         let result = value.wrapping_sub(1);
         cpu.write_operand(bus, ppu, mode, operands, result);
         cpu.update_nz(result);
@@ -745,7 +753,7 @@ impl Cpu {
     }
 
     fn asl(cpu: &mut Cpu, bus: &mut Bus, ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
-        let (value, _) = cpu.read_operand(bus, mode, operands);
+        let (value, _) = cpu.read_operand(bus, ppu, mode, operands);
         let result = value << 1;
         cpu.p.set(Flags::C, (value & 0b1000_0000) != 0);
         cpu.p.set(Flags::Z, result == 0);
@@ -755,7 +763,7 @@ impl Cpu {
     }
 
     fn lsr(cpu: &mut Cpu, bus: &mut Bus, ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
-        let (value, _) = cpu.read_operand(bus, mode, operands);
+        let (value, _) = cpu.read_operand(bus, ppu, mode, operands);
         let result = value >> 1;
         cpu.p.set(Flags::C, (value & 0b1) != 0);
         cpu.p.set(Flags::Z, result == 0);
@@ -765,7 +773,7 @@ impl Cpu {
     }
 
     fn rol(cpu: &mut Cpu, bus: &mut Bus, ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
-        let (value, _) = cpu.read_operand(bus, mode, operands);
+        let (value, _) = cpu.read_operand(bus, ppu, mode, operands);
         let carry = if cpu.p.contains(Flags::C) { 1 } else { 0 };
         let result = (value << 1) | carry;
         cpu.p.set(Flags::C, ((value >> 7) & 1) != 0);
@@ -776,7 +784,7 @@ impl Cpu {
     }
 
     fn ror(cpu: &mut Cpu, bus: &mut Bus, ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
-        let (value, _) = cpu.read_operand(bus, mode, operands);
+        let (value, _) = cpu.read_operand(bus, ppu, mode, operands);
         let carry = if cpu.p.contains(Flags::C) { 1 } else { 0 };
         let result = (value >> 1) | (carry << 7);
         cpu.p.set(Flags::C, (value & 0b1) != 0);
@@ -786,29 +794,29 @@ impl Cpu {
         0
     }
 
-    fn and(cpu: &mut Cpu, bus: &mut Bus, _ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
-        let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
+    fn and(cpu: &mut Cpu, bus: &mut Bus, ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
+        let (value, page_crossed) = cpu.read_operand(bus, ppu, mode, operands);
         cpu.a &= value;
         cpu.update_nz(cpu.a);
         if page_crossed { 1 } else { 0 }
     }
 
-    fn ora(cpu: &mut Cpu, bus: &mut Bus, _ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
-        let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
+    fn ora(cpu: &mut Cpu, bus: &mut Bus, ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
+        let (value, page_crossed) = cpu.read_operand(bus, ppu, mode, operands);
         cpu.a |= value;
         cpu.update_nz(cpu.a);
         if page_crossed { 1 } else { 0 }
     }
 
-    fn eor(cpu: &mut Cpu, bus: &mut Bus, _ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
-        let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
+    fn eor(cpu: &mut Cpu, bus: &mut Bus, ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
+        let (value, page_crossed) = cpu.read_operand(bus, ppu, mode, operands);
         cpu.a ^= value;
         cpu.update_nz(cpu.a);
         if page_crossed { 1 } else { 0 }
     }
 
-    fn bit(cpu: &mut Cpu, bus: &mut Bus, _ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
-        let (value, _) = cpu.read_operand(bus, mode, operands);
+    fn bit(cpu: &mut Cpu, bus: &mut Bus, ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
+        let (value, _) = cpu.read_operand(bus, ppu, mode, operands);
         let result = value & cpu.a;
         cpu.p.set(Flags::Z, result == 0);
         cpu.p.set(Flags::V, value & 0b0100_0000 != 0);
@@ -816,8 +824,8 @@ impl Cpu {
         0
     }
 
-    fn cmp(cpu: &mut Cpu, bus: &mut Bus, _ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
-        let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
+    fn cmp(cpu: &mut Cpu, bus: &mut Bus, ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
+        let (value, page_crossed) = cpu.read_operand(bus, ppu, mode, operands);
         let result = cpu.a.wrapping_sub(value);
         cpu.p.set(Flags::C, cpu.a >= value);
         cpu.p.set(Flags::Z, cpu.a == value);
@@ -825,8 +833,8 @@ impl Cpu {
         if page_crossed { 1 } else { 0 }
     }
 
-    fn cpx(cpu: &mut Cpu, bus: &mut Bus, _ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
-        let (value, _) = cpu.read_operand(bus, mode, operands);
+    fn cpx(cpu: &mut Cpu, bus: &mut Bus, ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
+        let (value, _) = cpu.read_operand(bus, ppu, mode, operands);
         let result = cpu.x.wrapping_sub(value);
         cpu.p.set(Flags::C, cpu.x >= value);
         cpu.p.set(Flags::Z, cpu.x == value);
@@ -834,8 +842,8 @@ impl Cpu {
         0
     }
 
-    fn cpy(cpu: &mut Cpu, bus: &mut Bus, _ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
-        let (value, _) = cpu.read_operand(bus, mode, operands);
+    fn cpy(cpu: &mut Cpu, bus: &mut Bus, ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
+        let (value, _) = cpu.read_operand(bus, ppu, mode, operands);
         let result = cpu.y.wrapping_sub(value);
         cpu.p.set(Flags::C, cpu.y >= value);
         cpu.p.set(Flags::Z, cpu.y == value);
@@ -1078,8 +1086,8 @@ impl Cpu {
         0
     }
 
-    fn inop(cpu: &mut Cpu, bus: &mut Bus, _ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
-        let (_, page_crossed) = cpu.read_operand(bus, mode, operands);
+    fn inop(cpu: &mut Cpu, bus: &mut Bus, ppu: &mut Ppu, mode: AddrMode, operands: &[u8]) -> u8 {
+        let (_, page_crossed) = cpu.read_operand(bus, ppu, mode, operands);
         if page_crossed { 1 } else { 0 }
     }
 }
