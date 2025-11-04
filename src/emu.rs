@@ -1,6 +1,6 @@
 use std::sync::{Arc, mpsc};
 
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 
 use crate::{
     args::Args,
@@ -82,8 +82,12 @@ impl Emu {
         self.send_event(Event::Resumed);
     }
 
-    pub fn step(&mut self) {
-        self.want_step = true;
+    pub fn step(&mut self) -> Result<(), String> {
+        self.cpu.tick(&mut self.bus)?;
+        self.ppu.tick()?;
+        self.ppu.tick()?;
+        self.ppu.tick()?;
+        Ok(())
     }
 }
 
@@ -117,7 +121,8 @@ pub fn emu_thread(
                     emu.resume();
                 }
                 Command::Step => {
-                    emu.step();
+                    debug!("Stepping");
+                    emu.want_step = true;
                 }
                 Command::MemoryAddress(addr) => {
                     emu.mem_chunk_addr = addr;
@@ -127,7 +132,7 @@ pub fn emu_thread(
 
         let should_run = !emu.paused || emu.want_step;
         if should_run {
-            if let Err(e) = emu.cpu.step(&mut emu.bus, &mut emu.ppu, &mut emu.debug_log) {
+            if let Err(e) = emu.step() {
                 warn!("{e}. Emulator will be paused");
                 emu.pause();
             }

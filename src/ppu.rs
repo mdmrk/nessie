@@ -277,6 +277,10 @@ impl Ppu {
         }
     }
 
+    pub fn tick(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+
     pub fn check_nmi(&self) -> bool {
         self.nmi_pending
     }

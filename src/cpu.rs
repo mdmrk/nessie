@@ -409,6 +409,8 @@ pub struct Cpu {
     pub log: String,
     pub nmi_pending: bool,
     pub irq_pending: bool,
+    pub current_opcode: u8,
+    pub cycles_remaining: u8,
 }
 
 impl Default for Cpu {
@@ -430,6 +432,8 @@ impl Cpu {
             log: "".into(),
             nmi_pending: false,
             irq_pending: false,
+            current_opcode: 0,
+            cycles_remaining: 0,
         }
     }
 
@@ -488,7 +492,7 @@ impl Cpu {
         let total_cycles = op.base_cycles + extra_cycles;
         self.cycle_count += total_cycles as usize;
 
-        ppu.step(total_cycles);
+        // ppu.step(total_cycles);
         self.nmi_pending = ppu.check_nmi();
 
         self.log.push_str(&step_str);
@@ -528,6 +532,19 @@ impl Cpu {
             Some(op) => self.execute(bus, ppu, op, opcode, debug_log),
             None => Err(format!("Unknown opcode: 0x{:02X}", opcode)),
         }
+    }
+
+    pub fn tick(self: &mut Self, bus: &mut Bus) -> Result<(), String> {
+        if self.cycles_remaining == 0 {
+            let opcode = self.fetch(bus);
+            let op = self.decode(opcode).unwrap(); // FIXME
+            self.cycles_remaining = op.base_cycles - 1;
+            self.current_opcode = opcode;
+        } else {
+            let op = self.decode(self.current_opcode).unwrap(); // FIXME: duplicated code
+            (op.execute)();
+        }
+        Ok(())
     }
 
     fn handle_nmi(&mut self, bus: &mut Bus, ppu: &mut Ppu) {
