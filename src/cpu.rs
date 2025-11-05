@@ -515,7 +515,7 @@ impl Cpu {
             debug!("NMI triggered");
             self.handle_nmi(bus, ppu);
             self.nmi_pending = false;
-        } else if self.irq_pending {
+        } else if self.irq_pending && !self.p.contains(Flags::I) {
             debug!("IRQ triggered");
             self.handle_irq(bus, ppu);
             self.irq_pending = false;
