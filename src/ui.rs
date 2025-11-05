@@ -106,6 +106,8 @@ pub struct Ui {
     mem_search: String,
     prev_mem_search_addr: usize,
 
+    show_about: bool,
+
     running: bool,
     paused: bool,
 }
@@ -121,6 +123,7 @@ impl Ui {
             emu_thread_handle: None,
             mem_search: "".into(),
             prev_mem_search_addr: 0,
+            show_about: false,
             running: false,
             paused: false,
         }
@@ -248,6 +251,27 @@ impl Ui {
                     }
                 });
             });
+            ui.menu_button("Help", |ui| {
+                if ui.button("ℹ About").clicked() {
+                    self.show_about = true;
+                }
+            });
+            if self.show_about {
+                let modal = egui::Modal::new(egui::Id::new("about_modal")).show(ui.ctx(), |ui| {
+                    ui.set_width(320.0);
+                    ui.heading("Nessie");
+                    ui.horizontal(|ui| {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.button("Close").clicked() {
+                                ui.close();
+                            }
+                        });
+                    });
+                });
+                if modal.should_close() {
+                    self.show_about = false;
+                }
+            }
         });
     }
 
