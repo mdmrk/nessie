@@ -1,7 +1,7 @@
 use core::fmt;
 
 use bitflags::bitflags;
-use log::debug;
+use log::{debug, error};
 use phf::phf_map;
 
 use crate::{bus::Bus, debug::DebugLog, ppu::Ppu};
@@ -576,11 +576,19 @@ impl Cpu {
     }
 
     fn push_stack(&mut self, bus: &mut Bus, value: u8) {
+        if self.sp == 0x0 {
+            error!("Stack overflow");
+            panic!();
+        }
         bus.write_byte(0x100 + self.sp, value);
         self.sp = self.sp.wrapping_sub(1);
     }
 
     fn pop_stack(&mut self, bus: &Bus) -> u8 {
+        if self.sp == 0xFF {
+            error!("Empty stack");
+            panic!();
+        }
         self.sp = self.sp.wrapping_add(1);
         bus.read_byte(0x100 + self.sp)
     }
