@@ -310,6 +310,7 @@ impl Ui {
                     .striped(true)
                     .column(Column::auto())
                     .column(Column::auto())
+                    .column(Column::auto())
                     .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
                     .body(|mut body| {
                         for (i, lines) in mem_chunk
@@ -319,6 +320,16 @@ impl Ui {
                         {
                             let bytes_str: Vec<String> =
                                 lines.iter().map(|b| format!("{:02X}", b)).collect();
+                            let bytes_ascii: Vec<char> = lines
+                                .iter()
+                                .map(|b| {
+                                    if !b.is_ascii_graphic() {
+                                        '.'
+                                    } else {
+                                        *b as char
+                                    }
+                                })
+                                .collect();
 
                             let row_addr = start_addr + (i * BYTES_PER_ROW);
 
@@ -334,6 +345,15 @@ impl Ui {
                                     ui.label(
                                         egui::RichText::new(bytes_str.join(" "))
                                             .text_style(egui::TextStyle::Monospace),
+                                    );
+                                });
+                                row.col(|ui| {
+                                    ui.label(
+                                        egui::RichText::new(format!(
+                                            "{}",
+                                            String::from_iter(bytes_ascii)
+                                        ))
+                                        .text_style(egui::TextStyle::Monospace),
                                     );
                                 });
                             });
