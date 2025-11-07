@@ -81,10 +81,6 @@ impl Emu {
         self.paused = false;
         self.send_event(Event::Resumed);
     }
-
-    pub fn step(&mut self) {
-        self.want_step = true;
-    }
 }
 
 pub fn emu_thread(
@@ -117,7 +113,7 @@ pub fn emu_thread(
                     emu.resume();
                 }
                 Command::Step => {
-                    emu.step();
+                    emu.want_step = true;
                 }
                 Command::MemoryAddress(addr) => {
                     emu.mem_chunk_addr = addr;
