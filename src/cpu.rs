@@ -1,7 +1,7 @@
 use core::fmt;
 
 use bitflags::bitflags;
-use log::{debug, error};
+use log::debug;
 use phf::phf_map;
 
 use crate::{bus::Bus, debug::DebugLog, ppu::Ppu};
@@ -399,7 +399,7 @@ bitflags! {
 
 #[derive(Clone)]
 pub struct Cpu {
-    pub sp: usize,
+    pub sp: u8,
     pub pc: u16,
     pub p: Flags,
     pub a: u8,
@@ -585,21 +585,13 @@ impl Cpu {
     }
 
     fn push_stack(&mut self, bus: &mut Bus, value: u8) {
-        if self.sp == 0x0 {
-            error!("Stack overflow");
-            panic!();
-        }
-        bus.write_byte(0x100 + self.sp, value);
+        bus.write_byte(0x100 + self.sp as usize, value);
         self.sp = self.sp.wrapping_sub(1);
     }
 
     fn pop_stack(&mut self, bus: &Bus) -> u8 {
-        if self.sp == 0xFF {
-            error!("Stack underflow");
-            panic!();
-        }
         self.sp = self.sp.wrapping_add(1);
-        bus.read_byte(0x100 + self.sp)
+        bus.read_byte(0x100 + self.sp as usize)
     }
 
     fn read_operand(
@@ -1048,12 +1040,12 @@ impl Cpu {
     }
 
     fn txs(cpu: &mut Cpu, _bus: &mut Bus, _ppu: &mut Ppu, _mode: AddrMode, _operands: &[u8]) -> u8 {
-        cpu.sp = cpu.x as usize;
+        cpu.sp = cpu.x;
         0
     }
 
     fn tsx(cpu: &mut Cpu, _bus: &mut Bus, _ppu: &mut Ppu, _mode: AddrMode, _operands: &[u8]) -> u8 {
-        cpu.x = cpu.sp as u8;
+        cpu.x = cpu.sp;
         cpu.update_nz(cpu.x);
         0
     }

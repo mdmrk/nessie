@@ -380,7 +380,7 @@ impl Ui {
                 .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
                 .body(|mut body| {
                     make_rows!(body,
-                        "sp" => format!("{}", cpu.sp + 0x100), format!("0x{:04X}", cpu.sp + 0x100),
+                        "sp" => format!("{}", cpu.sp as usize + 0x100), format!("0x{:04X}", cpu.sp as usize + 0x100),
                         "pc" => format!("{}", cpu.pc), format!("0x{:04X}", cpu.pc),
                         "a" => format!("{}", cpu.a), format!("0x{:02X}", cpu.a),
                         "x" => format!("{}", cpu.x), format!("0x{:02X}", cpu.x),
