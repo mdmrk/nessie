@@ -522,12 +522,12 @@ impl Cpu {
             debug!("NMI triggered");
             self.handle_nmi(bus, ppu);
             self.nmi_pending = false;
-            return Ok(());
+            Ok(())
         } else if self.irq_pending && !self.p.contains(Flags::I) {
             debug!("IRQ triggered");
             self.handle_irq(bus, ppu);
             self.irq_pending = false;
-            return Ok(());
+            Ok(())
         } else {
             let opcode = self.fetch(bus);
             let op = self.decode(opcode);
