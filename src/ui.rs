@@ -349,10 +349,9 @@ impl Ui {
                                 });
                                 row.col(|ui| {
                                     ui.label(
-                                        egui::RichText::new(format!(
-                                            "{}",
-                                            String::from_iter(bytes_ascii)
-                                        ))
+                                        egui::RichText::new(
+                                            String::from_iter(bytes_ascii).to_string(),
+                                        )
                                         .text_style(egui::TextStyle::Monospace),
                                     );
                                 });
