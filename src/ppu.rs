@@ -218,7 +218,6 @@ pub struct Ppu {
     pub oam_dma: OamDma,
 
     pub write_toggle: bool,
-    pub nmi_occurred: bool,
     pub nmi_output: bool,
     pub nmi_pending: bool,
 }
@@ -240,7 +239,6 @@ impl Ppu {
             oam_dma: OamDma::new(),
 
             write_toggle: false,
-            nmi_occurred: false,
             nmi_output: false,
             nmi_pending: false,
         }
@@ -261,8 +259,7 @@ impl Ppu {
 
             if self.scanline == 241 && self.h_pixel >= 1 && self.h_pixel < 4 {
                 self.ppu_status.set_vblank(true);
-                self.nmi_occurred = true;
-                if self.nmi_output {
+                if self.ppu_ctrl.vblank() {
                     self.nmi_pending = true;
                 }
             }
@@ -271,7 +268,6 @@ impl Ppu {
                 self.ppu_status.set_vblank(false);
                 self.ppu_status.set_sprite_0_hit(false);
                 self.ppu_status.set_sprite_overflow(false);
-                self.nmi_occurred = false;
                 self.nmi_pending = false;
             }
         }
@@ -282,11 +278,10 @@ impl Ppu {
     }
 
     pub fn write_ctrl(&mut self, value: u8) {
-        let old_nmi_output = self.nmi_output;
         self.ppu_ctrl.set(value);
         self.nmi_output = self.ppu_ctrl.vblank();
 
-        if !old_nmi_output && self.nmi_output && self.nmi_occurred {
+        if self.ppu_ctrl.vblank() && self.ppu_status.vblank() {
             self.nmi_pending = true;
         }
     }
@@ -296,7 +291,7 @@ impl Ppu {
 
         self.ppu_status.set_vblank(false);
         self.write_toggle = false;
-        self.nmi_occurred = false;
+        self.nmi_pending = false;
 
         status
     }

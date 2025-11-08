@@ -408,6 +408,7 @@ pub struct Cpu {
     pub cycle_count: usize,
     pub log: String,
     pub nmi_pending: bool,
+    pub nmi_previous_state: bool,
     pub irq_pending: bool,
 }
 
@@ -429,6 +430,7 @@ impl Cpu {
             cycle_count: 7,
             log: "".into(),
             nmi_pending: false,
+            nmi_previous_state: false,
             irq_pending: false,
         }
     }
@@ -489,7 +491,12 @@ impl Cpu {
         self.cycle_count += total_cycles as usize;
 
         ppu.step(total_cycles);
-        self.nmi_pending = ppu.check_nmi();
+
+        let nmi_current_state = ppu.check_nmi();
+        if nmi_current_state && !self.nmi_previous_state {
+            self.nmi_pending = true;
+        }
+        self.nmi_previous_state = nmi_current_state;
 
         self.log.push_str(&step_str);
         if let Some(debug_log) = debug_log {
@@ -515,18 +522,20 @@ impl Cpu {
             debug!("NMI triggered");
             self.handle_nmi(bus, ppu);
             self.nmi_pending = false;
+            return Ok(());
         } else if self.irq_pending && !self.p.contains(Flags::I) {
             debug!("IRQ triggered");
             self.handle_irq(bus, ppu);
             self.irq_pending = false;
-        }
+            return Ok(());
+        } else {
+            let opcode = self.fetch(bus);
+            let op = self.decode(opcode);
 
-        let opcode = self.fetch(bus);
-        let op = self.decode(opcode);
-
-        match op {
-            Some(op) => self.execute(bus, ppu, op, opcode, debug_log),
-            None => Err(format!("Unknown opcode: 0x{:02X}", opcode)),
+            match op {
+                Some(op) => self.execute(bus, ppu, op, opcode, debug_log),
+                None => Err(format!("Unknown opcode: 0x{:02X}", opcode)),
+            }
         }
     }
 
@@ -586,7 +595,7 @@ impl Cpu {
 
     fn pop_stack(&mut self, bus: &Bus) -> u8 {
         if self.sp == 0xFF {
-            error!("Empty stack");
+            error!("Stack underflow");
             panic!();
         }
         self.sp = self.sp.wrapping_add(1);
