@@ -15,6 +15,7 @@ use crate::{
     debug::DebugState,
     emu::{Command, Event, emu_thread},
     mapper::MapperIcon,
+    ppu::Ppu,
 };
 
 macro_rules! make_rows {
@@ -77,7 +78,7 @@ impl Screen {
         }
     }
 
-    pub fn update_texture(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+    pub fn update_texture(&mut self, ctx: &egui::Context, ui: &mut egui::Ui, ppu: &Ppu) {
         let available = ui.available_size();
         let aspect_ratio = self.width as f32 / self.height as f32;
 
@@ -86,6 +87,14 @@ impl Screen {
         } else {
             egui::Vec2::new(available.x, available.x / aspect_ratio)
         };
+        self.pixels = ppu
+            .screen
+            .iter()
+            .map(|c| {
+                let [r, g, b, a] = c.to_be_bytes();
+                Color32::from_rgba_unmultiplied(r, g, b, a)
+            })
+            .collect();
         let image = egui::ColorImage::new([self.width, self.height], self.pixels.clone());
 
         let texture: &mut egui::TextureHandle = self.texture_handle.get_or_insert_with(|| {
@@ -458,7 +467,7 @@ impl Ui {
                 .column(Column::remainder())
                 .body(|mut body| {
                     make_rows!(body,
-                        "H. Pixel" => format!("{}", ppu.h_pixel),
+                        "Dot" => format!("{}", ppu.dot),
                         "Scanline" => format!("{}", ppu.scanline),
                     );
                 });
@@ -492,10 +501,10 @@ impl Ui {
                     .body(|mut body| {
                         make_rows!(body,
                             "Greyscale (0: normal color, 1: greyscale)" => format!("{}", ppu.ppu_mask.greyscale()),
-                            "Show background in leftmost 8 pixels of screen, 0: Hide" => format!("{}", ppu.ppu_mask.show_background()),
-                            "Show sprites in leftmost 8 pixels of screen, 0: Hide" => format!("{}", ppu.ppu_mask.show_sprites()),
-                            "Enable background rendering" => format!("{}", ppu.ppu_mask.enable_background()),
-                            "Enable sprite rendering" => format!("{}", ppu.ppu_mask.enable_sprite()),
+                            "Show background in leftmost 8 pixels of screen, 0: Hide" => format!("{}", ppu.ppu_mask.show_background_left()),
+                            "Show sprites in leftmost 8 pixels of screen, 0: Hide" => format!("{}", ppu.ppu_mask.show_sprites_left()),
+                            "Enable background rendering" => format!("{}", ppu.ppu_mask.show_background()),
+                            "Enable sprite rendering" => format!("{}", ppu.ppu_mask.show_sprites()),
                             "Emphasize red (green on PAL/Dendy)" => format!("{}", ppu.ppu_mask.emphasize_red()),
                             "Emphasize green (red on PAL/Dendy)" => format!("{}", ppu.ppu_mask.emphasize_green()),
                             "Emphasize blue" => format!("{}", ppu.ppu_mask.emphasize_blue()),
@@ -527,7 +536,7 @@ impl Ui {
                         .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
                         .body(|mut body| {
                             make_rows!(body,
-                                "OAM Address" => format!("0x{:04X}", ppu.oam_addr.addr),
+                                "OAM Address" => format!("0x{:04X}", ppu.oam_addr),
                             );
                         });
                 });
@@ -540,7 +549,7 @@ impl Ui {
                         .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
                         .body(|mut body| {
                             make_rows!(body,
-                                "OAM Data" => format!("{}", ppu.oam_data.data),
+                                "OAM Data" => format!("{:?}", ppu.oam),
                             );
                         });
                 });
@@ -553,8 +562,7 @@ impl Ui {
                         .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
                         .body(|mut body| {
                             make_rows!(body,
-                                "X scroll" => format!("{}", ppu.ppu_scroll.x_scroll),
-                                "Y scroll" => format!("{}", ppu.ppu_scroll.y_scroll),
+                                "scroll" => format!("{}", ppu.v),
                             );
                         });
                 });
@@ -566,9 +574,9 @@ impl Ui {
                         .column(Column::remainder())
                         .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
                         .body(|mut body| {
-                            make_rows!(body,
-                                "PPU address" => format!("0x{:04X}", ppu.ppu_addr.addr),
-                            );
+                            // make_rows!(body,
+                            //     "PPU address" => format!("0x{:04X}", ppu.),
+                            // );
                         });
                 });
                 egui::CollapsingHeader::new("PPU Data").show(ui, |ui| {
@@ -579,9 +587,9 @@ impl Ui {
                         .column(Column::remainder())
                         .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
                         .body(|mut body| {
-                            make_rows!(body,
-                                "PPU Data" => format!("{}", ppu.ppu_data.data),
-                            );
+                            // make_rows!(body,
+                            //     "PPU Data" => format!("{:?}", ppu.read_data()),
+                            // );
                         });
                 });
                 egui::CollapsingHeader::new("OAM Dma").show(ui, |ui| {
@@ -593,7 +601,7 @@ impl Ui {
                         .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
                         .body(|mut body| {
                             make_rows!(body,
-                                "OAM Dma" => format!("{}", ppu.oam_dma.dma),
+                                "OAM Dma" => format!("{}", ppu.read_oam_data()),
                             );
                         });
                 });
@@ -666,7 +674,9 @@ impl Ui {
     }
 
     fn draw_screen(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
-        self.screen.update_texture(ctx, ui);
+        if let Ok(ppu) = self.debug_state.ppu.read() {
+            self.screen.update_texture(ctx, ui, &ppu);
+        }
     }
 
     fn draw_start_screen(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {

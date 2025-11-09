@@ -481,7 +481,7 @@ impl Cpu {
             self.p.bits(),
             self.sp,
             ppu.scanline,
-            ppu.h_pixel,
+            ppu.dot,
             self.cycle_count
         );
 
@@ -490,7 +490,7 @@ impl Cpu {
         let total_cycles = op.base_cycles + extra_cycles;
         self.cycle_count += total_cycles as usize;
 
-        ppu.step(total_cycles);
+        ppu.step(bus.cart.as_mut().unwrap().mapper.as_mut(), total_cycles);
 
         let nmi_current_state = ppu.check_nmi();
         if nmi_current_state && !self.nmi_previous_state {
@@ -504,7 +504,7 @@ impl Cpu {
 
             if !log_matches {
                 let mut log = debug_log.log[debug_log.line - 1].clone();
-                log.push_str(" [ACTUAL LOG]");
+                log.push_str(" [ACTUAL LOG]\n");
                 self.log.push_str(&log);
                 return Err("Emulator output differs from actual log".into());
             }
@@ -556,7 +556,7 @@ impl Cpu {
 
         let cycles: u8 = 7;
         self.cycle_count += cycles as usize;
-        ppu.step(cycles);
+        ppu.step(bus.cart.as_mut().unwrap().mapper.as_mut(), cycles);
     }
 
     fn handle_irq(&mut self, bus: &mut Bus, ppu: &mut Ppu) {
@@ -576,7 +576,7 @@ impl Cpu {
 
         let cycles: u8 = 7;
         self.cycle_count += cycles as usize;
-        ppu.step(cycles);
+        ppu.step(bus.cart.as_mut().unwrap().mapper.as_mut(), cycles);
     }
 
     fn update_nz(&mut self, value: u8) {
