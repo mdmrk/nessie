@@ -86,8 +86,8 @@ impl Bus {
                     2 => warn!("Invalid write request to PPUSTATUS"),
                     3 => ppu.oam_addr.set(value),
                     4 => ppu.oam_data.set(value),
-                    5 => ppu.ppu_scroll.set(value, &mut ppu.write_toggle),
-                    6 => ppu.ppu_addr.set(value, &mut ppu.write_toggle),
+                    5 => ppu.ppu_scroll.set(value, &mut ppu.w),
+                    6 => ppu.ppu_addr.set(value, &mut ppu.w),
                     7 => ppu.ppu_data.set(value),
                     _ => unreachable!(),
                 }

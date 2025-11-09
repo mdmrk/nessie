@@ -136,10 +136,7 @@ pub struct PpuScroll {
 
 impl PpuScroll {
     pub fn new() -> Self {
-        Self {
-            x_scroll: 0,
-            y_scroll: 0,
-        }
+        Self::default()
     }
 
     pub fn set(&mut self, value: u8, toggle: &mut bool) {
@@ -217,7 +214,8 @@ pub struct Ppu {
     pub ppu_data: PpuData,
     pub oam_dma: OamDma,
 
-    pub write_toggle: bool,
+    pub w: bool,
+
     pub nmi_output: bool,
     pub nmi_pending: bool,
 }
@@ -238,38 +236,42 @@ impl Ppu {
             ppu_data: PpuData::new(),
             oam_dma: OamDma::new(),
 
-            write_toggle: false,
+            w: false,
             nmi_output: false,
             nmi_pending: false,
         }
     }
 
     pub fn step(&mut self, cpu_cycles: u8) {
-        for _ in 0..cpu_cycles {
-            self.h_pixel += 3;
+        for _ in 0..cpu_cycles * 3 {
+            self.cycle();
+        }
+    }
 
-            if self.h_pixel >= 341 {
-                self.h_pixel -= 341;
-                self.scanline += 1;
+    pub fn cycle(&mut self) {
+        self.h_pixel += 1;
 
-                if self.scanline > 261 {
-                    self.scanline = 0;
-                }
+        if self.h_pixel >= 341 {
+            self.h_pixel -= 341;
+            self.scanline += 1;
+
+            if self.scanline > 261 {
+                self.scanline = 0;
             }
+        }
 
-            if self.scanline == 241 && self.h_pixel >= 1 && self.h_pixel < 4 {
-                self.ppu_status.set_vblank(true);
-                if self.ppu_ctrl.vblank() {
-                    self.nmi_pending = true;
-                }
+        if self.scanline == 241 && self.h_pixel >= 1 && self.h_pixel < 4 {
+            self.ppu_status.set_vblank(true);
+            if self.ppu_ctrl.vblank() {
+                self.nmi_pending = true;
             }
+        }
 
-            if self.scanline == 261 && self.h_pixel >= 1 && self.h_pixel < 4 {
-                self.ppu_status.set_vblank(false);
-                self.ppu_status.set_sprite_0_hit(false);
-                self.ppu_status.set_sprite_overflow(false);
-                self.nmi_pending = false;
-            }
+        if self.scanline == 261 && self.h_pixel >= 1 && self.h_pixel < 4 {
+            self.ppu_status.set_vblank(false);
+            self.ppu_status.set_sprite_0_hit(false);
+            self.ppu_status.set_sprite_overflow(false);
+            self.nmi_pending = false;
         }
     }
 
@@ -290,7 +292,7 @@ impl Ppu {
         let status = self.ppu_status.bytes[0];
 
         self.ppu_status.set_vblank(false);
-        self.write_toggle = false;
+        self.w = false;
         self.nmi_pending = false;
 
         status
