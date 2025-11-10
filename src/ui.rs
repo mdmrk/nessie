@@ -101,7 +101,7 @@ pub struct Ui {
 
     running: bool,
     paused: bool,
-    frame_completed: bool,
+    frame_ready: bool,
 }
 
 impl Ui {
@@ -118,7 +118,7 @@ impl Ui {
             show_about: false,
             running: false,
             paused: false,
-            frame_completed: false,
+            frame_ready: false,
         }
     }
 
@@ -680,14 +680,14 @@ impl Ui {
 
     fn draw_screen(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         if let Ok(ppu) = self.debug_state.ppu.read() {
-            if self.frame_completed {
-                self.frame_completed = false;
+            if self.frame_ready {
+                self.frame_ready = false;
                 self.screen.pixels = ppu
                     .screen
                     .iter()
                     .map(|c| {
-                        let [r, g, b, a] = c.to_be_bytes();
-                        Color32::from_rgba_unmultiplied(a, g, b, r)
+                        let [a, g, b, r] = c.to_be_bytes();
+                        Color32::from_rgba_unmultiplied(r, g, b, a)
                     })
                     .collect();
             }
@@ -770,7 +770,7 @@ impl Ui {
                         self.paused = false;
                     }
                     Event::FrameReady => {
-                        self.frame_completed = true;
+                        self.frame_ready = true;
                     }
                 }
             }
