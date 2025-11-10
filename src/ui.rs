@@ -512,7 +512,7 @@ impl Ui {
                             .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
                             .body(|mut body| {
                                 make_rows!(body,
-                                    "PPU open bus or 2C05 PPU identifier" => format!("0x{:02X}", ppu.ppu_status.open_bus()),
+                                    // "PPU open bus or 2C05 PPU identifier" => format!("0x{:02X}", ppu.read_status()),
                                     "Sprite overflow flag" => format!("{}", ppu.ppu_status.sprite_overflow()),
                                     "Sprite 0 hit flag" => format!("{}", ppu.ppu_status.sprite_0_hit()),
                                     "Vblank flag, cleared on read. Unreliable" => format!("{}", ppu.ppu_status.vblank()),
@@ -753,6 +753,7 @@ impl Ui {
                 });
             });
         }
+        self.send_command(Command::Update);
         ctx.request_repaint();
     }
 

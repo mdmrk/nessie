@@ -21,6 +21,7 @@ pub enum Command {
     Step,
     MemoryAddress(usize),
     DumpMemory,
+    Update,
 }
 
 pub enum Event {
@@ -138,6 +139,9 @@ pub fn emu_thread(
                 Command::DumpMemory => {
                     emu.dump_memory();
                 }
+                Command::Update => {
+                    debug_state.update(&mut emu);
+                }
             }
         }
 
@@ -157,7 +161,6 @@ pub fn emu_thread(
         if !emu.running {
             break;
         }
-        debug_state.update(&mut emu);
     }
     info!("Stopping emulation");
 }
