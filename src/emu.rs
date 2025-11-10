@@ -1,6 +1,6 @@
 use std::sync::{Arc, mpsc};
 
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 
 use crate::{
     args::Args,
@@ -24,6 +24,7 @@ pub enum Event {
     Paused,
     Resumed,
     Crashed,
+    FrameReady,
 }
 
 pub struct Emu {
@@ -126,6 +127,11 @@ pub fn emu_thread(
             if let Err(e) = emu.cpu.step(&mut emu.bus, &mut emu.ppu, &mut emu.debug_log) {
                 warn!("{e}. Emulator will be paused");
                 emu.pause();
+            }
+            if emu.ppu.frame_ready {
+                debug!("Frame ready");
+                emu.ppu.frame_ready = false;
+                emu.send_event(Event::FrameReady);
             }
             emu.want_step = false;
         }

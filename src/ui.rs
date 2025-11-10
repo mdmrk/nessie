@@ -2,7 +2,6 @@ use bytesize::ByteSize;
 use egui::Color32;
 use egui_extras::{Column, TableBuilder};
 use log::error;
-use rand::prelude::*;
 use rfd::FileDialog;
 use std::{
     sync::{Arc, mpsc},
@@ -15,7 +14,6 @@ use crate::{
     debug::DebugState,
     emu::{Command, Event, emu_thread},
     mapper::MapperIcon,
-    ppu::Ppu,
 };
 
 macro_rules! make_rows {
@@ -61,15 +59,7 @@ impl Screen {
     pub fn new() -> Self {
         let width: usize = 256;
         let height: usize = 240;
-        let mut rng = rand::rng();
-        let mut pixels: Vec<Color32> = vec![Color32::BLACK; width * height];
-        for i in 0..width {
-            for j in 0..height {
-                let n = j * width + i;
-                pixels[n] =
-                    Color32::from_rgb(rng.random::<u8>(), rng.random::<u8>(), rng.random::<u8>());
-            }
-        }
+        let pixels: Vec<Color32> = vec![Color32::BLACK; width * height];
         Self {
             width,
             height,
@@ -78,7 +68,7 @@ impl Screen {
         }
     }
 
-    pub fn update_texture(&mut self, ctx: &egui::Context, ui: &mut egui::Ui, ppu: &Ppu) {
+    pub fn update_texture(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         let available = ui.available_size();
         let aspect_ratio = self.width as f32 / self.height as f32;
 
@@ -87,14 +77,6 @@ impl Screen {
         } else {
             egui::Vec2::new(available.x, available.x / aspect_ratio)
         };
-        self.pixels = ppu
-            .screen
-            .iter()
-            .map(|c| {
-                let [r, g, b, a] = c.to_be_bytes();
-                Color32::from_rgba_unmultiplied(r, g, b, a)
-            })
-            .collect();
         let image = egui::ColorImage::new([self.width, self.height], self.pixels.clone());
 
         let texture: &mut egui::TextureHandle = self.texture_handle.get_or_insert_with(|| {
@@ -119,6 +101,7 @@ pub struct Ui {
 
     running: bool,
     paused: bool,
+    frame_completed: bool,
 }
 
 impl Ui {
@@ -135,6 +118,7 @@ impl Ui {
             show_about: false,
             running: false,
             paused: false,
+            frame_completed: false,
         }
     }
 
@@ -675,7 +659,18 @@ impl Ui {
 
     fn draw_screen(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         if let Ok(ppu) = self.debug_state.ppu.read() {
-            self.screen.update_texture(ctx, ui, &ppu);
+            if self.frame_completed {
+                self.frame_completed = false;
+                self.screen.pixels = ppu
+                    .screen
+                    .iter()
+                    .map(|c| {
+                        let [r, g, b, a] = c.to_be_bytes();
+                        Color32::from_rgba_unmultiplied(r, g, b, a)
+                    })
+                    .collect();
+            }
+            self.screen.update_texture(ctx, ui);
         }
     }
 
@@ -753,6 +748,9 @@ impl Ui {
                     Event::Crashed => {
                         self.running = false;
                         self.paused = false;
+                    }
+                    Event::FrameReady => {
+                        self.frame_completed = true;
                     }
                 }
             }

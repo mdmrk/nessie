@@ -111,6 +111,7 @@ pub struct Ppu {
     pub scanline: usize,
     pub dot: usize,
     pub frame: u64,
+    pub frame_ready: bool,
 
     pub ppu_ctrl: PpuCtrl,
     pub ppu_mask: PpuMask,
@@ -161,6 +162,7 @@ impl Default for Ppu {
             scanline: Default::default(),
             dot: 21,
             frame: Default::default(),
+            frame_ready: false,
             ppu_ctrl: Default::default(),
             ppu_mask: Default::default(),
             ppu_status: Default::default(),
@@ -237,6 +239,7 @@ impl Ppu {
             if self.scanline > 261 {
                 self.scanline = 0;
                 self.frame += 1;
+                self.frame_ready = true;
             }
         }
     }
