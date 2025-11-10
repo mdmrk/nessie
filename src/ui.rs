@@ -444,172 +444,173 @@ impl Ui {
     fn draw_ppu_inspector(&mut self, ui: &mut egui::Ui) {
         if let Ok(ppu) = self.debug_state.ppu.read() {
             ui.label(egui::RichText::new("PPU").strong());
-            egui::ScrollArea::vertical().show(ui, |ui|{
-        TableBuilder::new(ui)
-            .id_salt("ppu")
-            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-            .column(Column::auto())
-            .column(Column::remainder())
-            .body(|mut body| {
-                make_rows!(body,
-                    "Dot" => format!("{}", ppu.dot),
-                    "Scanline" => format!("{}", ppu.scanline),
-                    "Frame" => format!("{}", ppu.frame),
-                );
-            });
-            egui::CollapsingHeader::new("PPU Ctrl").show(ui, |ui| {
-            TableBuilder::new(ui)
-                .id_salt("ppuctrl")
-                .striped(true)
-                .column(Column::auto())
-                .column(Column::remainder())
-                .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                .body(|mut body| {
-                    make_rows!(body,
-                        "Base nametable addr" => format!("0x{:04X}", ppu.ppu_ctrl.get_base_nametable_addr()),
-                        "VRAM addr inc per CPU r/w of PPUDATA" => format!("{}", ppu.ppu_ctrl.get_vram_addr_inc()),
-                        "Sprite pattern table addr for 8x8 sprites" => format!("0x{:04X}", ppu.ppu_ctrl.get_sprite_pattern_table_addr()),
-                        "Background pattern table address" => format!("0x{:04X}", ppu.ppu_ctrl.get_bg_pattern_table_addr()),
-                        "Sprite size" => format!("{:?}", ppu.ppu_ctrl.sprite_size()),
-                        "PPU master/slave select" => format!("{:?}", ppu.ppu_ctrl.mode()),
-                        "Vblank NMI enable" => format!("{}", ppu.ppu_ctrl.vblank())
-                    );
-                });
-        });
-        egui::CollapsingHeader::new("PPU Mask").show(ui, |ui| {
-            TableBuilder::new(ui)
-                .id_salt("ppumask")
-                .striped(true)
-                .column(Column::auto())
-                .column(Column::remainder())
-                .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                .body(|mut body| {
-                    make_rows!(body,
-                        "Greyscale (0: normal color, 1: greyscale)" => format!("{}", ppu.ppu_mask.greyscale()),
-                        "Show background in leftmost 8 pixels of screen, 0: Hide" => format!("{}", ppu.ppu_mask.show_background_left()),
-                        "Show sprites in leftmost 8 pixels of screen, 0: Hide" => format!("{}", ppu.ppu_mask.show_sprites_left()),
-                        "Enable background rendering" => format!("{}", ppu.ppu_mask.show_background()),
-                        "Enable sprite rendering" => format!("{}", ppu.ppu_mask.show_sprites()),
-                        "Emphasize red (green on PAL/Dendy)" => format!("{}", ppu.ppu_mask.emphasize_red()),
-                        "Emphasize green (red on PAL/Dendy)" => format!("{}", ppu.ppu_mask.emphasize_green()),
-                        "Emphasize blue" => format!("{}", ppu.ppu_mask.emphasize_blue()),
-                    );
-                });
-        });
-        egui::CollapsingHeader::new("PPU Status").show(ui, |ui| {
-            TableBuilder::new(ui)
-                .id_salt("ppustatus")
-                .striped(true)
-                .column(Column::auto())
-                .column(Column::remainder())
-                .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                .body(|mut body| {
-                    make_rows!(body,
-                        "PPU open bus or 2C05 PPU identifier" => format!("0x{:02X}", ppu.ppu_status.open_bus()),
-                        "Sprite overflow flag" => format!("{}", ppu.ppu_status.sprite_overflow()),
-                        "Sprite 0 hit flag" => format!("{}", ppu.ppu_status.sprite_0_hit()),
-                        "Vblank flag, cleared on read. Unreliable" => format!("{}", ppu.ppu_status.vblank()),
-                    );
-                });
-            });
-            egui::CollapsingHeader::new("OAM Address").show(ui, |ui| {
-                TableBuilder::new(ui)
-                    .id_salt("oamaddr")
-                    .striped(true)
-                    .column(Column::auto())
-                    .column(Column::remainder())
-                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                    .body(|mut body| {
-                        make_rows!(body,
-                            "OAM Address" => format!("0x{:02X}", ppu.oam_addr),
-                        );
-                    });
-            });
-            egui::CollapsingHeader::new("OAM Data").show(ui, |ui| {
-                egui::ScrollArea::vertical()
-                    .max_height(200.0)
-                    .show(ui, |ui| {
+            egui::ScrollArea::vertical()
+                .auto_shrink(false)
+                .show(ui, |ui|{
+                    TableBuilder::new(ui)
+                        .id_salt("ppu")
+                        .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                        .column(Column::auto())
+                        .column(Column::remainder())
+                        .body(|mut body| {
+                            make_rows!(body,
+                                "Dot" => format!("{}", ppu.dot),
+                                "Scanline" => format!("{}", ppu.scanline),
+                                "Frame" => format!("{}", ppu.frame),
+                            );
+                        });
+                        egui::CollapsingHeader::new("PPU Ctrl").show(ui, |ui| {
                         TableBuilder::new(ui)
-                            .id_salt("oamdata")
+                            .id_salt("ppuctrl")
                             .striped(true)
                             .column(Column::auto())
                             .column(Column::remainder())
                             .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
                             .body(|mut body| {
-                                for (i, chunk) in ppu.oam.chunks(4).enumerate() {
-                                    if i >= 64 { break; }
-                                    body.row(16.0, |mut row| {
-                                        row.col(|ui| {
-                                            ui.label(egui::RichText::new(format!("Sprite {}", i)).strong());
-                                        });
-                                        row.col(|ui| {
-                                            ui.label(format!(
-                                                "Y:{} Tile:{:02X} Attr:{:02X} X:{}",
-                                                chunk[0], chunk[1], chunk[2], chunk[3]
-                                            ));
-                                        });
-                                    });
-                                }
+                                make_rows!(body,
+                                    "Base nametable addr" => format!("0x{:04X}", ppu.ppu_ctrl.get_base_nametable_addr()),
+                                    "VRAM addr inc per CPU r/w of PPUDATA" => format!("{}", ppu.ppu_ctrl.get_vram_addr_inc()),
+                                    "Sprite pattern table addr for 8x8 sprites" => format!("0x{:04X}", ppu.ppu_ctrl.get_sprite_pattern_table_addr()),
+                                    "Background pattern table address" => format!("0x{:04X}", ppu.ppu_ctrl.get_bg_pattern_table_addr()),
+                                    "Sprite size" => format!("{:?}", ppu.ppu_ctrl.sprite_size()),
+                                    "PPU master/slave select" => format!("{:?}", ppu.ppu_ctrl.mode()),
+                                    "Vblank NMI enable" => format!("{}", ppu.ppu_ctrl.vblank())
+                                );
                             });
                     });
-            });
-            egui::CollapsingHeader::new("PPU Registers").show(ui, |ui| {
-                TableBuilder::new(ui)
-                    .id_salt("ppuregs")
-                    .striped(true)
-                    .column(Column::auto())
-                    .column(Column::remainder())
-                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                    .body(|mut body| {
-                        make_rows!(body,
-                            "v (current VRAM address)" => format!("0x{:04X}", ppu.v),
-                            "t (temp VRAM address)" => format!("0x{:04X}", ppu.t),
-                            "x (X scroll)" => format!("{}", ppu.x),
-                            "w (write toggle)" => format!("{}", ppu.w),
-                        );
-                    });
-            });
-            egui::CollapsingHeader::new("Background Shifters").show(ui, |ui| {
-                TableBuilder::new(ui)
-                    .id_salt("bgshifters")
-                    .striped(true)
-                    .column(Column::auto())
-                    .column(Column::remainder())
-                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                    .body(|mut body| {
-                        make_rows!(body,
-                            "bg_shift_lo" => format!("0x{:04X}", ppu.bg_shift_lo),
-                            "bg_shift_hi" => format!("0x{:04X}", ppu.bg_shift_hi),
-                            "bg_attr_shift_lo" => format!("0x{:04X}", ppu.bg_attr_shift_lo),
-                            "bg_attr_shift_hi" => format!("0x{:04X}", ppu.bg_attr_shift_hi),
-                        );
-                    });
-            });
-            egui::CollapsingHeader::new("Palette").show(ui, |ui| {
-                egui::ScrollArea::vertical()
-                    .max_height(200.0)
-                    .show(ui, |ui| {
-                        ui.horizontal_wrapped(|ui| {
-                            for (i, &color_idx) in ppu.palette.iter().enumerate() {
-                                if i % 4 == 0 {
-                                    if i > 0 {
-                                        ui.end_row();
-                                    }
-                                    ui.label(egui::RichText::new(format!("${:02X}:", i)).strong());
-                                }
-                                let color = ppu.get_color_from_palette(color_idx & 0x3F);
-                                let [r, g, b, a] = color.to_be_bytes();
-                                let color32 = egui::Color32::from_rgba_unmultiplied(r, g, b, a);
-                                
-                                ui.colored_label(
-                                    color32,
-                                    format!("{:02X}", color_idx)
+                    egui::CollapsingHeader::new("PPU Mask").show(ui, |ui| {
+                        TableBuilder::new(ui)
+                            .id_salt("ppumask")
+                            .striped(true)
+                            .column(Column::auto())
+                            .column(Column::remainder())
+                            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                            .body(|mut body| {
+                                make_rows!(body,
+                                    "Greyscale (0: normal color, 1: greyscale)" => format!("{}", ppu.ppu_mask.greyscale()),
+                                    "Show background in leftmost 8 pixels of screen, 0: Hide" => format!("{}", ppu.ppu_mask.show_background_left()),
+                                    "Show sprites in leftmost 8 pixels of screen, 0: Hide" => format!("{}", ppu.ppu_mask.show_sprites_left()),
+                                    "Enable background rendering" => format!("{}", ppu.ppu_mask.show_background()),
+                                    "Enable sprite rendering" => format!("{}", ppu.ppu_mask.show_sprites()),
+                                    "Emphasize red (green on PAL/Dendy)" => format!("{}", ppu.ppu_mask.emphasize_red()),
+                                    "Emphasize green (red on PAL/Dendy)" => format!("{}", ppu.ppu_mask.emphasize_green()),
+                                    "Emphasize blue" => format!("{}", ppu.ppu_mask.emphasize_blue()),
                                 );
-                            }
+                            });
+                    });
+                    egui::CollapsingHeader::new("PPU Status").show(ui, |ui| {
+                        TableBuilder::new(ui)
+                            .id_salt("ppustatus")
+                            .striped(true)
+                            .column(Column::auto())
+                            .column(Column::remainder())
+                            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                            .body(|mut body| {
+                                make_rows!(body,
+                                    "PPU open bus or 2C05 PPU identifier" => format!("0x{:02X}", ppu.ppu_status.open_bus()),
+                                    "Sprite overflow flag" => format!("{}", ppu.ppu_status.sprite_overflow()),
+                                    "Sprite 0 hit flag" => format!("{}", ppu.ppu_status.sprite_0_hit()),
+                                    "Vblank flag, cleared on read. Unreliable" => format!("{}", ppu.ppu_status.vblank()),
+                                );
+                            });
+                        });
+                        egui::CollapsingHeader::new("OAM Address").show(ui, |ui| {
+                            TableBuilder::new(ui)
+                                .id_salt("oamaddr")
+                                .striped(true)
+                                .column(Column::auto())
+                                .column(Column::remainder())
+                                .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                                .body(|mut body| {
+                                    make_rows!(body,
+                                        "OAM Address" => format!("0x{:02X}", ppu.oam_addr),
+                                    );
+                                });
+                        });
+                        egui::CollapsingHeader::new("OAM Data").show(ui, |ui| {
+                            egui::ScrollArea::vertical()
+                                .max_height(200.0)
+                                .show(ui, |ui| {
+                                    TableBuilder::new(ui)
+                                        .id_salt("oamdata")
+                                        .striped(true)
+                                        .column(Column::auto())
+                                        .column(Column::remainder())
+                                        .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                                        .body(|mut body| {
+                                            for (i, chunk) in ppu.oam.chunks(4).enumerate() {
+                                                if i >= 64 { break; }
+                                                body.row(16.0, |mut row| {
+                                                    row.col(|ui| {
+                                                        ui.label(egui::RichText::new(format!("Sprite {}", i)).strong());
+                                                    });
+                                                    row.col(|ui| {
+                                                        ui.label(format!(
+                                                            "Y:{} Tile:{:02X} Attr:{:02X} X:{}",
+                                                            chunk[0], chunk[1], chunk[2], chunk[3]
+                                                        ));
+                                                    });
+                                                });
+                                            }
+                                        });
+                                });
+                        });
+                        egui::CollapsingHeader::new("PPU Registers").show(ui, |ui| {
+                            TableBuilder::new(ui)
+                                .id_salt("ppuregs")
+                                .striped(true)
+                                .column(Column::auto())
+                                .column(Column::remainder())
+                                .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                                .body(|mut body| {
+                                    make_rows!(body,
+                                        "v (current VRAM address)" => format!("0x{:04X}", ppu.v),
+                                        "t (temp VRAM address)" => format!("0x{:04X}", ppu.t),
+                                        "x (X scroll)" => format!("{}", ppu.x),
+                                        "w (write toggle)" => format!("{}", ppu.w),
+                                    );
+                                });
+                        });
+                        egui::CollapsingHeader::new("Background Shifters").show(ui, |ui| {
+                            TableBuilder::new(ui)
+                                .id_salt("bgshifters")
+                                .striped(true)
+                                .column(Column::auto())
+                                .column(Column::remainder())
+                                .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                                .body(|mut body| {
+                                    make_rows!(body,
+                                        "bg_shift_lo" => format!("0x{:04X}", ppu.bg_shift_lo),
+                                        "bg_shift_hi" => format!("0x{:04X}", ppu.bg_shift_hi),
+                                        "bg_attr_shift_lo" => format!("0x{:04X}", ppu.bg_attr_shift_lo),
+                                        "bg_attr_shift_hi" => format!("0x{:04X}", ppu.bg_attr_shift_hi),
+                                    );
+                                });
+                        });
+                        egui::CollapsingHeader::new("Palette").show(ui, |ui| {
+                            egui::ScrollArea::vertical()
+                                .max_height(200.0)
+                                .show(ui, |ui| {
+                                    ui.horizontal_wrapped(|ui| {
+                                        for (i, &color_idx) in ppu.palette.iter().enumerate() {
+                                            if i % 4 == 0 {
+                                                if i > 0 {
+                                                    ui.end_row();
+                                                }
+                                                ui.label(egui::RichText::new(format!("${:02X}:", i)).strong());
+                                            }
+                                            let color = ppu.get_color_from_palette(color_idx & 0x3F);
+                                            let [r, g, b, a] = color.to_be_bytes();
+                                            let color32 = egui::Color32::from_rgba_unmultiplied(r, g, b, a);
+                                            ui.colored_label(
+                                                color32,
+                                                format!("{:02X}", color_idx)
+                                            );
+                                        }
+                                    });
+                                });
                         });
                     });
-            });
-        });
         }
     }
 
@@ -686,7 +687,7 @@ impl Ui {
                     .iter()
                     .map(|c| {
                         let [r, g, b, a] = c.to_be_bytes();
-                        Color32::from_rgba_unmultiplied(r, g, b, a)
+                        Color32::from_rgba_unmultiplied(a, g, b, r)
                     })
                     .collect();
             }
