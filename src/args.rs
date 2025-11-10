@@ -1,14 +1,17 @@
-use clap::Parser;
+use argh::FromArgs;
 
-#[derive(Parser, Debug, Clone)]
-#[command(version, about, long_about = None)]
+#[derive(FromArgs, Clone)]
+/// NES emulator
 pub struct Args {
-    #[arg(help = "Path to the ROM (.nes)")]
+    /// path to the ROM (.nes)
+    #[argh(positional)]
     pub rom: Option<String>,
 
-    #[arg(short, long, default_value_t = false, help = "Start in paused state")]
+    /// start in paused state
+    #[argh(short = 'p', switch)]
     pub pause: bool,
 
-    #[arg(short, long, help = "A reference output log file to test roms")]
+    /// a reference output log file to test roms
+    #[argh(short = 'l', option)]
     pub logfile: Option<String>,
 }

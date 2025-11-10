@@ -1,10 +1,9 @@
-use clap::Parser;
-use nessie::{app::App, args::Args};
+use nessie::app::App;
 
 fn main() -> eframe::Result {
     env_logger::init();
 
-    let args = Args::parse();
+    let args = argh::from_env();
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([1280.0, 720.0]),
