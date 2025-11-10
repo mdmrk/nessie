@@ -160,7 +160,7 @@ impl Default for Ppu {
     fn default() -> Self {
         Self {
             scanline: Default::default(),
-            dot: 21,
+            dot: 0,
             frame: Default::default(),
             frame_ready: false,
             ppu_ctrl: Default::default(),
@@ -578,27 +578,13 @@ impl Ppu {
             }
         }
 
-        let mut pixel = 0u8;
-        let mut palette = 0u8;
-
-        if bg_pixel == 0 && fg_pixel == 0 {
-            pixel = 0;
-            palette = 0;
+        let (pixel, palette) = if bg_pixel == 0 && fg_pixel == 0 {
+            (0u8, 0u8)
         } else if bg_pixel == 0 && fg_pixel > 0 {
-            pixel = fg_pixel;
-            palette = fg_palette;
+            (fg_pixel, fg_palette)
         } else if bg_pixel > 0 && fg_pixel == 0 {
-            pixel = bg_pixel;
-            palette = bg_palette;
+            (bg_pixel, bg_palette)
         } else {
-            if fg_priority == 0 {
-                pixel = fg_pixel;
-                palette = fg_palette;
-            } else {
-                pixel = bg_pixel;
-                palette = bg_palette;
-            }
-
             if sprite_zero_rendering
                 && x < 255
                 && self.ppu_mask.show_background()
@@ -612,7 +598,13 @@ impl Ppu {
                     self.ppu_status.set_sprite_0_hit(true);
                 }
             }
-        }
+
+            if fg_priority == 0 {
+                (fg_pixel, fg_palette)
+            } else {
+                (bg_pixel, bg_palette)
+            }
+        };
 
         let color_addr = (palette as u16) * 4 + pixel as u16;
         let color = self.palette[color_addr as usize] & 0x3F;
@@ -640,7 +632,8 @@ impl Ppu {
         let addr = addr & 0x3FFF;
 
         if addr < 0x2000 {
-            return mapper.read_chr(addr);
+            self.bus = mapper.read_chr(addr);
+            return self.bus;
         }
 
         if addr < 0x3F00 {
@@ -655,7 +648,7 @@ impl Ppu {
             } else {
                 palette_addr
             };
-            return self.palette[adjusted_addr];
+            return (self.palette[adjusted_addr] & 0x3F) | (self.bus & 0xC0);
         }
 
         0
