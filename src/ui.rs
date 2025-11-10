@@ -292,11 +292,16 @@ impl Ui {
                 self.prev_mem_search_addr = start_addr;
             }
 
-            ui.label(
-                egui::RichText::new(format!("0x{:04X} {}", n, n))
-                    .strong()
-                    .text_style(egui::TextStyle::Monospace),
-            );
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new(format!("0x{:04X} {}", n, n))
+                        .strong()
+                        .text_style(egui::TextStyle::Monospace),
+                );
+                if ui.button("Dump").clicked() {
+                    self.send_command(Command::DumpMemory);
+                }
+            });
 
             if let Ok(mem_chunk) = self.debug_state.mem_chunk.read() {
                 TableBuilder::new(ui)
@@ -686,7 +691,7 @@ impl Ui {
                     .screen
                     .iter()
                     .map(|c| {
-                        let [a, g, b, r] = c.to_be_bytes();
+                        let [a, r, g, b] = c.to_be_bytes();
                         Color32::from_rgba_unmultiplied(r, g, b, a)
                     })
                     .collect();

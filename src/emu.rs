@@ -1,4 +1,7 @@
-use std::sync::{Arc, mpsc};
+use std::{
+    fs,
+    sync::{Arc, mpsc},
+};
 
 use log::{debug, error, info, warn};
 
@@ -17,6 +20,7 @@ pub enum Command {
     Resume,
     Step,
     MemoryAddress(usize),
+    DumpMemory,
 }
 
 pub enum Event {
@@ -82,6 +86,18 @@ impl Emu {
         self.paused = false;
         self.send_event(Event::Resumed);
     }
+
+    fn dump_memory(&mut self) {
+        let mut mem: [u8; 0x10000] = [0; 0x10000];
+
+        for (i, n) in mem.iter_mut().enumerate() {
+            *n = self.bus.read_byte(i);
+        }
+        let mut path = std::env::current_exe().unwrap();
+        path.set_file_name("dump.txt");
+        info!("Memory dumped to {:?}", path);
+        fs::write(path, mem).expect("Cannot write into memory");
+    }
 }
 
 pub fn emu_thread(
@@ -118,6 +134,9 @@ pub fn emu_thread(
                 }
                 Command::MemoryAddress(addr) => {
                     emu.mem_chunk_addr = addr;
+                }
+                Command::DumpMemory => {
+                    emu.dump_memory();
                 }
             }
         }
