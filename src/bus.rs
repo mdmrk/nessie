@@ -105,8 +105,8 @@ impl Bus {
             0x4014 => {
                 let page_start = (value as usize) * 0x100;
                 let mut data = [0u8; 256];
-                for i in 0..256 {
-                    data[i] = self.read_byte(page_start + i);
+                for (i, item) in data.iter_mut().enumerate() {
+                    *item = self.read_byte(page_start + i);
                 }
                 ppu.write_oam_dma(value, &data);
             }
