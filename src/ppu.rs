@@ -620,7 +620,7 @@ impl Ppu {
         self.screen[y * 256 + x] = self.get_color_from_palette(color);
     }
 
-    fn get_color_from_palette(&self, index: u8) -> u32 {
+    pub fn get_color_from_palette(&self, index: u8) -> u32 {
         const PALETTE: [u32; 64] = [
             0xFF666666, 0xFF002A88, 0xFF1412A7, 0xFF3B00A4, 0xFF5C007E, 0xFF6E0040, 0xFF6C0600,
             0xFF561D00, 0xFF333500, 0xFF0B4800, 0xFF005200, 0xFF004F08, 0xFF00404D, 0xFF000000,
