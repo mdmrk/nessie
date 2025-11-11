@@ -125,6 +125,18 @@ impl Ppu {
             self.prerender_scanline(mapper);
         }
 
+        if self.scanline == 261
+            && self.dot == 339
+            && self.frame % 2 == 1
+            && self.mask.rendering_enabled()
+        {
+            self.dot = 0;
+            self.scanline = 0;
+            self.frame += 1;
+            self.frame_ready = true;
+            return;
+        }
+
         self.dot += 1;
 
         if self.scanline == 241 && self.dot == 1 {
@@ -135,18 +147,6 @@ impl Ppu {
                 }
             }
             self.suppress_nmi = false;
-        }
-
-        if self.scanline == 261
-            && self.dot == 340
-            && self.frame % 2 == 1
-            && self.mask.rendering_enabled()
-        {
-            self.dot = 0;
-            self.scanline = 0;
-            self.frame += 1;
-            self.frame_ready = true;
-            return;
         }
 
         if self.dot > 340 {
@@ -186,7 +186,7 @@ impl Ppu {
     }
 
     fn prerender_scanline(&mut self, _mapper: &mut dyn crate::mapper::Mapper) {
-        if self.dot == 1 {
+        if self.dot == 0 {
             self.status.set_vblank(false);
             self.status.set_sprite_0_hit(false);
             self.status.set_sprite_overflow(false);
