@@ -1,6 +1,6 @@
 use log::warn;
 
-use crate::{cart::Cart, ppu::Ppu};
+use crate::{cart::Cart, mapper::Mapper, ppu::Ppu};
 
 #[derive(Clone)]
 pub struct Bus {
@@ -48,8 +48,8 @@ impl Bus {
                     5 => self.mem[addr],
                     6 => self.mem[addr],
                     7 => {
-                        if let Some(cart) = &mut self.cart {
-                            let mapper = &mut *cart.mapper as &mut dyn crate::mapper::Mapper;
+                        if let Some(cart) = self.cart.as_mut() {
+                            let mapper = &mut *cart.mapper as &mut dyn Mapper;
                             ppu.read_data(mapper)
                         } else {
                             0
@@ -108,7 +108,7 @@ impl Bus {
                 for (i, item) in data.iter_mut().enumerate() {
                     *item = self.read_byte(page_start + i);
                 }
-                ppu.write_oam_dma(value, &data);
+                ppu.write_oam_dma(&data);
             }
             0x6000..=0xFFFF => {
                 if let Some(cart) = &mut self.cart {

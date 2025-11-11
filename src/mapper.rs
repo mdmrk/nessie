@@ -97,15 +97,21 @@ pub enum Mirroring {
 #[derive(Clone, Debug)]
 pub struct Mapper0 {
     prg_rom: Vec<u8>,
-    chr_rom: Vec<u8>,
+    chr_mem: Vec<u8>, // ROM or RAM
     mirroring: Mirroring,
 }
 
 impl Mapper0 {
     pub fn new(prg_rom: Vec<u8>, chr_rom: Vec<u8>, mirroring: Mirroring) -> Self {
+        let chr_mem = if chr_rom.is_empty() {
+            vec![0; 0x2000]
+        } else {
+            chr_rom
+        };
+
         Self {
             prg_rom,
-            chr_rom,
+            chr_mem,
             mirroring,
         }
     }
@@ -123,13 +129,12 @@ impl Mapper for Mapper0 {
     fn write_prg(&mut self, _addr: u16, _value: u8) {}
 
     fn read_chr(&self, addr: u16) -> u8 {
-        self.chr_rom[addr as usize % self.chr_rom.len()]
+        self.chr_mem[(addr as usize) % self.chr_mem.len()]
     }
 
     fn write_chr(&mut self, addr: u16, value: u8) {
-        if !self.chr_rom.is_empty() {
-            self.chr_rom[addr as usize] = value;
-        }
+        let index = (addr as usize) % self.chr_mem.len();
+        self.chr_mem[index] = value;
     }
 
     fn mirroring(&self) -> Mirroring {
@@ -144,7 +149,7 @@ impl Mapper for Mapper0 {
 #[derive(Clone, Debug)]
 pub struct Mapper1 {
     prg_rom: Vec<u8>,
-    chr_rom: Vec<u8>,
+    chr_mem: Vec<u8>, // ROM or RAM
     prg_ram: Vec<u8>,
     shift_register: u8,
     write_count: u8,
@@ -156,9 +161,15 @@ pub struct Mapper1 {
 
 impl Mapper1 {
     pub fn new(prg_rom: Vec<u8>, chr_rom: Vec<u8>, _mirroring: Mirroring) -> Self {
+        let chr_mem = if chr_rom.is_empty() {
+            vec![0; 0x2000]
+        } else {
+            chr_rom
+        };
+
         Self {
             prg_rom,
-            chr_rom,
+            chr_mem,
             prg_ram: vec![0; 0x2000],
             shift_register: 0x10,
             write_count: 0,
@@ -265,35 +276,29 @@ impl Mapper for Mapper1 {
         let bank_size = 0x1000;
         let offset = (addr as usize & (bank_size - 1)) + (bank * bank_size);
 
-        if self.chr_rom.is_empty() {
-            0
-        } else {
-            self.chr_rom[offset % self.chr_rom.len()]
-        }
+        self.chr_mem[offset % self.chr_mem.len()]
     }
 
     fn write_chr(&mut self, addr: u16, value: u8) {
-        if !self.chr_rom.is_empty() {
-            let chr_mode = (self.control >> 4) & 0x01;
+        let chr_mode = (self.control >> 4) & 0x01;
 
-            let bank = if chr_mode == 0 {
-                if addr < 0x1000 {
-                    (self.chr_bank_0 & 0x1E) as usize
-                } else {
-                    ((self.chr_bank_0 & 0x1E) + 1) as usize
-                }
-            } else if addr < 0x1000 {
-                self.chr_bank_0 as usize
+        let bank = if chr_mode == 0 {
+            if addr < 0x1000 {
+                (self.chr_bank_0 & 0x1E) as usize
             } else {
-                self.chr_bank_1 as usize
-            };
-
-            let bank_size = 0x1000;
-            let offset = (addr as usize & (bank_size - 1)) + (bank * bank_size);
-
-            if offset < self.chr_rom.len() {
-                self.chr_rom[offset] = value;
+                ((self.chr_bank_0 & 0x1E) + 1) as usize
             }
+        } else if addr < 0x1000 {
+            self.chr_bank_0 as usize
+        } else {
+            self.chr_bank_1 as usize
+        };
+
+        let bank_size = 0x1000;
+        let offset = (addr as usize & (bank_size - 1)) + (bank * bank_size);
+
+        if offset < self.chr_mem.len() {
+            self.chr_mem[offset] = value;
         }
     }
 
