@@ -389,12 +389,15 @@ impl Ppu {
 
     pub fn read_status(&mut self) -> u8 {
         let status = self.status.bytes[0];
+        let in_suppression = self.scanline == 241 && self.dot <= 2;
+
+        if in_suppression {
+            self.suppress_nmi = true;
+            self.nmi_pending = false;
+        }
 
         self.status.set_vblank(false);
         self.w = false;
-        if self.scanline == 241 && (self.dot == 0 || self.dot == 1) {
-            self.suppress_nmi = true;
-        }
 
         status
     }
