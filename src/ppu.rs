@@ -68,6 +68,7 @@ pub struct Ppu {
     pub read_buffer: u8,
 
     pub nmi_pending: bool,
+    pub suppress_nmi: bool,
 
     pub screen: Vec<u32>,
 }
@@ -92,6 +93,7 @@ impl Default for Ppu {
             w: false,
             read_buffer: 0,
             nmi_pending: false,
+            suppress_nmi: false,
             screen: vec![0; 256 * 240],
         }
     }
@@ -111,22 +113,29 @@ impl Ppu {
         self.scanline = 0;
         self.dot = 0;
         self.oam_addr = 0;
+        self.suppress_nmi = false;
     }
 
     pub fn tick(&mut self, mapper: &mut dyn crate::mapper::Mapper) {
         if self.scanline < 240 {
             self.visible_scanline(mapper);
-        // } else if self.scanline == 240 {
-        } else if self.scanline == 241 && self.dot == 1 {
-            self.status.set_vblank(true);
-            if self.ctrl.nmi_enable() {
-                self.nmi_pending = true;
-            }
-        } else if self.scanline == 261 {
+        }
+
+        if self.scanline == 261 {
             self.prerender_scanline(mapper);
         }
 
         self.dot += 1;
+
+        if self.scanline == 241 && self.dot == 1 {
+            if !self.suppress_nmi {
+                self.status.set_vblank(true);
+                if self.ctrl.nmi_enable() {
+                    self.nmi_pending = true;
+                }
+            }
+            self.suppress_nmi = false;
+        }
 
         if self.scanline == 261
             && self.dot == 340
@@ -182,6 +191,7 @@ impl Ppu {
             self.status.set_sprite_0_hit(false);
             self.status.set_sprite_overflow(false);
             self.nmi_pending = false;
+            self.suppress_nmi = false;
         }
 
         if self.dot >= 280 && self.dot <= 304 && self.mask.rendering_enabled() {
@@ -379,7 +389,9 @@ impl Ppu {
 
         self.status.set_vblank(false);
         self.w = false;
-        self.nmi_pending = false;
+        if self.scanline == 241 && (self.dot == 0 || self.dot == 1) {
+            self.suppress_nmi = true;
+        }
 
         status
     }
