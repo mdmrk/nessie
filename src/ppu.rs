@@ -68,6 +68,7 @@ pub struct Ppu {
     pub read_buffer: u8,
 
     pub nmi_pending: bool,
+    pub nmi_just_enabled: bool,
     pub suppress_nmi: bool,
 
     pub screen: Vec<u32>,
@@ -93,6 +94,7 @@ impl Default for Ppu {
             w: false,
             read_buffer: 0,
             nmi_pending: false,
+            nmi_just_enabled: false,
             suppress_nmi: false,
             screen: vec![0; 256 * 240],
         }
@@ -375,6 +377,7 @@ impl Ppu {
 
         if !prev_nmi && self.ctrl.nmi_enable() && self.status.vblank() {
             self.nmi_pending = true;
+            self.nmi_just_enabled = true;
         } else if !self.ctrl.nmi_enable() {
             self.nmi_pending = false;
         }
@@ -469,6 +472,10 @@ impl Ppu {
     }
 
     pub fn check_nmi(&mut self) -> bool {
+        if self.nmi_just_enabled {
+            self.nmi_just_enabled = false;
+            return false;
+        }
         if self.nmi_pending {
             self.nmi_pending = false;
             true
