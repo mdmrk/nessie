@@ -882,6 +882,7 @@ impl Ui {
                 });
             });
         }
+        self.send_command(Command::Update);
         ctx.request_repaint();
     }
 
