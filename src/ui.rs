@@ -104,6 +104,7 @@ pub struct Ui {
     prev_mem_search_addr: usize,
 
     show_about: bool,
+    show_debug_panels: bool,
 
     running: bool,
     paused: bool,
@@ -122,6 +123,7 @@ impl Ui {
             mem_search: "".into(),
             prev_mem_search_addr: 0,
             show_about: false,
+            show_debug_panels: false,
             running: false,
             paused: false,
             frame_ready: false,
@@ -224,6 +226,7 @@ impl Ui {
                 {
                     self.spawn_emu_thread(&rom.into_os_string().into_string().unwrap());
                 }
+                ui.separator();
                 if ui.button("✖ Quit").clicked() {
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                 }
@@ -249,6 +252,8 @@ impl Ui {
                         self.emu_stop();
                     }
                 });
+                ui.separator();
+                ui.checkbox(&mut self.show_debug_panels, "Show debug panels");
             });
             ui.menu_button("Help", |ui| {
                 if ui.button("ℹ About").clicked() {
@@ -833,36 +838,38 @@ impl Ui {
                 self.draw_menubar(ui);
             });
         if self.running {
-            egui::SidePanel::left("left_panel")
-                .resizable(true)
-                .default_width(180.0)
-                .width_range(..=500.0)
-                .show(ctx, |ui| {
-                    ui.vertical(|ui| {
-                        self.draw_cpu_inspector(ui);
-                        ui.separator();
-                        self.draw_ppu_inspector(ui);
+            if self.show_debug_panels {
+                egui::SidePanel::left("left_panel")
+                    .resizable(true)
+                    .default_width(180.0)
+                    .width_range(..=500.0)
+                    .show(ctx, |ui| {
+                        ui.vertical(|ui| {
+                            self.draw_cpu_inspector(ui);
+                            ui.separator();
+                            self.draw_ppu_inspector(ui);
+                        });
                     });
-                });
-            egui::SidePanel::right("right_panel")
-                .resizable(true)
-                .default_width(180.0)
-                .width_range(..=200.0)
-                .show(ctx, |ui| {
-                    ui.vertical(|ui| {
-                        self.draw_rom_details(ui);
+                egui::SidePanel::right("right_panel")
+                    .resizable(true)
+                    .default_width(180.0)
+                    .width_range(..=200.0)
+                    .show(ctx, |ui| {
+                        ui.vertical(|ui| {
+                            self.draw_rom_details(ui);
+                        });
                     });
-                });
-            egui::TopBottomPanel::bottom("bottom_panel")
-                .resizable(true)
-                .height_range(..=500.0)
-                .show(ctx, |ui| {
-                    ui.horizontal_top(|ui| {
-                        self.draw_memory_viewer(ui);
-                        ui.separator();
-                        self.draw_log_reader(ui);
+                egui::TopBottomPanel::bottom("bottom_panel")
+                    .resizable(true)
+                    .height_range(..=500.0)
+                    .show(ctx, |ui| {
+                        ui.horizontal_top(|ui| {
+                            self.draw_memory_viewer(ui);
+                            ui.separator();
+                            self.draw_log_reader(ui);
+                        });
                     });
-                });
+            }
             egui::CentralPanel::default().show(ctx, |ui| {
                 ui.centered_and_justified(|ui| {
                     self.draw_screen(ctx, ui);
@@ -875,7 +882,6 @@ impl Ui {
                 });
             });
         }
-        self.send_command(Command::Update);
         ctx.request_repaint();
     }
 
