@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 argh = "0.1.13"
 bitflags = "2.10.0"
-bytesize = "2.1.0"
+bytesize = "2.2.0"
 eframe = "0.33.0"
 egui = "0.33.0"
 egui_extras = { version = "0.33.0", features = ["image"] }
