@@ -11,7 +11,7 @@ use std::{
 use crate::{
     args::Args,
     cpu::Flags,
-    debug::DebugState,
+    debug::{BYTES_PER_ROW, DebugState, ROWS_TO_SHOW},
     emu::{Command, Event, emu_thread},
     mapper::MapperIcon,
 };
@@ -287,8 +287,6 @@ impl Ui {
             })
             .min(0xffff);
 
-            const BYTES_PER_ROW: usize = 0x10;
-            const ROWS_TO_SHOW: usize = 7;
             const ROWS_ABOVE_CURRENT: usize = ROWS_TO_SHOW / 2;
             const MAX_ROW: usize = 0xFFFF / BYTES_PER_ROW;
 
