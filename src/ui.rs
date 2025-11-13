@@ -670,11 +670,6 @@ impl Ui {
                                                     let color = ppu.get_color_from_palette(
                                                         displayed_idx & 0x3F,
                                                     );
-                                                    let [a, r, g, b] = color.to_be_bytes();
-                                                    let color32 =
-                                                        egui::Color32::from_rgba_unmultiplied(
-                                                            r, g, b, a,
-                                                        );
 
                                                     let mut text = egui::RichText::new(format!(
                                                         "{:02X}",
@@ -688,7 +683,7 @@ impl Ui {
                                                     }
 
                                                     row.col(|ui| {
-                                                        ui.colored_label(color32, text);
+                                                        ui.colored_label(color, text);
                                                     });
                                                 }
 
@@ -715,11 +710,6 @@ impl Ui {
                                                     let color = ppu.get_color_from_palette(
                                                         displayed_idx & 0x3F,
                                                     );
-                                                    let [a, r, g, b] = color.to_be_bytes();
-                                                    let color32 =
-                                                        egui::Color32::from_rgba_unmultiplied(
-                                                            r, g, b, a,
-                                                        );
 
                                                     let mut text = egui::RichText::new(format!(
                                                         "{:02X}",
@@ -733,7 +723,7 @@ impl Ui {
                                                     }
 
                                                     row.col(|ui| {
-                                                        ui.colored_label(color32, text);
+                                                        ui.colored_label(color, text);
                                                     });
                                                 }
                                             });
@@ -820,8 +810,7 @@ impl Ui {
             }
 
             for (dst, src) in self.screen.pixels.iter_mut().zip(ppu.screen.iter()) {
-                let [a, r, g, b] = src.to_le_bytes();
-                *dst = Color32::from_rgba_unmultiplied(r, g, b, a);
+                *dst = *src;
             }
         }
         self.screen.update_texture(ctx, ui);

@@ -1,3 +1,6 @@
+use std::sync::LazyLock;
+
+use egui::Color32;
 use modular_bitfield::prelude::*;
 
 // PPU Control Register ($2000)
@@ -73,7 +76,7 @@ pub struct Ppu {
     pub suppress_vbl: bool,
     pub nmi_delay: bool,
 
-    pub screen: Vec<u32>,
+    pub screen: Vec<Color32>,
 }
 
 impl Default for Ppu {
@@ -100,7 +103,7 @@ impl Default for Ppu {
             suppress_nmi: false,
             suppress_vbl: false,
             nmi_delay: false,
-            screen: vec![0; 256 * 240],
+            screen: vec![Color32::BLACK; 256 * 240],
         }
     }
 }
@@ -491,8 +494,8 @@ impl Ppu {
         }
     }
 
-    pub fn get_color_from_palette(&self, index: u8) -> u32 {
-        const PALETTE: [u32; 64] = [
+    pub fn get_color_from_palette(&self, index: u8) -> Color32 {
+        const PALETTE_COLORS: [u32; 64] = [
             0xFF666666, 0xFF002A88, 0xFF1412A7, 0xFF3B00A4, 0xFF5C007E, 0xFF6E0040, 0xFF6C0600,
             0xFF561D00, 0xFF333500, 0xFF0B4800, 0xFF005200, 0xFF004F08, 0xFF00404D, 0xFF000000,
             0xFF000000, 0xFF000000, 0xFFADADAD, 0xFF155FD9, 0xFF4240FF, 0xFF7527FE, 0xFFA01ACC,
@@ -504,6 +507,13 @@ impl Ppu {
             0xFFE4E594, 0xFFCFEF96, 0xFFBDF4AB, 0xFFB3F3CC, 0xFFB5EBF2, 0xFFB8B8B8, 0xFF000000,
             0xFF000000,
         ];
+
+        static PALETTE: LazyLock<[Color32; 64]> = LazyLock::new(|| {
+            PALETTE_COLORS.map(|c| {
+                let [a, r, g, b] = c.to_be_bytes();
+                Color32::from_rgba_unmultiplied(r, g, b, a)
+            })
+        });
         PALETTE[index as usize & 0x3F]
     }
 }
