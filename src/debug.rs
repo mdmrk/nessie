@@ -2,26 +2,31 @@ use std::sync::RwLock;
 
 use crate::{cart::Header, cpu::Cpu, emu::Emu, ppu::Ppu};
 
-#[derive(Default)]
 pub struct DebugState {
     pub cpu: RwLock<Cpu>,
     pub ppu: RwLock<Ppu>,
     pub cart_header: RwLock<Option<Header>>,
     pub cpu_log: RwLock<String>,
     pub mem_chunk: RwLock<Vec<u8>>,
-    pub stack: RwLock<Vec<u8>>,
+    pub stack: RwLock<[u8; 0x100]>,
+}
+
+impl Default for DebugState {
+    fn default() -> Self {
+        Self {
+            cpu: Default::default(),
+            ppu: Default::default(),
+            cart_header: Default::default(),
+            cpu_log: Default::default(),
+            mem_chunk: Default::default(),
+            stack: RwLock::new([0; 0x100]),
+        }
+    }
 }
 
 impl DebugState {
     pub fn new() -> Self {
-        Self {
-            cpu: RwLock::new(Cpu::new()),
-            ppu: RwLock::new(Ppu::new()),
-            cart_header: RwLock::new(None),
-            cpu_log: RwLock::new("".into()),
-            mem_chunk: RwLock::new(vec![0; 7 * 16]),
-            stack: RwLock::new(vec![0; 0x100]),
-        }
+        Default::default()
     }
 
     pub fn update(&self, emu: &mut Emu) {
@@ -42,7 +47,7 @@ impl DebugState {
             *mem_chunk = emu.bus.read(emu.mem_chunk_addr as u16, 7 * 16);
         }
         if let Ok(mut stack) = self.stack.write() {
-            *stack = emu.bus.read(0x100, 0x100);
+            stack.copy_from_slice(&emu.bus.read(0x100, 0x100)[..0x100]);
         }
     }
 }
