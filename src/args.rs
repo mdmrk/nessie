@@ -10,8 +10,4 @@ pub struct Args {
     /// start in paused state
     #[argh(short = 'p', switch)]
     pub pause: bool,
-
-    /// a reference output log file to test roms
-    #[argh(short = 'l', option)]
-    pub logfile: Option<String>,
 }

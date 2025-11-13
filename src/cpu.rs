@@ -4,7 +4,7 @@ use bitflags::bitflags;
 use log::debug;
 use phf::phf_map;
 
-use crate::{bus::Bus, debug::DebugLog, ppu::Ppu};
+use crate::{bus::Bus, ppu::Ppu};
 
 #[derive(Debug)]
 pub enum OperandValue {
@@ -453,14 +453,7 @@ impl Cpu {
         OPCODES.get(&opcode)
     }
 
-    fn execute(
-        &mut self,
-        bus: &mut Bus,
-        ppu: &mut Ppu,
-        op: &Op,
-        opcode: u8,
-        debug_log: &mut Option<DebugLog>,
-    ) -> Result<(), String> {
+    fn execute(&mut self, bus: &mut Bus, ppu: &mut Ppu, op: &Op, opcode: u8) {
         let operand_bytes = op.mode.operand_bytes();
         let operands = bus.read(self.pc + 1, operand_bytes as u16);
 
@@ -497,27 +490,10 @@ impl Cpu {
             self.nmi_pending = true;
         }
         self.nmi_previous_state = nmi_current_state;
-
         self.log.push_str(&step_str);
-        if let Some(debug_log) = debug_log {
-            let log_matches = debug_log.compare(&step_str);
-
-            if !log_matches {
-                let mut log = debug_log.log[debug_log.line - 1].clone();
-                log.push_str(" [ACTUAL LOG]\n");
-                self.log.push_str(&log);
-                return Err("Emulator output differs from actual log".into());
-            }
-        }
-        Ok(())
     }
 
-    pub fn step(
-        &mut self,
-        bus: &mut Bus,
-        ppu: &mut Ppu,
-        debug_log: &mut Option<DebugLog>,
-    ) -> Result<(), String> {
+    pub fn step(&mut self, bus: &mut Bus, ppu: &mut Ppu) -> Result<(), String> {
         if self.nmi_pending {
             debug!("NMI triggered");
             self.handle_nmi(bus, ppu);
@@ -533,7 +509,10 @@ impl Cpu {
             let op = self.decode(opcode);
 
             match op {
-                Some(op) => self.execute(bus, ppu, op, opcode, debug_log),
+                Some(op) => {
+                    self.execute(bus, ppu, op, opcode);
+                    Ok(())
+                }
                 None => Err(format!("Unknown opcode: 0x{:02X}", opcode)),
             }
         }

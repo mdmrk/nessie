@@ -5,14 +5,7 @@ use std::{
 
 use log::{debug, error, info, warn};
 
-use crate::{
-    args::Args,
-    bus::Bus,
-    cart::Cart,
-    cpu::Cpu,
-    debug::{DebugLog, DebugState},
-    ppu::Ppu,
-};
+use crate::{args::Args, bus::Bus, cart::Cart, cpu::Cpu, debug::DebugState, ppu::Ppu};
 
 pub enum Command {
     Stop,
@@ -39,7 +32,6 @@ pub struct Emu {
     pub running: bool,
     pub paused: bool,
     pub want_step: bool,
-    pub debug_log: Option<DebugLog>,
     pub event_tx: mpsc::Sender<Event>,
     pub mem_chunk_addr: usize,
 }
@@ -53,7 +45,6 @@ impl Emu {
             running: true,
             paused: false,
             want_step: false,
-            debug_log: None,
             event_tx,
             mem_chunk_addr: 0,
         }
@@ -111,9 +102,6 @@ pub fn emu_thread(
     let mut emu = Emu::new(event_tx);
 
     emu.load_rom(rom);
-    if let Some(logfile) = &args.logfile {
-        emu.debug_log = Some(DebugLog::new(logfile));
-    }
     if args.pause {
         emu.pause();
     }
@@ -147,7 +135,7 @@ pub fn emu_thread(
 
         let should_run = !emu.paused || emu.want_step;
         if should_run {
-            if let Err(e) = emu.cpu.step(&mut emu.bus, &mut emu.ppu, &mut emu.debug_log) {
+            if let Err(e) = emu.cpu.step(&mut emu.bus, &mut emu.ppu) {
                 warn!("{e}. Emulator will be paused");
                 emu.pause();
             }
