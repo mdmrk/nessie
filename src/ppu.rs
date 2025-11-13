@@ -70,6 +70,8 @@ pub struct Ppu {
     pub nmi_pending: bool,
     pub nmi_just_enabled: bool,
     pub suppress_nmi: bool,
+    pub suppress_vbl: bool,
+    pub nmi_delay: bool,
 
     pub screen: Vec<u32>,
 }
@@ -96,6 +98,8 @@ impl Default for Ppu {
             nmi_pending: false,
             nmi_just_enabled: false,
             suppress_nmi: false,
+            suppress_vbl: false,
+            nmi_delay: false,
             screen: vec![0; 256 * 240],
         }
     }
@@ -116,40 +120,28 @@ impl Ppu {
         self.dot = 0;
         self.oam_addr = 0;
         self.suppress_nmi = false;
+        self.suppress_vbl = false;
+        self.nmi_delay = false;
     }
 
     pub fn tick(&mut self, mapper: &mut dyn crate::mapper::Mapper) {
+        if self.scanline == 241 && self.dot == 1 {
+            if !self.suppress_vbl {
+                self.status.set_vblank(true);
+            }
+            if !self.suppress_nmi && self.ctrl.nmi_enable() {
+                self.nmi_pending = true;
+            }
+            self.suppress_vbl = false;
+            self.suppress_nmi = false;
+        }
         if self.scanline < 240 {
             self.visible_scanline(mapper);
         }
-
         if self.scanline == 261 {
             self.prerender_scanline(mapper);
         }
-
-        if self.scanline == 261
-            && self.dot == 339
-            && self.frame % 2 == 1
-            && self.mask.rendering_enabled()
-        {
-            self.dot = 0;
-            self.scanline = 0;
-            self.frame += 1;
-            self.frame_ready = true;
-            return;
-        }
-
         self.dot += 1;
-
-        if self.scanline == 241 && self.dot == 1 {
-            if !self.suppress_nmi {
-                self.status.set_vblank(true);
-                if self.ctrl.nmi_enable() {
-                    self.nmi_pending = true;
-                }
-            }
-            self.suppress_nmi = false;
-        }
 
         if self.dot > 340 {
             self.dot = 0;
@@ -194,6 +186,7 @@ impl Ppu {
             self.status.set_sprite_overflow(false);
             self.nmi_pending = false;
             self.suppress_nmi = false;
+            self.suppress_vbl = false;
         }
 
         if self.dot >= 280 && self.dot <= 304 && self.mask.rendering_enabled() {
@@ -377,7 +370,7 @@ impl Ppu {
 
         if !prev_nmi && self.ctrl.nmi_enable() && self.status.vblank() {
             self.nmi_pending = true;
-            self.nmi_just_enabled = true;
+            self.nmi_delay = true;
         } else if !self.ctrl.nmi_enable() {
             self.nmi_pending = false;
         }
@@ -388,18 +381,24 @@ impl Ppu {
     }
 
     pub fn read_status(&mut self) -> u8 {
-        let status = self.status.bytes[0];
-        let in_suppression = self.scanline == 241 && self.dot <= 2;
+        let mut status_byte = self.status.bytes[0];
 
-        if in_suppression {
-            self.suppress_nmi = true;
-            self.nmi_pending = false;
+        if self.scanline == 241 {
+            if self.dot == 0 {
+                self.suppress_vbl = true;
+                self.suppress_nmi = true;
+            } else if self.dot == 1 {
+                self.suppress_nmi = true;
+                self.suppress_vbl = true;
+                status_byte |= 0b1000_0000;
+            } else if self.dot == 2 {
+                self.nmi_pending = false;
+            }
         }
-
         self.status.set_vblank(false);
         self.w = false;
 
-        status
+        status_byte
     }
 
     pub fn write_oam_addr(&mut self, value: u8) {
@@ -475,10 +474,15 @@ impl Ppu {
     }
 
     pub fn check_nmi(&mut self) -> bool {
-        if self.nmi_just_enabled {
-            self.nmi_just_enabled = false;
+        if self.nmi_delay {
+            self.nmi_delay = false;
             return false;
         }
+
+        if self.scanline == 241 && (self.dot == 1 || self.dot == 2) {
+            return false;
+        }
+
         if self.nmi_pending {
             self.nmi_pending = false;
             true
