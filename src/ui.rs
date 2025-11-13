@@ -1,9 +1,10 @@
 use bytesize::ByteSize;
 use egui::Color32;
 use egui_extras::{Column, TableBuilder};
-use log::error;
+use log::{error, info};
 use rfd::FileDialog;
 use std::{
+    path::Path,
     sync::{Arc, mpsc},
     thread::{self, JoinHandle},
 };
@@ -253,6 +254,9 @@ impl Ui {
                     }
                 });
                 ui.separator();
+                if ui.button("📷 Take snapshot").clicked() {
+                    self.take_snapshot();
+                }
                 ui.checkbox(&mut self.show_debug_panels, "Show debug panels");
             });
             ui.menu_button("Help", |ui| {
@@ -897,6 +901,30 @@ impl Ui {
                     }
                 }
             }
+        }
+    }
+
+    fn take_snapshot(&self) {
+        let frame_data: Vec<u8> = self
+            .screen
+            .pixels
+            .iter()
+            .flat_map(|c| {
+                let [r, g, b, _a] = c.to_array();
+                vec![r, g, b]
+            })
+            .collect();
+        let path = Path::new("screenshot.png");
+        match image::save_buffer_with_format(
+            path,
+            &frame_data,
+            self.screen.width as u32,
+            self.screen.height as u32,
+            image::ColorType::Rgb8,
+            image::ImageFormat::Png,
+        ) {
+            Ok(()) => info!("Image saved to {}", path.display()),
+            Err(e) => error!("Couldn't save image: {e}"),
         }
     }
 }

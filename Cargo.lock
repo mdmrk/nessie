@@ -2048,6 +2048,7 @@ dependencies = [
  "egui",
  "egui_extras",
  "env_logger",
+ "image",
  "log",
  "modular-bitfield",
  "phf 0.13.1",
