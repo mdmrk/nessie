@@ -781,17 +781,18 @@ impl Ui {
         }
     }
 
-    fn draw_log_reader(&mut self, ui: &mut egui::Ui) {
+    fn draw_log_reader(&self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
             ui.label(egui::RichText::new("Log").strong());
             egui::ScrollArea::vertical()
                 .stick_to_bottom(true)
                 .auto_shrink(false)
                 .show(ui, |ui| {
-                    if let Ok(cpu_log) = self.debug_state.cpu_log.read() {
-                        let start = cpu_log.len().saturating_sub(3000);
-                        let slice = &cpu_log[start..];
-                        ui.label(egui::RichText::new(slice).text_style(egui::TextStyle::Monospace));
+                    if let Ok(cpu) = self.debug_state.cpu.read() {
+                        ui.label(
+                            egui::RichText::new(cpu.log.iter().collect::<String>())
+                                .text_style(egui::TextStyle::Monospace),
+                        );
                     }
                 });
         });

@@ -1,10 +1,13 @@
 use core::fmt;
+use std::collections::VecDeque;
 
 use bitflags::bitflags;
 use log::debug;
 use phf::phf_map;
 
 use crate::{bus::Bus, ppu::Ppu};
+
+const MAX_LOG_SIZE: usize = 3000;
 
 #[derive(Debug)]
 pub enum OperandValue {
@@ -406,7 +409,7 @@ pub struct Cpu {
     pub x: u8,
     pub y: u8,
     pub cycle_count: usize,
-    pub log: String,
+    pub log: VecDeque<char>,
     pub nmi_pending: bool,
     pub nmi_previous_state: bool,
     pub irq_pending: bool,
@@ -428,7 +431,7 @@ impl Cpu {
             x: 0,
             y: 0,
             cycle_count: 7,
-            log: "".into(),
+            log: VecDeque::with_capacity(MAX_LOG_SIZE),
             nmi_pending: false,
             nmi_previous_state: false,
             irq_pending: false,
@@ -477,6 +480,7 @@ impl Cpu {
             ppu.dot,
             self.cycle_count
         );
+        self.append_to_log(&step_str);
 
         self.pc += 1 + operand_bytes as u16;
         let extra_cycles = (op.execute)(self, bus, ppu, op.mode, &operands);
@@ -490,7 +494,6 @@ impl Cpu {
             self.nmi_pending = true;
         }
         self.nmi_previous_state = nmi_current_state;
-        self.log.push_str(&step_str);
     }
 
     pub fn step(&mut self, bus: &mut Bus, ppu: &mut Ppu) -> Result<(), String> {
@@ -556,6 +559,16 @@ impl Cpu {
         let cycles: u8 = 7;
         self.cycle_count += cycles as usize;
         ppu.step(bus.cart.as_mut().unwrap().mapper.as_mut(), cycles);
+    }
+
+    fn append_to_log(&mut self, message: &str) {
+        for c in message.chars() {
+            self.log.push_back(c);
+        }
+
+        while self.log.len() > MAX_LOG_SIZE {
+            self.log.pop_front();
+        }
     }
 
     fn update_nz(&mut self, value: u8) {

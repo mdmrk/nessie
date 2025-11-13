@@ -10,7 +10,6 @@ pub struct DebugState {
     pub cpu: RwLock<Cpu>,
     pub ppu: RwLock<Ppu>,
     pub cart_header: RwLock<Option<Header>>,
-    pub cpu_log: RwLock<String>,
     pub mem_chunk: RwLock<[u8; ROWS_TO_SHOW * MEM_BLOCK_SIZE]>,
     pub stack: RwLock<[u8; 0x100]>,
 }
@@ -21,7 +20,6 @@ impl Default for DebugState {
             cpu: Default::default(),
             ppu: Default::default(),
             cart_header: Default::default(),
-            cpu_log: Default::default(),
             mem_chunk: RwLock::new([0; ROWS_TO_SHOW * MEM_BLOCK_SIZE]),
             stack: RwLock::new([0; 0x100]),
         }
@@ -42,10 +40,6 @@ impl DebugState {
         }
         if let Ok(mut cart_header) = self.cart_header.write() {
             *cart_header = emu.bus.cart.as_ref().map(|cart| cart.header.clone())
-        }
-        if let Ok(mut cpu_log) = self.cpu_log.write() {
-            cpu_log.push_str(&emu.cpu.log);
-            emu.cpu.log.clear();
         }
         if let Ok(mut mem_chunk) = self.mem_chunk.write() {
             mem_chunk.copy_from_slice(
