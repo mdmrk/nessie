@@ -46,7 +46,7 @@ pub struct PpuStatus {
     pub vblank: bool,          // 7: Vertical blank has started
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Ppu {
     pub scanline: u16,
     pub dot: u16,
@@ -77,6 +77,35 @@ pub struct Ppu {
     pub nmi_delay: bool,
 
     pub screen: Vec<Color32>,
+}
+
+impl Clone for Ppu {
+    fn clone(&self) -> Self {
+        Self {
+            scanline: self.scanline,
+            dot: self.dot,
+            frame: self.frame,
+            frame_ready: self.frame_ready,
+            ctrl: self.ctrl,
+            mask: self.mask,
+            status: self.status,
+            oam: self.oam,
+            oam_addr: self.oam_addr,
+            vram: self.vram,
+            palette: self.palette,
+            v: self.v,
+            t: self.t,
+            x: self.x,
+            w: self.w,
+            read_buffer: self.read_buffer,
+            nmi_pending: self.nmi_pending,
+            nmi_just_enabled: self.nmi_just_enabled,
+            suppress_nmi: self.suppress_nmi,
+            suppress_vbl: self.suppress_vbl,
+            nmi_delay: self.nmi_delay,
+            screen: Vec::new(),
+        }
+    }
 }
 
 impl Default for Ppu {

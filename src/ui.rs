@@ -99,7 +99,7 @@ impl FrameStats {
 pub struct Screen {
     pub width: usize,
     pub height: usize,
-    pixels: Vec<Color32>,
+    pixels: Arc<Vec<Color32>>,
     pub texture_handle: Option<egui::TextureHandle>,
 }
 
@@ -107,7 +107,7 @@ impl Screen {
     pub fn new() -> Self {
         let width: usize = 256;
         let height: usize = 240;
-        let pixels: Vec<Color32> = vec![Color32::BLACK; width * height];
+        let pixels = Arc::new(vec![Color32::BLACK; width * height]);
         Self {
             width,
             height,
@@ -117,7 +117,7 @@ impl Screen {
     }
 
     pub fn update_texture(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
-        let image = egui::ColorImage::new([self.width, self.height], self.pixels.clone());
+        let image = egui::ColorImage::new([self.width, self.height], (*self.pixels).clone());
 
         if let Some(texture) = &mut self.texture_handle {
             texture.set(image, egui::TextureOptions::NEAREST);
@@ -158,6 +158,8 @@ pub struct Ui {
     paused: bool,
     frame_ready: bool,
     frame_stats: FrameStats,
+
+    pixels_buffer: Option<Arc<Vec<Color32>>>,
 }
 
 impl Ui {
@@ -177,6 +179,7 @@ impl Ui {
             paused: false,
             frame_ready: false,
             frame_stats: FrameStats::new(60.0),
+            pixels_buffer: None,
         }
     }
 
@@ -856,23 +859,13 @@ impl Ui {
     }
 
     fn draw_screen(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
-        if self.frame_ready
-            && self.frame_stats.should_render()
-            && let Ok(ppu) = self.debug_state.ppu.read()
-        {
+        if self.frame_ready && self.frame_stats.should_render() {
             self.frame_ready = false;
-
-            if self.screen.pixels.len() != ppu.screen.len() {
-                self.screen.pixels.resize(ppu.screen.len(), Color32::BLACK);
-            }
-
-            for (dst, src) in self.screen.pixels.iter_mut().zip(ppu.screen.iter()) {
-                *dst = *src;
+            if let Some(frame) = self.pixels_buffer.take() {
+                self.screen.pixels = frame;
             }
         }
-
         self.frame_stats.update_fps();
-
         self.screen.update_texture(ctx, ui);
     }
 
@@ -955,7 +948,8 @@ impl Ui {
                         self.running = false;
                         self.paused = false;
                     }
-                    Event::FrameReady => {
+                    Event::FrameReady(frame_arc) => {
+                        self.pixels_buffer = Some(frame_arc);
                         self.frame_ready = true;
                     }
                 }

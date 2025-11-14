@@ -3,9 +3,10 @@ use std::{
     sync::{Arc, mpsc},
 };
 
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
 
 use crate::{args::Args, bus::Bus, cart::Cart, cpu::Cpu, debug::DebugState, ppu::Ppu};
+use egui::Color32;
 
 pub enum Command {
     Stop,
@@ -22,7 +23,7 @@ pub enum Event {
     Paused,
     Resumed,
     Crashed,
-    FrameReady,
+    FrameReady(Arc<Vec<Color32>>),
 }
 
 pub struct Emu {
@@ -141,7 +142,8 @@ pub fn emu_thread(
             }
             if emu.ppu.frame_ready {
                 emu.ppu.frame_ready = false;
-                emu.send_event(Event::FrameReady);
+                let frame_arc = Arc::new(emu.ppu.screen.clone());
+                emu.send_event(Event::FrameReady(frame_arc));
             }
             emu.want_step = false;
         }

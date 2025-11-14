@@ -2,7 +2,6 @@ use core::fmt;
 use std::collections::VecDeque;
 
 use bitflags::bitflags;
-use log::debug;
 use phf::phf_map;
 
 use crate::{bus::Bus, ppu::Ppu};

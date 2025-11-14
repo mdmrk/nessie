@@ -35,9 +35,13 @@ impl DebugState {
         if let Ok(mut cpu) = self.cpu.write() {
             *cpu = emu.cpu.clone();
         }
+
         if let Ok(mut ppu) = self.ppu.write() {
-            *ppu = emu.ppu.clone();
+            let mut ppu_clone = emu.ppu.clone();
+            ppu_clone.screen = Vec::new();
+            *ppu = ppu_clone;
         }
+
         if let Ok(mut cart_header) = self.cart_header.write() {
             *cart_header = emu.bus.cart.as_ref().map(|cart| cart.header.clone())
         }
