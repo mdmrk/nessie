@@ -498,12 +498,10 @@ impl Cpu {
 
     pub fn step(&mut self, bus: &mut Bus, ppu: &mut Ppu) -> Result<(), String> {
         if self.nmi_pending {
-            debug!("NMI triggered");
             self.handle_nmi(bus, ppu);
             self.nmi_pending = false;
             Ok(())
         } else if self.irq_pending && !self.p.contains(Flags::I) {
-            debug!("IRQ triggered");
             self.handle_irq(bus, ppu);
             self.irq_pending = false;
             Ok(())

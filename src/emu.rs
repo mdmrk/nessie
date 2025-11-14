@@ -140,7 +140,6 @@ pub fn emu_thread(
                 emu.pause();
             }
             if emu.ppu.frame_ready {
-                debug!("Frame ready");
                 emu.ppu.frame_ready = false;
                 emu.send_event(Event::FrameReady);
             }

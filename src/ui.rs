@@ -48,6 +48,53 @@ macro_rules! make_rows {
     };
 }
 
+pub struct FrameStats {
+    last_update: std::time::Instant,
+    frame_count: u64,
+    fps: f32,
+    target_fps: f32,
+    fps_last_update: std::time::Instant,
+    render_count_since_fps_update: u64,
+}
+
+impl FrameStats {
+    pub fn new(target_fps: f32) -> Self {
+        Self {
+            last_update: std::time::Instant::now(),
+            frame_count: 0,
+            fps: 0.0,
+            target_fps,
+            fps_last_update: std::time::Instant::now(),
+            render_count_since_fps_update: 0,
+        }
+    }
+
+    pub fn should_render(&mut self) -> bool {
+        let elapsed = self.last_update.elapsed().as_secs_f32();
+        let target_interval = 1.0 / self.target_fps;
+
+        if elapsed >= target_interval {
+            self.frame_count += 1;
+            self.render_count_since_fps_update += 1;
+            self.last_update = std::time::Instant::now();
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn update_fps(&mut self) {
+        let elapsed_since_fps_update = self.fps_last_update.elapsed().as_secs_f32();
+
+        if elapsed_since_fps_update >= 1.0 {
+            self.fps = self.render_count_since_fps_update as f32 / elapsed_since_fps_update;
+
+            self.render_count_since_fps_update = 0;
+            self.fps_last_update = std::time::Instant::now();
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct Screen {
     pub width: usize,
@@ -110,6 +157,7 @@ pub struct Ui {
     running: bool,
     paused: bool,
     frame_ready: bool,
+    frame_stats: FrameStats,
 }
 
 impl Ui {
@@ -124,10 +172,11 @@ impl Ui {
             mem_search: "".into(),
             prev_mem_search_addr: 0,
             show_about: false,
-            show_debug_panels: false,
+            show_debug_panels: true,
             running: false,
             paused: false,
             frame_ready: false,
+            frame_stats: FrameStats::new(60.0),
         }
     }
 
@@ -436,7 +485,7 @@ impl Ui {
 
         egui::CollapsingHeader::new("Stack").show(ui, |ui| {
             if let Ok(stack) = self.debug_state.stack.read() {
-                egui::ScrollArea::vertical() // FIXME: optimize this
+                egui::ScrollArea::vertical()
                     .max_height(200.0)
                     .show(ui, |ui| {
                         TableBuilder::new(ui)
@@ -785,6 +834,10 @@ impl Ui {
         }
     }
 
+    fn draw_fps(&self, ui: &mut egui::Ui) {
+        ui.label(format!("FPS: {:.1}", self.frame_stats.fps));
+    }
+
     fn draw_log_reader(&self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
             ui.label(egui::RichText::new("Log").strong());
@@ -804,6 +857,7 @@ impl Ui {
 
     fn draw_screen(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         if self.frame_ready
+            && self.frame_stats.should_render()
             && let Ok(ppu) = self.debug_state.ppu.read()
         {
             self.frame_ready = false;
@@ -816,6 +870,9 @@ impl Ui {
                 *dst = *src;
             }
         }
+
+        self.frame_stats.update_fps();
+
         self.screen.update_texture(ctx, ui);
     }
 
@@ -849,6 +906,8 @@ impl Ui {
                     .show(ctx, |ui| {
                         ui.vertical(|ui| {
                             self.draw_rom_details(ui);
+                            ui.separator();
+                            self.draw_fps(ui);
                         });
                     });
                 egui::TopBottomPanel::bottom("bottom_panel")
