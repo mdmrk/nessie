@@ -15,4 +15,8 @@ pub struct Args {
     /// enable profiling
     #[argh(switch)]
     pub profiling: bool,
+
+    /// enable logging
+    #[argh(short = 'l', switch)]
+    pub log: bool,
 }

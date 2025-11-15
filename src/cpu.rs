@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 use bitflags::bitflags;
 use phf::phf_map;
 
-use crate::{bus::Bus, ppu::Ppu};
+use crate::{args::Args, bus::Bus, ppu::Ppu};
 
 const MAX_LOG_SIZE: usize = 3000;
 
@@ -455,10 +455,29 @@ impl Cpu {
         OPCODES.get(&opcode)
     }
 
-    fn execute(&mut self, bus: &mut Bus, ppu: &mut Ppu, op: &Op, opcode: u8) {
+    fn execute(&mut self, bus: &mut Bus, ppu: &mut Ppu, op: &Op, opcode: u8, args: &Args) {
         let operand_bytes = op.mode.operand_bytes();
         let operands = bus.read(self.pc + 1, operand_bytes as u16);
 
+        if args.log {
+            self.log(ppu, opcode, op, &operands);
+        }
+
+        self.pc += 1 + operand_bytes as u16;
+        let extra_cycles = (op.execute)(self, bus, ppu, op.mode, &operands);
+        let total_cycles = op.base_cycles + extra_cycles;
+        self.cycle_count += total_cycles as usize;
+
+        ppu.step(bus.cart.as_mut().unwrap().mapper.as_mut(), total_cycles);
+
+        let nmi_current_state = ppu.check_nmi();
+        if nmi_current_state && !self.nmi_previous_state {
+            self.nmi_pending = true;
+        }
+        self.nmi_previous_state = nmi_current_state;
+    }
+
+    fn log(&mut self, ppu: &Ppu, opcode: u8, op: &Op, operands: &[u8]) {
         let step_str = format!(
             "{:04X}  {:02X} {:6}{}{} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:{:3},{:3} CYC:{}\n",
             self.pc,
@@ -479,23 +498,16 @@ impl Cpu {
             ppu.dot,
             self.cycle_count
         );
-        self.append_to_log(&step_str);
-
-        self.pc += 1 + operand_bytes as u16;
-        let extra_cycles = (op.execute)(self, bus, ppu, op.mode, &operands);
-        let total_cycles = op.base_cycles + extra_cycles;
-        self.cycle_count += total_cycles as usize;
-
-        ppu.step(bus.cart.as_mut().unwrap().mapper.as_mut(), total_cycles);
-
-        let nmi_current_state = ppu.check_nmi();
-        if nmi_current_state && !self.nmi_previous_state {
-            self.nmi_pending = true;
+        for c in step_str.chars() {
+            self.log.push_back(c);
         }
-        self.nmi_previous_state = nmi_current_state;
+
+        while self.log.len() > MAX_LOG_SIZE {
+            self.log.pop_front();
+        }
     }
 
-    pub fn step(&mut self, bus: &mut Bus, ppu: &mut Ppu) -> Result<(), String> {
+    pub fn step(&mut self, bus: &mut Bus, ppu: &mut Ppu, args: &Args) -> Result<(), String> {
         if self.nmi_pending {
             self.handle_nmi(bus, ppu);
             self.nmi_pending = false;
@@ -510,7 +522,7 @@ impl Cpu {
 
             match op {
                 Some(op) => {
-                    self.execute(bus, ppu, op, opcode);
+                    self.execute(bus, ppu, op, opcode, args);
                     Ok(())
                 }
                 None => Err(format!("Unknown opcode: 0x{:02X}", opcode)),
@@ -556,16 +568,6 @@ impl Cpu {
         let cycles: u8 = 7;
         self.cycle_count += cycles as usize;
         ppu.step(bus.cart.as_mut().unwrap().mapper.as_mut(), cycles);
-    }
-
-    fn append_to_log(&mut self, message: &str) {
-        for c in message.chars() {
-            self.log.push_back(c);
-        }
-
-        while self.log.len() > MAX_LOG_SIZE {
-            self.log.pop_front();
-        }
     }
 
     fn update_nz(&mut self, value: u8) {

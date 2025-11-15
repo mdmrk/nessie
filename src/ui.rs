@@ -144,9 +144,9 @@ pub struct Ui {
     screen: Screen,
     command_tx: Option<mpsc::Sender<Command>>,
     event_rx: Option<mpsc::Receiver<Event>>,
-    pub debug_state: Arc<DebugState>,
     args: Args,
     emu_thread_handle: Option<JoinHandle<()>>,
+    pub debug_state: Arc<DebugState>,
 
     mem_search: String,
     prev_mem_search_addr: usize,
@@ -909,8 +909,10 @@ impl Ui {
                     .show(ctx, |ui| {
                         ui.horizontal_top(|ui| {
                             self.draw_memory_viewer(ui);
-                            ui.separator();
-                            self.draw_log_reader(ui);
+                            if self.args.log {
+                                ui.separator();
+                                self.draw_log_reader(ui);
+                            }
                         });
                     });
             }
