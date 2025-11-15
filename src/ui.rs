@@ -7,6 +7,7 @@ use std::{
     path::Path,
     sync::{Arc, mpsc},
     thread::{self, JoinHandle},
+    time::{Duration, Instant},
 };
 
 use crate::{
@@ -49,48 +50,56 @@ macro_rules! make_rows {
 }
 
 pub struct FrameStats {
-    last_update: std::time::Instant,
+    last_update: Instant,
     frame_count: u64,
     fps: f32,
-    target_fps: f32,
-    fps_last_update: std::time::Instant,
+    target_interval: Duration,
+    fps_last_update: Instant,
     render_count_since_fps_update: u64,
 }
 
 impl FrameStats {
     pub fn new(target_fps: f32) -> Self {
+        let target_interval_secs = 1.0 / target_fps;
+        let target_interval = Duration::from_secs_f32(target_interval_secs);
+        let now = Instant::now();
+
         Self {
-            last_update: std::time::Instant::now(),
+            last_update: now,
             frame_count: 0,
             fps: 0.0,
-            target_fps,
-            fps_last_update: std::time::Instant::now(),
+            target_interval,
+            fps_last_update: now,
             render_count_since_fps_update: 0,
         }
     }
 
     pub fn should_render(&mut self) -> bool {
-        let elapsed = self.last_update.elapsed().as_secs_f32();
-        let target_interval = 1.0 / self.target_fps;
+        let next_update_time = self.last_update.checked_add(self.target_interval);
 
-        if elapsed >= target_interval {
-            self.frame_count += 1;
-            self.render_count_since_fps_update += 1;
-            self.last_update = std::time::Instant::now();
-            true
-        } else {
-            false
+        if let Some(next_update) = next_update_time {
+            let now = Instant::now();
+            if now >= next_update {
+                self.frame_count += 1;
+                self.render_count_since_fps_update += 1;
+                self.last_update = now;
+                return true;
+            }
         }
+        false
     }
 
     pub fn update_fps(&mut self) {
-        let elapsed_since_fps_update = self.fps_last_update.elapsed().as_secs_f32();
+        let elapsed_duration = self.fps_last_update.elapsed();
+        let one_second = Duration::from_secs(1);
 
-        if elapsed_since_fps_update >= 1.0 {
-            self.fps = self.render_count_since_fps_update as f32 / elapsed_since_fps_update;
+        if elapsed_duration >= one_second {
+            let elapsed_secs = elapsed_duration.as_secs_f32();
+
+            self.fps = self.render_count_since_fps_update as f32 / elapsed_secs;
 
             self.render_count_since_fps_update = 0;
-            self.fps_last_update = std::time::Instant::now();
+            self.fps_last_update = Instant::now();
         }
     }
 }
