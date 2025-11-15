@@ -14,6 +14,14 @@ pub struct DebugState {
     pub stack: RwLock<[u8; 0x100]>,
 }
 
+macro_rules! profile {
+    ($name:expr) => {
+        #[cfg(debug_assertions)]
+        puffin::profile_scope!($name);
+    };
+}
+pub(crate) use profile;
+
 impl Default for DebugState {
     fn default() -> Self {
         Self {
@@ -37,9 +45,7 @@ impl DebugState {
         }
 
         if let Ok(mut ppu) = self.ppu.write() {
-            let mut ppu_clone = emu.ppu.clone();
-            ppu_clone.screen = Vec::new();
-            *ppu = ppu_clone;
+            *ppu = emu.ppu.clone();
         }
 
         if let Ok(mut cart_header) = self.cart_header.write() {

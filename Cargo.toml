@@ -15,6 +15,8 @@ image = { version = "0.25.8", default-features = false, features = ["png"] }
 log = "0.4.28"
 modular-bitfield = "0.13.0"
 phf = { version = "0.13.1", features = ["macros"] }
+puffin = "0.19.1"
+puffin_http = "0.16.1"
 rfd = "0.15.4"
 
 [profile.release]

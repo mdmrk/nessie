@@ -69,6 +69,8 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        #[cfg(debug_assertions)]
+        puffin::GlobalProfiler::lock().new_frame();
         self.listen_shortcuts(ctx, frame);
         self.ui.handle_emu_events(ctx, frame);
         self.ui.draw(ctx, frame);

@@ -3,6 +3,8 @@ use std::sync::LazyLock;
 use egui::Color32;
 use modular_bitfield::prelude::*;
 
+use crate::debug::profile;
+
 // PPU Control Register ($2000)
 #[bitfield(bytes = 1)]
 #[derive(Debug, Clone, Default, Copy)]
@@ -188,6 +190,7 @@ impl Ppu {
     }
 
     pub fn step(&mut self, mapper: &mut dyn crate::mapper::Mapper, cpu_cycles: u8) {
+        profile!("Tick");
         for _ in 0..(cpu_cycles * 3) {
             self.tick(mapper);
         }

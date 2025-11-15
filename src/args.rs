@@ -7,7 +7,12 @@ pub struct Args {
     #[argh(positional)]
     pub rom: Option<String>,
 
-    /// start in paused state
+    /// start paused
     #[argh(short = 'p', switch)]
     pub pause: bool,
+
+    #[cfg(debug_assertions)]
+    /// enable profiling
+    #[argh(switch)]
+    pub profiling: bool,
 }
