@@ -405,8 +405,8 @@ impl Ppu {
                 if is_sprite_0 && x < 255 {
                     self.status.set_sprite_0_hit(true);
                 }
-
                 let sprite = self.sprites.iter().find(|s| s.index == sp_index).unwrap();
+
                 if sprite.priority() {
                     bg_palette_addr_offset
                 } else {
@@ -514,14 +514,9 @@ impl Ppu {
 
         if addr < 0x4000 {
             let palette_addr = ((addr - 0x3F00) % 32) as usize;
-            let adjusted_addr = match palette_addr {
-                0x10 => 0x00,
-                0x14 => 0x04,
-                0x18 => 0x08,
-                0x1C => 0x0C,
-                _ => palette_addr,
-            };
-            return self.palette[adjusted_addr] & 0x3F;
+            let index = palette_addr;
+            let data = self.palette[index] & 0x3F;
+            return data | (self.read_buffer & 0xC0);
         }
 
         0
@@ -596,22 +591,13 @@ impl Ppu {
     }
 
     pub fn read_status(&mut self) -> u8 {
-        let mut status_byte = self.status.bytes[0];
-
-        if self.scanline == 241 {
-            if self.dot == 0 {
-                self.suppress_vbl = true;
-                self.suppress_nmi = true;
-            } else if self.dot == 1 {
-                self.suppress_nmi = true;
-                self.suppress_vbl = true;
-                status_byte |= 0b1000_0000;
-            } else if self.dot == 2 {
-                self.nmi_pending = false;
-            }
-        }
+        let status_byte = self.status.bytes[0];
         self.status.set_vblank(false);
+        self.nmi_pending = false;
         self.w = false;
+        if self.scanline == 241 && (self.dot == 1 || self.dot == 2) {
+            self.suppress_nmi = true;
+        }
 
         status_byte
     }
@@ -666,8 +652,9 @@ impl Ppu {
             self.read_buffer = self.read_vram(addr, mapper);
             data
         } else {
+            let data = self.read_vram(addr, mapper);
             self.read_buffer = self.read_vram(addr & 0x2FFF, mapper);
-            self.read_vram(addr, mapper)
+            data
         }
     }
 
