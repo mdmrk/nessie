@@ -457,13 +457,13 @@ impl Cpu {
 
     fn execute(&mut self, bus: &mut Bus, ppu: &mut Ppu, op: &Op, opcode: u8, args: &Args) {
         let operand_bytes = op.mode.operand_bytes();
-        let operands = bus.read(self.pc + 1, operand_bytes as u16);
+        let operands = bus.read(self.pc.wrapping_add(1), operand_bytes as u16);
 
         if args.log {
             self.log(ppu, opcode, op, &operands);
         }
 
-        self.pc += 1 + operand_bytes as u16;
+        self.pc = self.pc.wrapping_add(1 + operand_bytes as u16);
         let extra_cycles = (op.execute)(self, bus, ppu, op.mode, &operands);
         let total_cycles = op.base_cycles + extra_cycles;
         self.cycle_count += total_cycles as usize;
@@ -525,7 +525,10 @@ impl Cpu {
                     self.execute(bus, ppu, op, opcode, args);
                     Ok(())
                 }
-                None => Err(format!("Unknown opcode: 0x{:02X}", opcode)),
+                None => {
+                    self.pc = self.pc.wrapping_add(1);
+                    Err(format!("Unknown opcode: 0x{:02X}", opcode))
+                }
             }
         }
     }
