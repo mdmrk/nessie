@@ -1,6 +1,8 @@
 use std::{
     fs,
     sync::{Arc, mpsc},
+    thread,
+    time::{Duration, Instant},
 };
 
 use log::{error, info, warn};
@@ -16,6 +18,7 @@ pub enum Command {
     MemoryAddress(usize),
     DumpMemory,
     Update,
+    ControllerInputs(u16),
 }
 
 pub enum Event {
@@ -23,7 +26,7 @@ pub enum Event {
     Paused,
     Resumed,
     Crashed,
-    FrameReady(Arc<Vec<Color32>>),
+    FrameReady(Vec<Color32>),
 }
 
 pub struct Emu {
@@ -107,6 +110,9 @@ pub fn emu_thread(
         emu.pause();
     }
 
+    let frame_duration = Duration::from_secs_f64(1.0 / 60.0);
+    let mut frame_start_time = Instant::now();
+
     loop {
         while let Ok(command) = command_rx.try_recv() {
             match command {
@@ -131,6 +137,10 @@ pub fn emu_thread(
                 Command::Update => {
                     debug_state.update(&mut emu);
                 }
+                Command::ControllerInputs(input) => {
+                    emu.bus.controller1.realtime = (input & 0xFF) as u8;
+                    emu.bus.controller2.realtime = (input >> 8 & 0xFF) as u8;
+                }
             }
         }
 
@@ -142,10 +152,18 @@ pub fn emu_thread(
             }
             if emu.ppu.frame_ready {
                 emu.ppu.frame_ready = false;
-                let frame_arc = Arc::new(emu.ppu.screen.clone());
+                let frame_arc = emu.ppu.screen.clone();
                 emu.send_event(Event::FrameReady(frame_arc));
+
+                let elapsed = frame_start_time.elapsed();
+                if elapsed < frame_duration {
+                    thread::sleep(frame_duration - elapsed);
+                }
+                frame_start_time = Instant::now();
             }
             emu.want_step = false;
+        } else {
+            thread::yield_now();
         }
         if !emu.running {
             break;

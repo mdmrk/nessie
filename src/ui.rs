@@ -1,5 +1,5 @@
 use bytesize::ByteSize;
-use egui::Color32;
+use egui::{Color32, Key};
 use egui_extras::{Column, TableBuilder};
 use log::{error, info};
 use rfd::FileDialog;
@@ -108,7 +108,7 @@ impl FrameStats {
 pub struct Screen {
     pub width: usize,
     pub height: usize,
-    pixels: Arc<Vec<Color32>>,
+    pixels: Vec<Color32>,
     pub texture_handle: Option<egui::TextureHandle>,
 }
 
@@ -116,7 +116,7 @@ impl Screen {
     pub fn new() -> Self {
         let width: usize = 256;
         let height: usize = 240;
-        let pixels = Arc::new(vec![Color32::BLACK; width * height]);
+        let pixels = vec![Color32::BLACK; width * height];
         Self {
             width,
             height,
@@ -126,7 +126,7 @@ impl Screen {
     }
 
     pub fn update_texture(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
-        let image = egui::ColorImage::new([self.width, self.height], (*self.pixels).clone());
+        let image = egui::ColorImage::new([self.width, self.height], self.pixels.clone());
 
         if let Some(texture) = &mut self.texture_handle {
             texture.set(image, egui::TextureOptions::NEAREST);
@@ -149,6 +149,51 @@ impl Screen {
     }
 }
 
+#[derive(Default)]
+pub struct Input {
+    a: bool,
+    b: bool,
+    select: bool,
+    start: bool,
+    up: bool,
+    down: bool,
+    left: bool,
+    right: bool,
+}
+
+impl Input {
+    pub fn as_byte(&self) -> u8 {
+        let mut byte: u8 = 0;
+
+        if self.a {
+            byte |= 1 << 0;
+        }
+        if self.b {
+            byte |= 1 << 1;
+        }
+        if self.select {
+            byte |= 1 << 2;
+        }
+        if self.start {
+            byte |= 1 << 3;
+        }
+        if self.up {
+            byte |= 1 << 4;
+        }
+        if self.down {
+            byte |= 1 << 5;
+        }
+        if self.left {
+            byte |= 1 << 6;
+        }
+        if self.right {
+            byte |= 1 << 7;
+        }
+
+        byte
+    }
+}
+
 pub struct Ui {
     screen: Screen,
     command_tx: Option<mpsc::Sender<Command>>,
@@ -168,7 +213,10 @@ pub struct Ui {
     frame_ready: bool,
     frame_stats: FrameStats,
 
-    pixels_buffer: Option<Arc<Vec<Color32>>>,
+    pixels_buffer: Option<Vec<Color32>>,
+
+    controller1_input: Input,
+    controller2_input: Input,
 }
 
 impl Ui {
@@ -189,7 +237,38 @@ impl Ui {
             frame_ready: false,
             frame_stats: FrameStats::new(60.0),
             pixels_buffer: None,
+            controller1_input: Default::default(),
+            controller2_input: Default::default(),
         }
+    }
+
+    pub fn process_input(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if !ctx.wants_keyboard_input() {
+            ctx.input_mut(|i| {
+                self.controller1_input.a = i.key_down(Key::A);
+                self.controller1_input.b = i.key_down(Key::B);
+                self.controller1_input.start = i.key_down(Key::Z);
+                self.controller1_input.select = i.key_down(Key::N);
+                self.controller1_input.up = i.key_down(Key::ArrowUp);
+                self.controller1_input.down = i.key_down(Key::ArrowDown);
+                self.controller1_input.left = i.key_down(Key::ArrowLeft);
+                self.controller1_input.right = i.key_down(Key::ArrowRight);
+
+                // TODO
+                // self.controller2_input.a = i.key_down(Key::A);
+                // self.controller2_input.b = i.key_down(Key::B);
+                // self.controller2_input.start = i.key_down(Key::Z);
+                // self.controller2_input.select = i.key_down(Key::N);
+                // self.controller2_input.up = i.key_down(Key::ArrowUp);
+                // self.controller2_input.down = i.key_down(Key::ArrowDown);
+                // self.controller2_input.left = i.key_down(Key::ArrowLeft);
+                // self.controller2_input.right = i.key_down(Key::ArrowRight);
+            });
+        }
+        self.send_command(Command::ControllerInputs(
+            (self.controller2_input.as_byte() as u16) << 8
+                | self.controller1_input.as_byte() as u16,
+        ));
     }
 
     fn stop_emu_thread(&mut self) {
@@ -342,6 +421,27 @@ impl Ui {
                 }
             }
         });
+    }
+
+    fn show_input(&self, ui: &mut egui::Ui) {
+        ui.label(egui::RichText::new("Controller").strong());
+        TableBuilder::new(ui)
+            .id_salt("controller")
+            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+            .column(Column::auto())
+            .column(Column::remainder())
+            .body(|mut body| {
+                make_rows!(body,
+                    "A" => format!("{}", self.controller1_input.a),
+                    "B" => format!("{}", self.controller1_input.b),
+                    "Select" => format!("{}", self.controller1_input.select),
+                    "Start" => format!("{}", self.controller1_input.start),
+                    "Up" => format!("{}", self.controller1_input.up),
+                    "Down" => format!("{}", self.controller1_input.down),
+                    "Left" => format!("{}", self.controller1_input.left),
+                    "Right" => format!("{}", self.controller1_input.right),
+                );
+            });
     }
 
     fn draw_memory_viewer(&mut self, ui: &mut egui::Ui) {
@@ -908,6 +1008,8 @@ impl Ui {
                     .show(ctx, |ui| {
                         ui.vertical(|ui| {
                             self.draw_rom_details(ui);
+                            ui.separator();
+                            self.show_input(ui);
                             ui.separator();
                             self.draw_fps(ui);
                         });

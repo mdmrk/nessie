@@ -240,19 +240,22 @@ impl Ppu {
         }
 
         if self.dot >= 1 && self.dot <= 256 {
+            let x = (self.dot - 1) as usize;
+            let fine_x = ((self.x as usize + x) % 8) as u8;
+
             self.render_pixel(mapper);
 
-            if self.mask.rendering_enabled() && self.dot.is_multiple_of(8) {
+            if fine_x == 7 && self.mask.rendering_enabled() {
                 self.increment_coarse_x();
             }
         }
 
-        if self.dot == 256 && self.mask.rendering_enabled() {
-            self.increment_y();
-        }
-
         if self.dot == 257 && self.mask.rendering_enabled() {
             self.copy_horizontal();
+        }
+
+        if self.dot == 256 && self.mask.rendering_enabled() {
+            self.increment_y();
         }
     }
 
@@ -273,6 +276,10 @@ impl Ppu {
         if self.dot == 257 && self.mask.rendering_enabled() {
             self.copy_horizontal();
         }
+
+        if self.dot == 256 && self.mask.rendering_enabled() {
+            self.increment_y();
+        }
     }
 
     fn get_bg_pixel(&mut self, mapper: &mut dyn crate::mapper::Mapper) -> (u8, u8) {
@@ -285,8 +292,7 @@ impl Ppu {
             return (0, 0);
         }
 
-        let fine_x = ((self.x as u16 + x as u16) % 8) as u8;
-        let fine_y = (self.v >> 12) & 0x07;
+        let fine_x = ((self.x as usize + x) % 8) as u8;
 
         let tile_addr = 0x2000 | (self.v & 0x0FFF);
         let tile_id = self.read_vram(tile_addr, mapper);
@@ -303,6 +309,7 @@ impl Ppu {
         } else {
             0x0000
         };
+        let fine_y = (self.v >> 12) & 0x07;
         let pattern_addr = pattern_table | ((tile_id as u16) << 4) | fine_y;
 
         let pattern_lo = self.read_vram(pattern_addr, mapper);
@@ -349,7 +356,7 @@ impl Ppu {
                 }
 
                 let mut tile_index = sprite.tile_index as u16;
-                let mut pattern_table = 0x0000;
+                let pattern_table;
 
                 if self.sprite_height == 16 {
                     pattern_table = (tile_index & 0x01) << 12;
@@ -669,7 +676,7 @@ impl Ppu {
         self.v = self.v.wrapping_add(increment);
     }
 
-    pub fn write_oam_dma(&mut self, data: &[u8; 256]) {
+    pub fn write_oam_dma(&mut self, data: &[u8]) {
         for (i, &byte) in data.iter().enumerate() {
             self.oam[(self.oam_addr.wrapping_add(i as u8)) as usize] = byte;
         }
