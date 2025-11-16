@@ -14,10 +14,10 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(args: &Args) -> Self {
+    pub fn new(args: Args) -> Self {
         let debug_state = Arc::new(DebugState::new());
 
-        let mut ui = Ui::new(debug_state, args);
+        let mut ui = Ui::new(debug_state, args.clone());
         if let Some(rom) = &args.rom {
             ui.spawn_emu_thread(rom);
         }
@@ -71,7 +71,7 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        #[cfg(debug_assertions)]
+        #[cfg(all(debug_assertions, not(target_arch = "wasm32")))]
         puffin::GlobalProfiler::lock().new_frame();
         self.listen_shortcuts(ctx, frame);
         self.ui.process_input(ctx, frame);

@@ -2,6 +2,7 @@ use bytesize::ByteSize;
 use egui::{Color32, Key};
 use egui_extras::{Column, TableBuilder};
 use log::{error, info};
+#[cfg(not(target_arch = "wasm32"))]
 use rfd::FileDialog;
 use std::{
     path::Path,
@@ -220,13 +221,13 @@ pub struct Ui {
 }
 
 impl Ui {
-    pub fn new(debug_state: Arc<DebugState>, args: &Args) -> Self {
+    pub fn new(debug_state: Arc<DebugState>, args: Args) -> Self {
         Self {
             screen: Screen::new(),
             command_tx: None,
             event_rx: None,
             debug_state,
-            args: args.clone(),
+            args,
             emu_thread_handle: None,
             mem_search: "".into(),
             prev_mem_search_addr: 0,
@@ -360,6 +361,8 @@ impl Ui {
     fn draw_menubar(&mut self, ui: &mut egui::Ui) {
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button("File", |ui| {
+                #[cfg(not(target_arch = "wasm32"))]
+                // TODO: implement wasm file dialog (https://github.com/PolyMeilex/rfd/blob/master/examples/web-trunk/src/main.rs)
                 if ui.button("📥 Select rom...").clicked()
                     && let Some(rom) = FileDialog::new()
                         .add_filter("NES rom", &["nes"])

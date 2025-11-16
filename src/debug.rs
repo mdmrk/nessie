@@ -16,7 +16,7 @@ pub struct DebugState {
 
 macro_rules! profile {
     ($name:expr) => {
-        #[cfg(debug_assertions)]
+        #[cfg(all(debug_assertions, not(target_arch = "wasm32")))]
         puffin::profile_scope!($name);
     };
 }
