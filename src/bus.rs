@@ -63,7 +63,7 @@ impl Bus {
     fn read_cartridge(&self, addr: u16) -> u8 {
         self.cart
             .as_ref()
-            .map(|c| c.mapper.read_prg(addr))
+            .and_then(|c| c.mapper.read_prg(addr))
             .unwrap_or(self.open_bus)
     }
 
@@ -103,8 +103,8 @@ impl Bus {
             0x4020..=0xFFFF => self
                 .cart
                 .as_ref()
-                .map(|c| c.mapper.read_prg(addr))
-                .unwrap_or(0),
+                .and_then(|c| c.mapper.read_prg(addr))
+                .unwrap_or(self.open_bus),
             _ => 0,
         }
     }

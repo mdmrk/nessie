@@ -77,7 +77,7 @@ impl MapperIcon {
 }
 
 pub trait Mapper {
-    fn read_prg(&self, addr: u16) -> u8;
+    fn read_prg(&self, addr: u16) -> Option<u8>;
     fn write_prg(&mut self, addr: u16, value: u8);
     fn read_chr(&self, addr: u16) -> u8;
     fn write_chr(&mut self, addr: u16, value: u8);
@@ -118,11 +118,11 @@ impl Mapper0 {
 }
 
 impl Mapper for Mapper0 {
-    fn read_prg(&self, addr: u16) -> u8 {
+    fn read_prg(&self, addr: u16) -> Option<u8> {
         match addr {
-            0x6000..=0x7FFF => 0,
-            0x8000..=0xFFFF => self.prg_rom[(addr as usize - 0x8000) % self.prg_rom.len()],
-            _ => 0,
+            0x6000..=0x7FFF => None,
+            0x8000..=0xFFFF => Some(self.prg_rom[(addr as usize - 0x8000) % self.prg_rom.len()]),
+            _ => None,
         }
     }
 
@@ -182,9 +182,9 @@ impl Mapper1 {
 }
 
 impl Mapper for Mapper1 {
-    fn read_prg(&self, addr: u16) -> u8 {
+    fn read_prg(&self, addr: u16) -> Option<u8> {
         match addr {
-            0x6000..=0x7FFF => self.prg_ram[(addr - 0x6000) as usize],
+            0x6000..=0x7FFF => Some(self.prg_ram[(addr - 0x6000) as usize]),
             0x8000..=0xFFFF => {
                 let prg_mode = (self.control >> 2) & 0x03;
                 let prg_bank = self.prg_bank & 0x0F;
@@ -216,9 +216,9 @@ impl Mapper for Mapper1 {
                 };
 
                 let offset = ((addr & 0x3FFF) as usize) + (bank * 0x4000);
-                self.prg_rom[offset % self.prg_rom.len()]
+                Some(self.prg_rom[offset % self.prg_rom.len()])
             }
-            _ => 0,
+            _ => None,
         }
     }
 
