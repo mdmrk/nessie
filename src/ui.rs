@@ -200,8 +200,10 @@ pub struct Ui {
     command_tx: Option<mpsc::Sender<Command>>,
     event_rx: Option<mpsc::Receiver<Event>>,
     args: Args,
-    emu_thread_handle: Option<JoinHandle<()>>,
     pub debug_state: Arc<DebugState>,
+
+    emu_thread_handle: Option<JoinHandle<()>>,
+    emu_error_msg: Option<String>,
 
     mem_search: String,
     prev_mem_search_addr: usize,
@@ -226,9 +228,10 @@ impl Ui {
             screen: Screen::new(),
             command_tx: None,
             event_rx: None,
-            debug_state,
             args,
+            debug_state,
             emu_thread_handle: None,
+            emu_error_msg: None,
             mem_search: "".into(),
             prev_mem_search_addr: 0,
             show_about: false,
@@ -303,6 +306,8 @@ impl Ui {
         self.event_rx = Some(event_rx);
         let event_tx_clone = event_tx.clone();
 
+        self.emu_error_msg = None;
+
         let handle = thread::Builder::new()
             .name("emu_thread".to_string())
             .spawn(move || {
@@ -312,7 +317,7 @@ impl Ui {
 
                 if let Err(e) = result {
                     error!("Emulator thread panicked: {:?}", e);
-                    _ = event_tx_clone.send(Event::Crashed);
+                    _ = event_tx_clone.send(Event::Crashed(format!("{:?}", e)));
                 }
             })
             .expect("Failed to spawn emu thread");
@@ -981,8 +986,11 @@ impl Ui {
         self.screen.update_texture(ctx, ui);
     }
 
-    fn draw_start_screen(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
-        ui.label("Load a rom");
+    fn draw_start_screen(&self, _ctx: &egui::Context, ui: &mut egui::Ui) {
+        match &self.emu_error_msg {
+            Some(msg) => ui.colored_label(Color32::RED, msg),
+            None => ui.label("Load a rom"),
+        };
     }
 
     pub fn draw(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -1060,7 +1068,8 @@ impl Ui {
                         self.running = false;
                         self.paused = false;
                     }
-                    Event::Crashed => {
+                    Event::Crashed(e) => {
+                        self.emu_error_msg = Some(e);
                         self.running = false;
                         self.paused = false;
                     }

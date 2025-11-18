@@ -25,7 +25,7 @@ pub enum Event {
     Stopped,
     Paused,
     Resumed,
-    Crashed,
+    Crashed(String),
     FrameReady(Vec<Color32>),
 }
 
