@@ -1,9 +1,9 @@
-var cacheName = 'egui-template-pwa';
+var cacheName = 'nessie-pwa';
 var filesToCache = [
   './',
   './index.html',
-  './eframe_template.js',
-  './eframe_template_bg.wasm',
+  './nessie.js',
+  './nessie_bg.wasm',
 ];
 
 self.addEventListener('install', function (e) {
