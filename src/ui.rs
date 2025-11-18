@@ -967,8 +967,10 @@ impl Ui {
                 .show(ui, |ui| {
                     if let Ok(cpu) = self.debug_state.cpu.read() {
                         ui.label(
-                            egui::RichText::new(cpu.log.iter().collect::<String>())
-                                .text_style(egui::TextStyle::Monospace),
+                            egui::RichText::new(
+                                cpu.log.as_ref().unwrap().iter().collect::<String>(),
+                            )
+                            .text_style(egui::TextStyle::Monospace),
                         );
                     }
                 });

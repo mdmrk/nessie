@@ -12,19 +12,23 @@ pub struct Controller {
 
 #[derive(Clone)]
 pub struct Bus {
-    mem: [u8; 0x10000],
+    mem: [u8; 0x800],
+    pub ppu: Ppu,
     pub cart: Option<Cart>,
     pub controller1: Controller,
     pub controller2: Controller,
+    pub open_bus: u8,
 }
 
 impl Default for Bus {
     fn default() -> Self {
         Self {
-            mem: [0; 0x10000],
+            mem: [0; 0x800],
+            ppu: Default::default(),
             cart: None,
             controller1: Default::default(),
             controller2: Default::default(), // TODO: process controller 2
+            open_bus: 0,
         }
     }
 }
@@ -34,18 +38,33 @@ impl Bus {
         Default::default()
     }
 
+    pub fn insert_cartridge(&mut self, cart: Cart) {
+        self.cart = Some(cart);
+    }
+
+    fn read_mem(&self, addr: u16) -> u8 {
+        self.mem[(addr & 0x7FF) as usize]
+    }
+
+    fn read_ppu(&mut self, addr: u16) -> u8 {
+        let reg = addr & 0x07;
+        match reg {
+            2 => self.ppu.read_status(),
+            4 => self.ppu.read_oam_data(),
+            7 => self
+                .cart
+                .as_mut()
+                .map(|c| self.ppu.read_data(&mut *c.mapper))
+                .unwrap_or(0),
+            _ => self.open_bus,
+        }
+    }
+
     fn read_cartridge(&self, addr: u16) -> u8 {
         self.cart
             .as_ref()
             .map(|c| c.mapper.read_prg(addr))
-            .unwrap_or(0)
-    }
-
-    pub fn read_byte(&self, addr: usize) -> u8 {
-        match addr {
-            0x6000..=0xFFFF => self.read_cartridge(addr as u16),
-            _ => self.mem[addr],
-        }
+            .unwrap_or(self.open_bus)
     }
 
     fn read_controller(&mut self) -> u8 {
@@ -58,35 +77,72 @@ impl Bus {
         } else {
             1
         };
-        data | 0x40
+        0x40 | data
     }
 
-    pub fn cpu_read_byte(&mut self, ppu: &mut Ppu, addr: usize) -> u8 {
-        match addr {
-            0x2000..=0x3FFF => {
-                let reg = (addr - 0x2000) % 8;
-                match reg {
-                    2 => ppu.read_status(),
-                    4 => ppu.read_oam_data(),
-                    7 => self
-                        .cart
-                        .as_mut()
-                        .map(|c| ppu.read_data(&mut *c.mapper))
-                        .unwrap_or(0),
-                    _ => self.mem[addr],
-                }
-            }
+    pub fn read_byte_mut(&mut self, addr: u16) -> u8 {
+        let value = match addr {
+            0x0000..=0x1FFF => self.read_mem(addr),
+            0x2000..=0x3FFF => self.read_ppu(addr),
+            0x4014 => self.open_bus,
+            0x4015 => 0, // TODO: APU
             0x4016 => self.read_controller(),
-            0x4017 => 0x40,
-            0x6000..=0xFFFF => self.read_cartridge(addr as u16),
-            _ => self.mem[addr],
+            0x4017 => 0,
+            0x4000..=0x401F => self.open_bus,
+            0x4020..=0xFFFF => self.read_cartridge(addr),
+        };
+
+        self.open_bus = value;
+        value
+    }
+
+    pub fn read_byte(&self, addr: u16) -> u8 {
+        match addr {
+            0x0000..=0x1FFF => self.read_mem(addr),
+            0x2000..=0x3FFF => 0,
+            0x4020..=0xFFFF => self
+                .cart
+                .as_ref()
+                .map(|c| c.mapper.read_prg(addr))
+                .unwrap_or(0),
+            _ => 0,
         }
     }
 
-    pub fn read(&self, addr: u16, bytes: u16) -> Vec<u8> {
-        (0..bytes)
-            .map(|i| self.read_byte((addr + i) as usize))
-            .collect()
+    pub fn read_range_mut(&mut self, addr: u16, bytes: u16) -> Vec<u8> {
+        if bytes == 0 {
+            return vec![];
+        }
+        let values: Vec<u8> = (0..bytes).map(|i| self.read_byte(addr + i)).collect();
+        self.open_bus = values.last().copied().unwrap();
+        values
+    }
+
+    pub fn read_range(&self, addr: u16, bytes: u16) -> Vec<u8> {
+        (0..bytes).map(|i| self.read_byte(addr + i)).collect()
+    }
+
+    fn write_mem(&mut self, addr: u16, value: u8) {
+        self.mem[(addr & 0x7FF) as usize] = value;
+    }
+
+    fn write_ppu(&mut self, addr: u16, value: u8) {
+        let reg = addr & 0x07;
+        match reg {
+            0 => self.ppu.write_ctrl(value),
+            1 => self.ppu.write_mask(value),
+            2 => warn!("Invalid write request to PPUSTATUS"),
+            3 => self.ppu.write_oam_addr(value),
+            4 => self.ppu.write_oam_data(value),
+            5 => self.ppu.write_scroll(value),
+            6 => self.ppu.write_addr(value),
+            7 => {
+                if let Some(cart) = &mut self.cart {
+                    self.ppu.write_data(value, &mut *cart.mapper);
+                }
+            }
+            _ => unreachable!(),
+        }
     }
 
     fn write_controller(&mut self, value: u8) {
@@ -102,65 +158,35 @@ impl Bus {
         self.controller1.strobe = new_strobe;
     }
 
-    pub fn cpu_write_byte(&mut self, ppu: &mut Ppu, addr: usize, value: u8) {
-        if addr < 0x6000 {
-            self.mem[addr] = value;
+    fn write_dma(&mut self, value: u8) {
+        let page = (value as u16) << 8;
+        let mut data = [0u8; 256];
+        for i in 0..256 {
+            data[i as usize] = self.read_byte(page + i);
         }
+        self.ppu.write_oam_dma(&data);
+    }
+
+    pub fn write_byte(&mut self, addr: u16, value: u8) {
+        self.open_bus = value;
 
         match addr {
-            0x2000..=0x3FFF => {
-                let reg = (addr - 0x2000) % 8;
-                match reg {
-                    0 => ppu.write_ctrl(value),
-                    1 => ppu.write_mask(value),
-                    2 => warn!("Invalid write request to PPUSTATUS"),
-                    3 => ppu.write_oam_addr(value),
-                    4 => ppu.write_oam_data(value),
-                    5 => ppu.write_scroll(value),
-                    6 => ppu.write_addr(value),
-                    7 => {
-                        if let Some(cart) = &mut self.cart {
-                            ppu.write_data(value, &mut *cart.mapper);
-                        }
-                    }
-                    _ => unreachable!(),
-                }
-            }
-            0x4014 => {
-                let data: Vec<u8> = (0..256)
-                    .map(|i| self.read_byte((value as usize) * 0x100 + i))
-                    .collect();
-                ppu.write_oam_dma(&data);
-            }
+            0x0000..=0x1FFF => self.write_mem(addr, value),
+            0x2000..=0x3FFF => self.write_ppu(addr, value),
+            0x4014 => self.write_dma(value),
             0x4016 => self.write_controller(value),
-            0x6000..=0xFFFF => {
+            0x4000..=0x401F => {} // TODO: APU
+            0x4020..=0xFFFF => {
                 if let Some(cart) = &mut self.cart {
-                    cart.mapper.write_prg(addr as u16, value);
+                    cart.mapper.write_prg(addr, value);
                 }
             }
-            _ => {}
         }
     }
 
-    pub fn write_byte(&mut self, addr: usize, value: u8) {
-        match addr {
-            0x4016 => self.write_controller(value),
-            0x6000..=0xFFFF => {
-                if let Some(cart) = &mut self.cart {
-                    cart.mapper.write_prg(addr as u16, value);
-                }
-            }
-            _ => self.mem[addr] = value,
-        }
-    }
-
-    pub fn write(&mut self, addr: usize, value: &[u8]) {
+    pub fn write_range(&mut self, addr: u16, value: &[u8]) {
         for (i, &byte) in value.iter().enumerate() {
-            self.write_byte(addr + i, byte);
+            self.write_byte(addr + i as u16, byte);
         }
-    }
-
-    pub fn insert_cartridge(&mut self, cart: Cart) {
-        self.cart = Some(cart);
     }
 }

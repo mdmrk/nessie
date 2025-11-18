@@ -7,7 +7,7 @@ use std::{
 
 use log::{error, info, warn};
 
-use crate::{args::Args, bus::Bus, cart::Cart, cpu::Cpu, debug::DebugState, ppu::Ppu};
+use crate::{args::Args, bus::Bus, cart::Cart, cpu::Cpu, debug::DebugState};
 use egui::Color32;
 
 pub enum Command {
@@ -31,7 +31,6 @@ pub enum Event {
 
 pub struct Emu {
     pub cpu: Cpu,
-    pub ppu: Ppu,
     pub bus: Bus,
     pub running: bool,
     pub paused: bool,
@@ -41,10 +40,9 @@ pub struct Emu {
 }
 
 impl Emu {
-    pub fn new(event_tx: mpsc::Sender<Event>) -> Self {
+    pub fn new(event_tx: mpsc::Sender<Event>, enable_logging: bool) -> Self {
         Self {
-            cpu: Cpu::new(),
-            ppu: Ppu::new(),
+            cpu: Cpu::new(enable_logging),
             bus: Bus::new(),
             running: true,
             paused: false,
@@ -64,6 +62,7 @@ impl Emu {
         if let Some(cart) = Cart::insert(rom_path) {
             self.bus.insert_cartridge(cart);
             info!("Rom \"{}\" loaded", rom_path);
+            self.bus.ppu.reset();
             self.cpu.reset(&mut self.bus);
         }
     }
@@ -87,7 +86,7 @@ impl Emu {
         let mut mem: [u8; 0x10000] = [0; 0x10000];
 
         for (i, n) in mem.iter_mut().enumerate() {
-            *n = self.bus.read_byte(i);
+            *n = self.bus.read_byte(i as u16);
         }
         let mut path = std::env::current_exe().unwrap();
         path.set_file_name("dump.txt");
@@ -103,7 +102,7 @@ pub fn emu_thread(
     args: &Args,
     rom: &str,
 ) {
-    let mut emu = Emu::new(event_tx);
+    let mut emu = Emu::new(event_tx, args.log);
 
     emu.load_rom(rom);
     if args.pause {
@@ -146,13 +145,13 @@ pub fn emu_thread(
 
         let should_run = !emu.paused || emu.want_step;
         if should_run {
-            if let Err(e) = emu.cpu.step(&mut emu.bus, &mut emu.ppu, args) {
+            if let Err(e) = emu.cpu.step(&mut emu.bus) {
                 warn!("{e}. Emulator will be paused");
                 emu.pause();
             }
-            if emu.ppu.frame_ready {
-                emu.ppu.frame_ready = false;
-                let frame_arc = emu.ppu.screen.clone();
+            if emu.bus.ppu.frame_ready {
+                emu.bus.ppu.frame_ready = false;
+                let frame_arc = emu.bus.ppu.screen.clone();
                 emu.send_event(Event::FrameReady(frame_arc));
 
                 let elapsed = frame_start_time.elapsed();
