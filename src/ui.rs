@@ -5,7 +5,7 @@ use log::{error, info};
 #[cfg(not(target_arch = "wasm32"))]
 use rfd::FileDialog;
 use std::{
-    path::Path,
+    path::{Path, PathBuf},
     sync::{Arc, mpsc},
     thread::{self, JoinHandle},
     time::{Duration, Instant},
@@ -1094,9 +1094,9 @@ impl Ui {
                 vec![r, g, b]
             })
             .collect();
-        let path = Path::new("screenshot.png");
+        let path = get_unique_path();
         match image::save_buffer_with_format(
-            path,
+            path.clone(),
             &frame_data,
             self.screen.width as u32,
             self.screen.height as u32,
@@ -1113,4 +1113,20 @@ impl Drop for Ui {
     fn drop(&mut self) {
         self.stop_emu_thread();
     }
+}
+
+fn get_unique_path() -> PathBuf {
+    let directory = ".";
+    let filename = "screenshot";
+    let extension = "png";
+    let mut count = 0;
+    let mut path = Path::new(directory).join(format!("{}.{}", filename, extension));
+
+    while path.exists() {
+        count += 1;
+        let new_filename = format!("{}_{}.{}", filename, count, extension);
+        path = Path::new(directory).join(new_filename);
+    }
+
+    path
 }
