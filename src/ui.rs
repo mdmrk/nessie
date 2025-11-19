@@ -1045,6 +1045,7 @@ impl Ui {
                     self.draw_screen(ctx, ui);
                 });
             });
+            self.send_command(Command::Update);
         } else {
             egui::CentralPanel::default().show(ctx, |ui| {
                 ui.centered_and_justified(|ui| {
@@ -1052,7 +1053,6 @@ impl Ui {
                 });
             });
         }
-        self.send_command(Command::Update);
         ctx.request_repaint();
     }
 
