@@ -170,6 +170,7 @@ pub enum OpMnemonic {
     SED,
     CLV,
     NOP,
+    SLO,
 }
 
 impl fmt::Display for OpMnemonic {
@@ -383,6 +384,13 @@ static OPCODES: phf::Map<u8, Op> = phf_map! {
     0x7Cu8 |
     0xDCu8 |
     0xFCu8 => op!(OpMnemonic::NOP, AddrMode::AbsoluteX  , 4, Cpu::inop, true),
+    0x03u8 => op!(OpMnemonic::SLO, AddrMode::IndirectX  , 8, Cpu::slo,  true),
+    0x07u8 => op!(OpMnemonic::SLO, AddrMode::ZeroPage   , 5, Cpu::slo,  true),
+    0x0Fu8 => op!(OpMnemonic::SLO, AddrMode::Absolute   , 6, Cpu::slo,  true),
+    0x13u8 => op!(OpMnemonic::SLO, AddrMode::IndirectY  , 8, Cpu::slo,  true),
+    0x17u8 => op!(OpMnemonic::SLO, AddrMode::ZeroPageX  , 6, Cpu::slo,  true),
+    0x1Bu8 => op!(OpMnemonic::SLO, AddrMode::AbsoluteY  , 7, Cpu::slo,  true),
+    0x1Fu8 => op!(OpMnemonic::SLO, AddrMode::AbsoluteX  , 7, Cpu::slo,  true),
 };
 
 bitflags! {
@@ -1088,6 +1096,18 @@ impl Cpu {
 
     fn inop(cpu: &mut Cpu, bus: &mut Bus, mode: AddrMode, operands: &[u8]) -> u8 {
         let (_, page_crossed) = cpu.read_operand(bus, mode, operands);
+        if page_crossed { 1 } else { 0 }
+    }
+
+    fn slo(cpu: &mut Cpu, bus: &mut Bus, mode: AddrMode, operands: &[u8]) -> u8 {
+        let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
+        let result = value << 1;
+        cpu.p.set(Flags::C, (value & 0b1000_0000) != 0);
+        cpu.p.set(Flags::Z, result == 0);
+        cpu.p.set(Flags::N, (result & 0b1000_0000) != 0);
+        cpu.write_operand(bus, mode, operands, result);
+        cpu.a |= result;
+        cpu.update_nz(cpu.a);
         if page_crossed { 1 } else { 0 }
     }
 }
