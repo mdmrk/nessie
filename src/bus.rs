@@ -18,8 +18,6 @@ pub struct Bus {
     pub controller1: Controller,
     pub controller2: Controller,
     pub open_bus: u8,
-    pub ppu_open_bus: u8,
-    pub ppu_open_bus_decay_timer: u64,
 }
 
 impl Default for Bus {
@@ -31,8 +29,6 @@ impl Default for Bus {
             controller1: Default::default(),
             controller2: Default::default(), // TODO: process controller 2
             open_bus: 0,
-            ppu_open_bus: 0,
-            ppu_open_bus_decay_timer: 0,
         }
     }
 }
@@ -51,26 +47,26 @@ impl Bus {
     }
 
     fn read_ppu(&mut self, addr: u16) -> u8 {
-        if self.ppu.frame > self.ppu_open_bus_decay_timer + 60 {
-            self.ppu_open_bus = 0;
+        if self.ppu.frame > self.ppu.open_bus_decay_timer + 60 {
+            self.ppu.open_bus = 0;
         }
 
         let reg = addr & 0x07;
         let result = match reg {
             2 => {
                 let status = self.ppu.read_status();
-                (status & 0xE0) | (self.ppu_open_bus & 0x1F)
+                (status & 0xE0) | (self.ppu.open_bus & 0x1F)
             }
             4 => self.ppu.read_oam_data(),
             7 => self
                 .cart
                 .as_mut()
-                .map(|c| self.ppu.read_data(&mut *c.mapper, self.ppu_open_bus))
+                .map(|c| self.ppu.read_data(&mut *c.mapper))
                 .unwrap_or(0),
-            _ => self.ppu_open_bus,
+            _ => self.ppu.open_bus,
         };
 
-        self.ppu_open_bus = result;
+        self.ppu.open_bus = result;
         result
     }
 
@@ -154,8 +150,8 @@ impl Bus {
     }
 
     fn write_ppu(&mut self, addr: u16, value: u8) {
-        self.ppu_open_bus = value;
-        self.ppu_open_bus_decay_timer = self.ppu.frame;
+        self.ppu.open_bus = value;
+        self.ppu.open_bus_decay_timer = self.ppu.frame;
 
         let reg = addr & 0x07;
         match reg {

@@ -78,6 +78,8 @@ pub struct Ppu {
     pub dot: u16,
     pub frame: u64,
     pub frame_ready: bool,
+    pub open_bus: u8,
+    pub open_bus_decay_timer: u64,
 
     pub ctrl: PpuCtrl,
     pub mask: PpuMask,
@@ -116,6 +118,8 @@ impl Clone for Ppu {
             dot: self.dot,
             frame: self.frame,
             frame_ready: self.frame_ready,
+            open_bus: 0,
+            open_bus_decay_timer: 0,
             ctrl: self.ctrl,
             mask: self.mask,
             status: self.status,
@@ -148,6 +152,8 @@ impl Default for Ppu {
             dot: 0,
             frame: 0,
             frame_ready: false,
+            open_bus: 0,
+            open_bus_decay_timer: 0,
             ctrl: Default::default(),
             mask: Default::default(),
             status: Default::default(),
@@ -645,7 +651,7 @@ impl Ppu {
         }
     }
 
-    pub fn read_data(&mut self, mapper: &mut dyn crate::mapper::Mapper, open_bus: u8) -> u8 {
+    pub fn read_data(&mut self, mapper: &mut dyn crate::mapper::Mapper) -> u8 {
         let addr = self.v;
         let increment = if self.ctrl.vram_addr_inc() != 0 {
             32
@@ -661,7 +667,7 @@ impl Ppu {
         } else {
             self.read_buffer = self.read_vram(addr & 0x2FFF, mapper);
             let data = self.read_vram(addr, mapper);
-            (data & 0x3F) | (open_bus & 0xC0)
+            (data & 0x3F) | (self.open_bus & 0xC0)
         }
     }
 
