@@ -355,7 +355,7 @@ impl Ppu {
 
             if current_x >= sprite_x && current_x < sprite_x + 8 {
                 let mut fine_x = (current_x - sprite_x) as u8;
-                let mut fine_y = (self.scanline - sprite.y as u16) as u8;
+                let mut fine_y = (self.scanline.wrapping_sub(1) - sprite.y as u16) as u8;
 
                 if sprite.flip_h() {
                     fine_x = 7 - fine_x;
@@ -452,7 +452,7 @@ impl Ppu {
             let y = self.oam[i * 4] as u16;
             let current_scanline = self.scanline;
 
-            if current_scanline >= y && current_scanline < y.wrapping_add(sprite_height) {
+            if current_scanline > y && current_scanline <= y.wrapping_add(sprite_height) {
                 if n < 8 {
                     self.secondary_oam[n * 4..n * 4 + 4]
                         .copy_from_slice(&self.oam[i * 4..i * 4 + 4]);
