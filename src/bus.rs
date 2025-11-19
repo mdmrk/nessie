@@ -75,7 +75,7 @@ impl Bus {
             .unwrap_or(self.open_bus)
     }
 
-    fn read_controller(&mut self) -> u8 {
+    fn read_controller1(&mut self) -> u8 {
         let data = if self.controller1.strobe {
             self.controller1.latched & 1
         } else if self.controller1.index < 8 {
@@ -85,7 +85,20 @@ impl Bus {
         } else {
             1
         };
-        0x40 | data
+        (self.open_bus & 0xE0) | data
+    }
+
+    fn read_controller2(&mut self) -> u8 {
+        let data = if self.controller2.strobe {
+            self.controller2.latched & 1
+        } else if self.controller2.index < 8 {
+            let val = (self.controller2.latched >> self.controller2.index) & 1;
+            self.controller2.index += 1;
+            val
+        } else {
+            1
+        };
+        (self.open_bus & 0xE0) | data
     }
 
     pub fn read_byte_mut(&mut self, addr: u16) -> u8 {
@@ -94,8 +107,8 @@ impl Bus {
             0x2000..=0x3FFF => self.read_ppu(addr),
             0x4014 => self.open_bus,
             0x4015 => 0, // TODO: APU
-            0x4016 => self.read_controller(),
-            0x4017 => 0,
+            0x4016 => self.read_controller1(),
+            0x4017 => self.read_controller2(),
             0x4000..=0x401F => self.open_bus,
             0x4020..=0xFFFF => self.read_cartridge(addr),
         };
