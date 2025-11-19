@@ -316,8 +316,15 @@ impl Ui {
                 }));
 
                 if let Err(e) = result {
-                    error!("Emulator thread panicked: {:?}", e);
-                    _ = event_tx_clone.send(Event::Crashed(format!("{:?}", e)));
+                    let msg = if let Some(s) = e.downcast_ref::<&str>() {
+                        s.to_string()
+                    } else if let Some(s) = e.downcast_ref::<String>() {
+                        s.clone()
+                    } else {
+                        "Unknown panic type".to_string()
+                    };
+                    error!("Emulator thread panicked: {:?}", msg);
+                    _ = event_tx_clone.send(Event::Crashed(format!("{:?}", msg)));
                 }
             })
             .expect("Failed to spawn emu thread");
