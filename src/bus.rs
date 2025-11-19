@@ -65,7 +65,7 @@ impl Bus {
             7 => self
                 .cart
                 .as_mut()
-                .map(|c| self.ppu.read_data(&mut *c.mapper))
+                .map(|c| self.ppu.read_data(&mut *c.mapper, self.ppu_open_bus))
                 .unwrap_or(0),
             _ => self.ppu_open_bus,
         };

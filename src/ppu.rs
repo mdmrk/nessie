@@ -522,8 +522,7 @@ impl Ppu {
         if addr < 0x4000 {
             let palette_addr = ((addr - 0x3F00) % 32) as usize;
             let index = palette_addr;
-            let data = self.palette[index] & 0x3F;
-            return data | (self.read_buffer & 0xC0);
+            return self.palette[index] & 0x3F;
         }
 
         0
@@ -545,6 +544,7 @@ impl Ppu {
 
         if addr < 0x4000 {
             let palette_addr = ((addr - 0x3F00) % 32) as usize;
+            let value = value & 0x3F;
 
             if palette_addr.is_multiple_of(4) {
                 self.palette[palette_addr] = value;
@@ -645,7 +645,7 @@ impl Ppu {
         }
     }
 
-    pub fn read_data(&mut self, mapper: &mut dyn crate::mapper::Mapper) -> u8 {
+    pub fn read_data(&mut self, mapper: &mut dyn crate::mapper::Mapper, open_bus: u8) -> u8 {
         let addr = self.v;
         let increment = if self.ctrl.vram_addr_inc() != 0 {
             32
@@ -659,9 +659,9 @@ impl Ppu {
             self.read_buffer = self.read_vram(addr, mapper);
             data
         } else {
-            let data = self.read_vram(addr, mapper);
             self.read_buffer = self.read_vram(addr & 0x2FFF, mapper);
-            data
+            let data = self.read_vram(addr, mapper);
+            (data & 0x3F) | (open_bus & 0xC0)
         }
     }
 
