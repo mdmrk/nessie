@@ -442,8 +442,8 @@ impl Cpu {
     }
 
     pub fn reset(&mut self, bus: &mut Bus) {
-        let lo = bus.read_byte(0xFFFC);
-        let hi = bus.read_byte(0xFFFD);
+        let lo = bus.read_byte_mut(0xFFFC);
+        let hi = bus.read_byte_mut(0xFFFD);
         self.pc = u16::from_le_bytes([lo, hi]);
 
         self.sp = 0xFD;
@@ -549,8 +549,8 @@ impl Cpu {
 
         self.p.insert(Flags::I);
 
-        let lo = bus.read_byte(0xFFFA);
-        let hi = bus.read_byte(0xFFFB);
+        let lo = bus.read_byte_mut(0xFFFA);
+        let hi = bus.read_byte_mut(0xFFFB);
         self.pc = u16::from_le_bytes([lo, hi]);
 
         let cycles: u8 = 7;
@@ -570,8 +570,8 @@ impl Cpu {
 
         self.p.insert(Flags::I);
 
-        let lo = bus.read_byte(0xFFFE);
-        let hi = bus.read_byte(0xFFFF);
+        let lo = bus.read_byte_mut(0xFFFE);
+        let hi = bus.read_byte_mut(0xFFFF);
         self.pc = u16::from_le_bytes([lo, hi]);
 
         let cycles: u8 = 7;
@@ -964,6 +964,9 @@ impl Cpu {
         if let OperandValue::Address(addr, _) = mode.resolve(cpu, bus, operands) {
             cpu.pc = addr;
         }
+        if operands.len() > 1 {
+            bus.open_bus = operands[1];
+        }
         0
     }
 
@@ -983,8 +986,8 @@ impl Cpu {
 
         cpu.p.insert(Flags::I);
 
-        let lo = bus.read_byte(0xFFFE);
-        let hi = bus.read_byte(0xFFFF);
+        let lo = bus.read_byte_mut(0xFFFE);
+        let hi = bus.read_byte_mut(0xFFFF);
         cpu.pc = u16::from_le_bytes([lo, hi]);
         0
     }

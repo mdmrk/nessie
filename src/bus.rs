@@ -113,7 +113,7 @@ impl Bus {
         if bytes == 0 {
             return vec![];
         }
-        let values: Vec<u8> = (0..bytes).map(|i| self.read_byte(addr + i)).collect();
+        let values: Vec<u8> = (0..bytes).map(|i| self.read_byte_mut(addr + i)).collect();
         self.open_bus = values.last().copied().unwrap();
         values
     }
@@ -162,7 +162,7 @@ impl Bus {
         let page = (value as u16) << 8;
         let mut data = [0u8; 256];
         for i in 0..256 {
-            data[i as usize] = self.read_byte(page + i);
+            data[i as usize] = self.read_byte_mut(page + i);
         }
         self.ppu.write_oam_dma(&data);
     }
