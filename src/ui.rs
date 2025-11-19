@@ -965,12 +965,12 @@ impl Ui {
                 .stick_to_bottom(true)
                 .auto_shrink(false)
                 .show(ui, |ui| {
-                    if let Ok(cpu) = self.debug_state.cpu.read() {
+                    if let Ok(cpu) = self.debug_state.cpu.read()
+                        && let Some(log) = cpu.log.as_ref()
+                    {
                         ui.label(
-                            egui::RichText::new(
-                                cpu.log.as_ref().unwrap().iter().collect::<String>(),
-                            )
-                            .text_style(egui::TextStyle::Monospace),
+                            egui::RichText::new(log.iter().collect::<String>())
+                                .text_style(egui::TextStyle::Monospace),
                         );
                     }
                 });
