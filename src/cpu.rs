@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 use bitflags::bitflags;
 use phf::phf_map;
 
-use crate::{bus::Bus, ppu::Ppu};
+use crate::bus::Bus;
 
 const MAX_LOG_SIZE: usize = 3000;
 
@@ -464,7 +464,7 @@ impl Cpu {
         let operands = bus.read_range_mut(self.pc.wrapping_add(1), operand_bytes as u16);
 
         if self.log.is_some() {
-            self.log(&bus.ppu, opcode, op, &operands);
+            self.log(bus, opcode, op, &operands);
         }
 
         self.pc = self.pc.wrapping_add(1 + operand_bytes as u16);
@@ -481,7 +481,7 @@ impl Cpu {
         self.nmi_previous_state = nmi_current_state;
     }
 
-    fn log(&mut self, ppu: &Ppu, opcode: u8, op: &Op, operands: &[u8]) {
+    fn log(&mut self, bus: &Bus, opcode: u8, op: &Op, operands: &[u8]) {
         let log = self.log.as_mut().unwrap();
         let step_str = format!(
             "{:04X}  {:02X} {:6}{}{} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} PPU:{:3},{:3} CYC:{}\n",
@@ -499,8 +499,8 @@ impl Cpu {
             self.y,
             self.p.bits(),
             self.sp,
-            ppu.scanline,
-            ppu.dot,
+            bus.ppu.scanline,
+            bus.ppu.dot,
             self.cycle_count
         );
         for c in step_str.chars() {
