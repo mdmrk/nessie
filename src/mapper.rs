@@ -99,20 +99,19 @@ pub struct Mapper0 {
     prg_rom: Vec<u8>,
     chr_mem: Vec<u8>, // ROM or RAM
     mirroring: Mirroring,
+    is_chr_ram: bool,
 }
 
 impl Mapper0 {
     pub fn new(prg_rom: Vec<u8>, chr_rom: Vec<u8>, mirroring: Mirroring) -> Self {
-        let chr_mem = if chr_rom.is_empty() {
-            vec![0; 0x2000]
-        } else {
-            chr_rom
-        };
+        let is_chr_ram = chr_rom.is_empty();
+        let chr_mem = if is_chr_ram { vec![0; 0x2000] } else { chr_rom };
 
         Self {
             prg_rom,
             chr_mem,
             mirroring,
+            is_chr_ram,
         }
     }
 }
@@ -133,6 +132,10 @@ impl Mapper for Mapper0 {
     }
 
     fn write_chr(&mut self, addr: u16, value: u8) {
+        if !self.is_chr_ram {
+            return;
+        }
+
         let index = (addr as usize) % self.chr_mem.len();
         self.chr_mem[index] = value;
     }
@@ -157,15 +160,13 @@ pub struct Mapper1 {
     chr_bank_0: u8,
     chr_bank_1: u8,
     prg_bank: u8,
+    is_chr_ram: bool,
 }
 
 impl Mapper1 {
     pub fn new(prg_rom: Vec<u8>, chr_rom: Vec<u8>, _mirroring: Mirroring) -> Self {
-        let chr_mem = if chr_rom.is_empty() {
-            vec![0; 0x2000]
-        } else {
-            chr_rom
-        };
+        let is_chr_ram = chr_rom.is_empty();
+        let chr_mem = if is_chr_ram { vec![0; 0x2000] } else { chr_rom };
 
         Self {
             prg_rom,
@@ -177,6 +178,7 @@ impl Mapper1 {
             chr_bank_0: 0,
             chr_bank_1: 0,
             prg_bank: 0,
+            is_chr_ram,
         }
     }
 }
@@ -280,6 +282,10 @@ impl Mapper for Mapper1 {
     }
 
     fn write_chr(&mut self, addr: u16, value: u8) {
+        if !self.is_chr_ram {
+            return;
+        }
+
         let chr_mode = (self.control >> 4) & 0x01;
 
         let bank = if chr_mode == 0 {
