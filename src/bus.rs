@@ -106,7 +106,7 @@ impl Bus {
             0x0000..=0x1FFF => self.read_mem(addr),
             0x2000..=0x3FFF => self.read_ppu(addr),
             0x4014 => self.open_bus,
-            0x4015 => 0, // TODO: APU
+            0x4015 => self.open_bus, // TODO: APU
             0x4016 => self.read_controller1(),
             0x4017 => self.read_controller2(),
             0x4000..=0x401F => self.open_bus,
