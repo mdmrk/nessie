@@ -598,7 +598,15 @@ impl Cpu {
     fn read_operand(&self, bus: &mut Bus, mode: AddrMode, operands: &[u8]) -> (u8, bool) {
         match mode.resolve(self, bus, operands) {
             OperandValue::Value(v) => (v, false),
-            OperandValue::Address(addr, crossed) => (bus.read_byte_mut(addr), crossed),
+            OperandValue::Address(addr, crossed) => {
+                if crossed {
+                    let page = addr & 0xFF00;
+                    let dummy_page = page.wrapping_sub(0x100);
+                    let dummy_addr = dummy_page | (addr & 0x00FF);
+                    bus.read_byte_mut(dummy_addr);
+                }
+                (bus.read_byte_mut(addr), crossed)
+            }
             OperandValue::Implied => (self.a, false),
         }
     }

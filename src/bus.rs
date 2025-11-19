@@ -18,6 +18,7 @@ pub struct Bus {
     pub controller1: Controller,
     pub controller2: Controller,
     pub open_bus: u8,
+    pub ppu_open_bus: u8,
 }
 
 impl Default for Bus {
@@ -29,6 +30,7 @@ impl Default for Bus {
             controller1: Default::default(),
             controller2: Default::default(), // TODO: process controller 2
             open_bus: 0,
+            ppu_open_bus: 0,
         }
     }
 }
@@ -48,16 +50,22 @@ impl Bus {
 
     fn read_ppu(&mut self, addr: u16) -> u8 {
         let reg = addr & 0x07;
-        match reg {
-            2 => self.ppu.read_status(),
+        let result = match reg {
+            2 => {
+                let status = self.ppu.read_status();
+                (status & 0xE0) | (self.ppu_open_bus & 0x1F)
+            }
             4 => self.ppu.read_oam_data(),
             7 => self
                 .cart
                 .as_mut()
                 .map(|c| self.ppu.read_data(&mut *c.mapper))
                 .unwrap_or(0),
-            _ => self.open_bus,
-        }
+            _ => self.ppu_open_bus,
+        };
+
+        self.ppu_open_bus = result;
+        result
     }
 
     fn read_cartridge(&self, addr: u16) -> u8 {
@@ -127,6 +135,7 @@ impl Bus {
     }
 
     fn write_ppu(&mut self, addr: u16, value: u8) {
+        self.ppu_open_bus = value;
         let reg = addr & 0x07;
         match reg {
             0 => self.ppu.write_ctrl(value),
