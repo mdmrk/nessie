@@ -101,7 +101,7 @@ impl Bus {
         (self.open_bus & 0xE0) | data
     }
 
-    pub fn read_byte_mut(&mut self, addr: u16) -> u8 {
+    pub fn read_byte(&mut self, addr: u16) -> u8 {
         let value = match addr {
             0x0000..=0x1FFF => self.read_mem(addr),
             0x2000..=0x3FFF => self.read_ppu(addr),
@@ -117,7 +117,7 @@ impl Bus {
         value
     }
 
-    pub fn read_byte(&self, addr: u16) -> u8 {
+    pub fn read_only(&self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x1FFF => self.read_mem(addr),
             0x2000..=0x3FFF => 0,
@@ -130,17 +130,17 @@ impl Bus {
         }
     }
 
-    pub fn read_range_mut(&mut self, addr: u16, bytes: u16) -> Vec<u8> {
+    pub fn read_range(&mut self, addr: u16, bytes: u16) -> Vec<u8> {
         if bytes == 0 {
             return vec![];
         }
-        let values: Vec<u8> = (0..bytes).map(|i| self.read_byte_mut(addr + i)).collect();
+        let values: Vec<u8> = (0..bytes).map(|i| self.read_byte(addr + i)).collect();
         self.open_bus = values.last().copied().unwrap();
         values
     }
 
-    pub fn read_range(&self, addr: u16, bytes: u16) -> Vec<u8> {
-        (0..bytes).map(|i| self.read_byte(addr + i)).collect()
+    pub fn read_only_range(&self, addr: u16, bytes: u16) -> Vec<u8> {
+        (0..bytes).map(|i| self.read_only(addr + i)).collect()
     }
 
     fn write_mem(&mut self, addr: u16, value: u8) {
@@ -184,7 +184,7 @@ impl Bus {
         let page = (value as u16) << 8;
         let mut data = [0u8; 256];
         for i in 0..256 {
-            data[i as usize] = self.read_byte_mut(page + i);
+            data[i as usize] = self.read_byte(page + i);
         }
         self.ppu.write_oam_dma(&data);
     }

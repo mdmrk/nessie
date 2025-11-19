@@ -64,22 +64,22 @@ impl AddrMode {
             }
             AddrMode::Indirect => {
                 let ptr = u16::from_le_bytes([operands[0], operands[1]]);
-                let lo = bus.read_byte_mut(ptr);
-                let hi = bus.read_byte_mut((ptr & 0xFF00) | ((ptr + 1) & 0x00FF));
+                let lo = bus.read_byte(ptr);
+                let hi = bus.read_byte((ptr & 0xFF00) | ((ptr + 1) & 0x00FF));
                 let addr = u16::from_le_bytes([lo, hi]);
                 OperandValue::Address(addr, false)
             }
             AddrMode::IndirectX => {
                 let ptr = operands[0].wrapping_add(cpu.x);
-                let lo = bus.read_byte_mut(ptr as u16);
-                let hi = bus.read_byte_mut(ptr.wrapping_add(1) as u16);
+                let lo = bus.read_byte(ptr as u16);
+                let hi = bus.read_byte(ptr.wrapping_add(1) as u16);
                 let addr = u16::from_le_bytes([lo, hi]);
                 OperandValue::Address(addr, false)
             }
             AddrMode::IndirectY => {
                 let ptr = operands[0];
-                let lo = bus.read_byte_mut(ptr as u16);
-                let hi = bus.read_byte_mut(ptr.wrapping_add(1) as u16);
+                let lo = bus.read_byte(ptr as u16);
+                let hi = bus.read_byte(ptr.wrapping_add(1) as u16);
                 let base = u16::from_le_bytes([lo, hi]);
                 let addr = base.wrapping_add(cpu.y as u16);
                 let page_crossed = (base & 0xFF00) != (addr & 0xFF00);
@@ -442,8 +442,8 @@ impl Cpu {
     }
 
     pub fn reset(&mut self, bus: &mut Bus) {
-        let lo = bus.read_byte_mut(0xFFFC);
-        let hi = bus.read_byte_mut(0xFFFD);
+        let lo = bus.read_byte(0xFFFC);
+        let hi = bus.read_byte(0xFFFD);
         self.pc = u16::from_le_bytes([lo, hi]);
 
         self.sp = 0xFD;
@@ -452,7 +452,7 @@ impl Cpu {
     }
 
     fn fetch(&self, bus: &mut Bus) -> u8 {
-        bus.read_byte_mut(self.pc)
+        bus.read_byte(self.pc)
     }
 
     fn decode(&self, opcode: u8) -> Option<&'static Op> {
@@ -461,7 +461,7 @@ impl Cpu {
 
     fn execute(&mut self, bus: &mut Bus, op: &Op, opcode: u8) {
         let operand_bytes = op.mode.operand_bytes();
-        let operands = bus.read_range_mut(self.pc.wrapping_add(1), operand_bytes);
+        let operands = bus.read_range(self.pc.wrapping_add(1), operand_bytes);
 
         if self.log.is_some() {
             self.log(bus, opcode, op, &operands);
@@ -549,8 +549,8 @@ impl Cpu {
 
         self.p.insert(Flags::I);
 
-        let lo = bus.read_byte_mut(0xFFFA);
-        let hi = bus.read_byte_mut(0xFFFB);
+        let lo = bus.read_byte(0xFFFA);
+        let hi = bus.read_byte(0xFFFB);
         self.pc = u16::from_le_bytes([lo, hi]);
 
         let cycles: u8 = 7;
@@ -570,8 +570,8 @@ impl Cpu {
 
         self.p.insert(Flags::I);
 
-        let lo = bus.read_byte_mut(0xFFFE);
-        let hi = bus.read_byte_mut(0xFFFF);
+        let lo = bus.read_byte(0xFFFE);
+        let hi = bus.read_byte(0xFFFF);
         self.pc = u16::from_le_bytes([lo, hi]);
 
         let cycles: u8 = 7;
@@ -592,7 +592,7 @@ impl Cpu {
 
     fn pop_stack(&mut self, bus: &mut Bus) -> u8 {
         self.sp = self.sp.wrapping_add(1);
-        bus.read_byte_mut(0x100 + self.sp as u16)
+        bus.read_byte(0x100 + self.sp as u16)
     }
 
     fn read_operand(&self, bus: &mut Bus, mode: AddrMode, operands: &[u8]) -> (u8, bool) {
@@ -603,9 +603,9 @@ impl Cpu {
                     let page = addr & 0xFF00;
                     let dummy_page = page.wrapping_sub(0x100);
                     let dummy_addr = dummy_page | (addr & 0x00FF);
-                    bus.read_byte_mut(dummy_addr);
+                    bus.read_byte(dummy_addr);
                 }
-                (bus.read_byte_mut(addr), crossed)
+                (bus.read_byte(addr), crossed)
             }
             OperandValue::Implied => (self.a, false),
         }
@@ -994,8 +994,8 @@ impl Cpu {
 
         cpu.p.insert(Flags::I);
 
-        let lo = bus.read_byte_mut(0xFFFE);
-        let hi = bus.read_byte_mut(0xFFFF);
+        let lo = bus.read_byte(0xFFFE);
+        let hi = bus.read_byte(0xFFFF);
         cpu.pc = u16::from_le_bytes([lo, hi]);
         0
     }

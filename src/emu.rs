@@ -86,7 +86,7 @@ impl Emu {
         let mut mem: [u8; 0x10000] = [0; 0x10000];
 
         for (i, n) in mem.iter_mut().enumerate() {
-            *n = self.bus.read_byte(i as u16);
+            *n = self.bus.read_only(i as u16);
         }
         let mut path = std::env::current_exe().unwrap();
         path.set_file_name("dump.txt");

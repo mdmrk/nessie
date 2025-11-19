@@ -54,11 +54,12 @@ impl DebugState {
         if let Ok(mut mem_chunk) = self.mem_chunk.write() {
             mem_chunk.copy_from_slice(
                 &emu.bus
-                    .read_range(emu.mem_chunk_addr as u16, MEM_BLOCK_SIZE as u16)[..MEM_BLOCK_SIZE],
+                    .read_only_range(emu.mem_chunk_addr as u16, MEM_BLOCK_SIZE as u16)
+                    [..MEM_BLOCK_SIZE],
             );
         }
         if let Ok(mut stack) = self.stack.write() {
-            stack.copy_from_slice(&emu.bus.read_range(0x100, 0x100)[..0x100]);
+            stack.copy_from_slice(&emu.bus.read_only_range(0x100, 0x100)[..0x100]);
         }
     }
 }
