@@ -261,23 +261,21 @@ impl Ppu {
                 self.render_pixel(mapper);
             }
 
-            if self.mask.rendering_enabled() {
-                if self.dot == 256 {
-                    self.increment_y();
-                }
+            if self.mask.rendering_enabled() && self.dot == 256 {
+                self.increment_y();
             }
 
-            if self.mask.rendering_enabled() {
-                if self.dot == 257 {
-                    self.load_sprites(mapper);
-                    self.copy_horizontal();
-                }
+            if self.mask.rendering_enabled() && self.dot == 257 {
+                self.load_sprites(mapper);
+                self.copy_horizontal();
             }
 
-            if self.scanline == 261 && self.mask.rendering_enabled() {
-                if self.dot >= 280 && self.dot <= 304 {
-                    self.copy_vertical();
-                }
+            if self.scanline == 261
+                && self.mask.rendering_enabled()
+                && self.dot >= 280
+                && self.dot <= 304
+            {
+                self.copy_vertical();
             }
         }
 
@@ -388,10 +386,6 @@ impl Ppu {
             self.tick(mapper);
         }
     }
-
-    fn visible_scanline(&mut self, _mapper: &mut dyn crate::mapper::Mapper) {}
-
-    fn prerender_scanline(&mut self, _mapper: &mut dyn crate::mapper::Mapper) {}
 
     fn get_bg_pixel(&self) -> (u8, u8) {
         if !self.mask.show_bg() {
