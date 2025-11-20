@@ -247,6 +247,9 @@ impl Ui {
     }
 
     pub fn process_input(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if !self.running {
+            return;
+        }
         if !ctx.wants_keyboard_input() {
             ctx.input_mut(|i| {
                 self.controller1_input.a = i.key_down(Key::A);
