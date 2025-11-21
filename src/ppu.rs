@@ -634,13 +634,18 @@ impl Ppu {
     }
 
     pub fn read_status(&mut self) -> u8 {
-        let status_byte = self.status.bytes[0];
+        let mut status_byte = self.status.bytes[0];
+        if self.scanline == 241 && self.dot == 1 {
+            self.suppress_vbl = true;
+            status_byte &= !0x80;
+        }
         self.status.set_vblank(false);
         self.nmi_pending = false;
         self.w = false;
         if self.scanline == 241 && (self.dot == 1 || self.dot == 2) {
             self.suppress_nmi = true;
         }
+
         status_byte
     }
 
