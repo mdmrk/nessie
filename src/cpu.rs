@@ -621,7 +621,20 @@ impl Cpu {
 
     fn write_operand(&mut self, bus: &mut Bus, mode: AddrMode, operands: &[u8], value: u8) {
         match mode.resolve(self, bus, operands) {
-            OperandValue::Address(addr, _) => bus.write_byte(addr, value),
+            OperandValue::Address(addr, crossed) => {
+                match mode {
+                    AddrMode::AbsoluteX | AddrMode::AbsoluteY | AddrMode::IndirectY => {
+                        let dummy_addr = if crossed {
+                            (addr & 0x00FF) | (addr.wrapping_sub(0x100) & 0xFF00)
+                        } else {
+                            addr
+                        };
+                        bus.read_byte(dummy_addr);
+                    }
+                    _ => {}
+                }
+                bus.write_byte(addr, value)
+            }
             OperandValue::Implied => self.a = value,
             _ => panic!("Cannot write to this addressing mode"),
         }
@@ -725,6 +738,7 @@ impl Cpu {
 
     fn inc(cpu: &mut Cpu, bus: &mut Bus, mode: AddrMode, operands: &[u8]) -> u8 {
         let (value, _) = cpu.read_operand(bus, mode, operands);
+        cpu.write_operand(bus, mode, operands, value);
         let result = value.wrapping_add(1);
         cpu.write_operand(bus, mode, operands, result);
         cpu.update_nz(result);
@@ -733,6 +747,7 @@ impl Cpu {
 
     fn dec(cpu: &mut Cpu, bus: &mut Bus, mode: AddrMode, operands: &[u8]) -> u8 {
         let (value, _) = cpu.read_operand(bus, mode, operands);
+        cpu.write_operand(bus, mode, operands, value);
         let result = value.wrapping_sub(1);
         cpu.write_operand(bus, mode, operands, result);
         cpu.update_nz(result);
@@ -765,6 +780,9 @@ impl Cpu {
 
     fn asl(cpu: &mut Cpu, bus: &mut Bus, mode: AddrMode, operands: &[u8]) -> u8 {
         let (value, _) = cpu.read_operand(bus, mode, operands);
+        if mode != AddrMode::Accumulator {
+            cpu.write_operand(bus, mode, operands, value);
+        }
         let result = value << 1;
         cpu.p.set(Flags::C, (value & 0b1000_0000) != 0);
         cpu.p.set(Flags::Z, result == 0);
@@ -775,6 +793,9 @@ impl Cpu {
 
     fn lsr(cpu: &mut Cpu, bus: &mut Bus, mode: AddrMode, operands: &[u8]) -> u8 {
         let (value, _) = cpu.read_operand(bus, mode, operands);
+        if mode != AddrMode::Accumulator {
+            cpu.write_operand(bus, mode, operands, value);
+        }
         let result = value >> 1;
         cpu.p.set(Flags::C, (value & 0b1) != 0);
         cpu.p.set(Flags::Z, result == 0);
@@ -785,6 +806,9 @@ impl Cpu {
 
     fn rol(cpu: &mut Cpu, bus: &mut Bus, mode: AddrMode, operands: &[u8]) -> u8 {
         let (value, _) = cpu.read_operand(bus, mode, operands);
+        if mode != AddrMode::Accumulator {
+            cpu.write_operand(bus, mode, operands, value);
+        }
         let carry = if cpu.p.contains(Flags::C) { 1 } else { 0 };
         let result = (value << 1) | carry;
         cpu.p.set(Flags::C, ((value >> 7) & 1) != 0);
@@ -796,6 +820,9 @@ impl Cpu {
 
     fn ror(cpu: &mut Cpu, bus: &mut Bus, mode: AddrMode, operands: &[u8]) -> u8 {
         let (value, _) = cpu.read_operand(bus, mode, operands);
+        if mode != AddrMode::Accumulator {
+            cpu.write_operand(bus, mode, operands, value);
+        }
         let carry = if cpu.p.contains(Flags::C) { 1 } else { 0 };
         let result = (value >> 1) | (carry << 7);
         cpu.p.set(Flags::C, (value & 0b1) != 0);
@@ -1101,6 +1128,7 @@ impl Cpu {
 
     fn slo(cpu: &mut Cpu, bus: &mut Bus, mode: AddrMode, operands: &[u8]) -> u8 {
         let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
+        cpu.write_operand(bus, mode, operands, value);
         let result = value << 1;
         cpu.p.set(Flags::C, (value & 0b1000_0000) != 0);
         cpu.p.set(Flags::Z, result == 0);
