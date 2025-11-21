@@ -1,9 +1,5 @@
-use std::sync::LazyLock;
-
 use egui::Color32;
 use modular_bitfield::prelude::*;
-
-use crate::debug::profile;
 
 #[bitfield(bytes = 1)]
 #[derive(Debug, Clone, Default, Copy)]
@@ -31,6 +27,7 @@ pub struct PpuMask {
 }
 
 impl PpuMask {
+    #[inline(always)]
     pub fn rendering_enabled(&self) -> bool {
         self.show_bg() || self.show_sprites()
     }
@@ -55,18 +52,22 @@ struct Sprite {
 }
 
 impl Sprite {
+    #[inline(always)]
     fn palette(&self) -> u8 {
         self.attributes & 0x03
     }
 
+    #[inline(always)]
     fn priority(&self) -> bool {
         self.attributes & 0x20 != 0
     }
 
+    #[inline(always)]
     fn flip_h(&self) -> bool {
         self.attributes & 0x40 != 0
     }
 
+    #[inline(always)]
     fn flip_v(&self) -> bool {
         self.attributes & 0x80 != 0
     }
@@ -80,42 +81,32 @@ pub struct Ppu {
     pub frame_ready: bool,
     pub open_bus: u8,
     pub open_bus_decay_timer: u64,
-
     pub ctrl: PpuCtrl,
     pub mask: PpuMask,
     pub status: PpuStatus,
-
     pub oam: [u8; 256],
     pub oam_addr: u8,
-
     pub vram: [u8; 2048],
     pub palette: [u8; 32],
-
     pub v: u16,
     pub t: u16,
     pub x: u8,
     pub w: bool,
-
     bg_next_tile_id: u8,
     bg_next_tile_attrib: u8,
     bg_next_tile_lsb: u8,
     bg_next_tile_msb: u8,
-
     bg_shifter_pattern_lo: u16,
     bg_shifter_pattern_hi: u16,
     bg_shifter_attrib_lo: u16,
     bg_shifter_attrib_hi: u16,
-
     pub read_buffer: u8,
-
     pub nmi_pending: bool,
     pub nmi_just_enabled: bool,
     pub suppress_nmi: bool,
     pub suppress_vbl: bool,
     pub nmi_delay: bool,
-
     pub screen: Vec<Color32>,
-
     secondary_oam: [u8; 32],
     sprites: [Sprite; 8],
     sprite_height: u16,
@@ -233,6 +224,12 @@ impl Ppu {
         self.bg_shifter_attrib_hi = 0;
     }
 
+    pub fn step(&mut self, mapper: &mut dyn crate::mapper::Mapper, cpu_cycles: u8) {
+        for _ in 0..(cpu_cycles * 3) {
+            self.tick(mapper);
+        }
+    }
+
     pub fn tick(&mut self, mapper: &mut dyn crate::mapper::Mapper) {
         if self.scanline == 241 && self.dot == 1 {
             if !self.suppress_vbl {
@@ -251,31 +248,27 @@ impl Ppu {
                 self.process_bg_pipeline(mapper);
             }
 
-            if self.scanline < 240 && self.dot == 1 {
-                self.sprite_height = if self.ctrl.sprite_size() != 0 { 16 } else { 8 };
-                self.clear_secondary_oam();
-                self.fetch_sprites();
+            if self.scanline < 240 {
+                if self.dot == 1 {
+                    self.sprite_height = if self.ctrl.sprite_size() != 0 { 16 } else { 8 };
+                    self.clear_secondary_oam();
+                    self.fetch_sprites();
+                }
+
+                if self.dot >= 1 && self.dot <= 256 {
+                    self.render_pixel(mapper);
+                }
             }
 
-            if self.scanline < 240 && self.dot >= 1 && self.dot <= 256 {
-                self.render_pixel(mapper);
-            }
-
-            if self.mask.rendering_enabled() && self.dot == 256 {
-                self.increment_y();
-            }
-
-            if self.mask.rendering_enabled() && self.dot == 257 {
-                self.load_sprites(mapper);
-                self.copy_horizontal();
-            }
-
-            if self.scanline == 261
-                && self.mask.rendering_enabled()
-                && self.dot >= 280
-                && self.dot <= 304
-            {
-                self.copy_vertical();
+            if self.mask.rendering_enabled() {
+                if self.dot == 256 {
+                    self.increment_y();
+                } else if self.dot == 257 {
+                    self.load_sprites(mapper);
+                    self.copy_horizontal();
+                } else if self.scanline == 261 && self.dot >= 280 && self.dot <= 304 {
+                    self.copy_vertical();
+                }
             }
         }
 
@@ -289,11 +282,9 @@ impl Ppu {
         }
 
         self.dot += 1;
-
         if self.dot > 340 {
             self.dot = 0;
             self.scanline += 1;
-
             if self.scanline > 261 {
                 self.scanline = 0;
                 self.frame += 1;
@@ -307,9 +298,7 @@ impl Ppu {
             return;
         }
 
-        let cycle = (self.dot - 1) % 8;
-
-        match cycle {
+        match (self.dot - 1) & 7 {
             0 => {
                 self.load_background_shifters();
                 let tile_addr = 0x2000 | (self.v & 0x0FFF);
@@ -319,37 +308,27 @@ impl Ppu {
                 let attr_addr =
                     0x23C0 | (self.v & 0x0C00) | ((self.v >> 4) & 0x38) | ((self.v >> 2) & 0x07);
                 let attr_byte = self.read_vram(attr_addr, mapper);
-
                 let shift = ((self.v >> 4) & 4) | (self.v & 2);
                 self.bg_next_tile_attrib = (attr_byte >> shift) & 0x03;
             }
             4 => {
-                let pattern_table = if self.ctrl.bg_pattern_table() != 0 {
-                    0x1000
-                } else {
-                    0x0000
-                };
+                let pattern_table = (self.ctrl.bg_pattern_table() as u16) << 12;
                 let fine_y = (self.v >> 12) & 0x07;
                 let pattern_addr = pattern_table | ((self.bg_next_tile_id as u16) << 4) | fine_y;
                 self.bg_next_tile_lsb = self.read_vram(pattern_addr, mapper);
             }
             6 => {
-                let pattern_table = if self.ctrl.bg_pattern_table() != 0 {
-                    0x1000
-                } else {
-                    0x0000
-                };
+                let pattern_table = (self.ctrl.bg_pattern_table() as u16) << 12;
                 let fine_y = (self.v >> 12) & 0x07;
                 let pattern_addr = pattern_table | ((self.bg_next_tile_id as u16) << 4) | fine_y;
                 self.bg_next_tile_msb = self.read_vram(pattern_addr + 8, mapper);
             }
-            7 => {
-                self.increment_coarse_x();
-            }
+            7 => self.increment_coarse_x(),
             _ => {}
         }
     }
 
+    #[inline]
     fn update_shifters(&mut self) {
         if self.mask.show_bg() {
             self.bg_shifter_pattern_lo <<= 1;
@@ -380,26 +359,22 @@ impl Ppu {
         self.bg_shifter_attrib_hi = (self.bg_shifter_attrib_hi & 0xFF00) | attrib_hi;
     }
 
-    pub fn step(&mut self, mapper: &mut dyn crate::mapper::Mapper, cpu_cycles: u8) {
-        profile!("Tick");
-        for _ in 0..(cpu_cycles * 3) {
-            self.tick(mapper);
-        }
-    }
-
     fn get_bg_pixel(&self) -> (u8, u8) {
         if !self.mask.show_bg() {
             return (0, 0);
         }
 
         let bit_mux = 0x8000 >> self.x;
-
-        let p0 = (self.bg_shifter_pattern_lo & bit_mux) > 0;
-        let p1 = (self.bg_shifter_pattern_hi & bit_mux) > 0;
+        let p0 = (self.bg_shifter_pattern_lo & bit_mux) != 0;
+        let p1 = (self.bg_shifter_pattern_hi & bit_mux) != 0;
         let pixel = ((p1 as u8) << 1) | (p0 as u8);
 
-        let a0 = (self.bg_shifter_attrib_lo & bit_mux) > 0;
-        let a1 = (self.bg_shifter_attrib_hi & bit_mux) > 0;
+        if pixel == 0 {
+            return (0, 0);
+        }
+
+        let a0 = (self.bg_shifter_attrib_lo & bit_mux) != 0;
+        let a1 = (self.bg_shifter_attrib_hi & bit_mux) != 0;
         let palette = ((a1 as u8) << 1) | (a0 as u8);
 
         (pixel, palette)
@@ -410,7 +385,7 @@ impl Ppu {
             return (0, 0, 0, false);
         }
 
-        let x = self.dot.wrapping_sub(1);
+        let x = self.dot - 1;
         if x < 8 && !self.mask.show_sprites_left() {
             return (0, 0, 0, false);
         }
@@ -421,60 +396,59 @@ impl Ppu {
             }
 
             let sprite_x = sprite.x as u16;
-            let current_x = x;
+            if x < sprite_x || x >= sprite_x + 8 {
+                continue;
+            }
 
-            if current_x >= sprite_x && current_x < sprite_x + 8 {
-                let mut fine_x = (current_x - sprite_x) as u8;
-                let mut fine_y =
-                    (self.scanline.wrapping_sub(sprite.y as u16).wrapping_sub(1)) as u8;
+            let mut fine_x = (x - sprite_x) as u8;
+            let mut fine_y = (self.scanline.wrapping_sub(sprite.y as u16).wrapping_sub(1)) as u8;
 
-                if sprite.flip_h() {
-                    fine_x = 7 - fine_x;
-                }
+            if sprite.flip_h() {
+                fine_x = 7 - fine_x;
+            }
 
-                let mut tile_index = sprite.tile_index as u16;
-                let pattern_table;
+            let mut tile_index = sprite.tile_index as u16;
+            let pattern_table;
 
-                if self.sprite_height == 16 {
-                    pattern_table = (tile_index & 0x01) << 12;
-                    tile_index &= 0xFE;
-
-                    if fine_y >= 8 {
-                        fine_y -= 8;
-                        if !sprite.flip_v() {
-                            tile_index += 1;
-                        }
-                    } else if sprite.flip_v() {
+            if self.sprite_height == 16 {
+                pattern_table = (tile_index & 0x01) << 12;
+                tile_index &= 0xFE;
+                if fine_y >= 8 {
+                    fine_y -= 8;
+                    if !sprite.flip_v() {
                         tile_index += 1;
                     }
-                } else {
-                    pattern_table = (self.ctrl.sprite_pattern_table() as u16) << 12;
-                    if sprite.flip_v() {
-                        fine_y = 7 - fine_y;
-                    }
+                } else if sprite.flip_v() {
+                    tile_index += 1;
                 }
-
-                let pattern_addr = pattern_table | (tile_index << 4) | (fine_y as u16);
-                let pattern_lo = self.read_vram(pattern_addr, mapper);
-                let pattern_hi = self.read_vram(pattern_addr + 8, mapper);
-
-                let bit_offset = 7 - fine_x;
-                let pixel_lo = (pattern_lo >> bit_offset) & 1;
-                let pixel_hi = (pattern_hi >> bit_offset) & 1;
-                let pixel = (pixel_hi << 1) | pixel_lo;
-
-                if pixel != 0 {
-                    let color_index = (sprite.palette() << 2) | pixel;
-                    let is_sprite_0 = sprite.index == 0;
-                    return (pixel, color_index, sprite.index, is_sprite_0);
+            } else {
+                pattern_table = (self.ctrl.sprite_pattern_table() as u16) << 12;
+                if sprite.flip_v() {
+                    fine_y = 7 - fine_y;
                 }
+            }
+
+            let pattern_addr = pattern_table | (tile_index << 4) | (fine_y as u16);
+            let pattern_lo = self.read_vram(pattern_addr, mapper);
+            let pattern_hi = self.read_vram(pattern_addr + 8, mapper);
+
+            let bit_offset = 7 - fine_x;
+            let pixel = (((pattern_hi >> bit_offset) & 1) << 1) | ((pattern_lo >> bit_offset) & 1);
+
+            if pixel != 0 {
+                return (
+                    pixel,
+                    (sprite.palette() << 2) | pixel,
+                    sprite.index,
+                    sprite.index == 0,
+                );
             }
         }
         (0, 0, 0, false)
     }
 
     fn render_pixel(&mut self, mapper: &mut dyn crate::mapper::Mapper) {
-        let x = (self.dot - 1) as usize;
+        let x = self.dot.wrapping_sub(1) as usize;
         let y = self.scanline as usize;
 
         let (bg_pixel, bg_palette) = if x < 8 && !self.mask.show_bg_left() {
@@ -483,14 +457,14 @@ impl Ppu {
             self.get_bg_pixel()
         };
 
+        let (sp_pixel, sp_palette_addr_offset, sp_index, is_sprite_0) =
+            self.get_sprite_pixel(mapper);
+
         let bg_palette_addr_offset = if bg_pixel > 0 {
             (bg_palette << 2) | bg_pixel
         } else {
             0
         };
-
-        let (sp_pixel, sp_palette_addr_offset, sp_index, is_sprite_0) =
-            self.get_sprite_pixel(mapper);
 
         let final_color_index = match (bg_pixel, sp_pixel) {
             (0, 0) => 0,
@@ -501,7 +475,6 @@ impl Ppu {
                     self.status.set_sprite_0_hit(true);
                 }
                 let sprite = self.sprites.iter().find(|s| s.index == sp_index).unwrap();
-
                 if sprite.priority() {
                     bg_palette_addr_offset
                 } else {
@@ -510,14 +483,13 @@ impl Ppu {
             }
         };
 
-        let final_palette_index = if final_color_index.is_multiple_of(4) && final_color_index < 0x10
-        {
+        let final_palette_index = if (final_color_index & 0x03) == 0 {
             0
         } else {
-            (final_color_index & 0x1F) as usize
+            final_color_index & 0x1F
         };
 
-        let color_index = self.palette[final_palette_index] & 0x3F;
+        let color_index = self.palette[final_palette_index as usize] & 0x3F;
         self.screen[y * 256 + x] = self.get_color_from_palette(color_index);
     }
 
@@ -529,21 +501,21 @@ impl Ppu {
     fn fetch_sprites(&mut self) {
         let mut n = 0;
         let sprite_height = self.sprite_height;
+        let oam_raw = &self.oam;
 
         for i in 0..64 {
-            let y = self.oam[i * 4] as u16;
-            let current_scanline = self.scanline;
+            let idx = i * 4;
+            let y = oam_raw[idx] as u16;
 
-            if current_scanline > y && current_scanline <= y.wrapping_add(sprite_height) {
+            if self.scanline > y && self.scanline <= y.wrapping_add(sprite_height) {
                 if n < 8 {
-                    self.secondary_oam[n * 4..n * 4 + 4]
-                        .copy_from_slice(&self.oam[i * 4..i * 4 + 4]);
-
+                    let dst = n * 4;
+                    self.secondary_oam[dst..dst + 4].copy_from_slice(&oam_raw[idx..idx + 4]);
                     self.sprites[n] = Sprite {
-                        y: self.oam[i * 4],
-                        tile_index: self.oam[i * 4 + 1],
-                        attributes: self.oam[i * 4 + 2],
-                        x: self.oam[i * 4 + 3],
+                        y: oam_raw[idx],
+                        tile_index: oam_raw[idx + 1],
+                        attributes: oam_raw[idx + 2],
+                        x: oam_raw[idx + 3],
                         index: i as u8,
                     };
                     n += 1;
@@ -560,6 +532,7 @@ impl Ppu {
 
     fn load_sprites(&mut self, _mapper: &mut dyn crate::mapper::Mapper) {}
 
+    #[inline]
     fn increment_coarse_x(&mut self) {
         if (self.v & 0x001F) == 31 {
             self.v &= !0x001F;
@@ -569,6 +542,7 @@ impl Ppu {
         }
     }
 
+    #[inline]
     fn increment_y(&mut self) {
         if (self.v & 0x7000) != 0x7000 {
             self.v += 0x1000;
@@ -587,90 +561,64 @@ impl Ppu {
         }
     }
 
+    #[inline]
     fn copy_horizontal(&mut self) {
         self.v = (self.v & !0x041F) | (self.t & 0x041F);
     }
 
+    #[inline]
     fn copy_vertical(&mut self) {
         self.v = (self.v & !0x7BE0) | (self.t & 0x7BE0);
     }
 
     pub fn read_vram(&self, addr: u16, mapper: &mut dyn crate::mapper::Mapper) -> u8 {
         let addr = addr & 0x3FFF;
-
         if addr < 0x2000 {
-            return mapper.read_chr(addr);
+            mapper.read_chr(addr)
+        } else if addr < 0x3F00 {
+            self.vram[self.mirror_vram_addr(addr, mapper.mirroring())]
+        } else if addr < 0x4000 {
+            self.palette[(addr & 0x1F) as usize] & 0x3F
+        } else {
+            0
         }
-
-        if addr < 0x3F00 {
-            let mirrored_addr = self.mirror_vram_addr(addr, mapper.mirroring());
-            return self.vram[mirrored_addr];
-        }
-
-        if addr < 0x4000 {
-            let palette_addr = ((addr - 0x3F00) % 32) as usize;
-            let index = palette_addr;
-            return self.palette[index] & 0x3F;
-        }
-
-        0
     }
 
     pub fn write_vram(&mut self, addr: u16, value: u8, mapper: &mut dyn crate::mapper::Mapper) {
         let addr = addr & 0x3FFF;
-
         if addr < 0x2000 {
             mapper.write_chr(addr, value);
-            return;
-        }
-
-        if addr < 0x3F00 {
-            let mirrored_addr = self.mirror_vram_addr(addr, mapper.mirroring());
-            self.vram[mirrored_addr] = value;
-            return;
-        }
-
-        if addr < 0x4000 {
-            let palette_addr = ((addr - 0x3F00) % 32) as usize;
+        } else if addr < 0x3F00 {
+            let m_addr = self.mirror_vram_addr(addr, mapper.mirroring());
+            self.vram[m_addr] = value;
+        } else if addr < 0x4000 {
+            let p_addr = (addr & 0x1F) as usize;
             let value = value & 0x3F;
-
-            if palette_addr.is_multiple_of(4) {
-                self.palette[palette_addr] = value;
-                self.palette[palette_addr ^ 0x10] = value;
-            } else {
-                self.palette[palette_addr] = value;
+            self.palette[p_addr] = value;
+            if (p_addr & 0x03) == 0 {
+                self.palette[p_addr ^ 0x10] = value;
             }
         }
     }
 
     fn mirror_vram_addr(&self, addr: u16, mirroring: crate::mapper::Mirroring) -> usize {
-        let addr = ((addr - 0x2000) & 0x0FFF) as usize;
-        let table = addr / 0x400;
-        let offset = addr % 0x400;
+        let addr = (addr & 0x0FFF) as usize;
+        let table = addr >> 10;
+        let offset = addr & 0x3FF;
 
         let mapped_table = match mirroring {
-            crate::mapper::Mirroring::Horizontal => match table {
-                0 | 1 => 0,
-                2 | 3 => 1,
-                _ => 0,
-            },
-            crate::mapper::Mirroring::Vertical => match table {
-                0 | 2 => 0,
-                1 | 3 => 1,
-                _ => 0,
-            },
+            crate::mapper::Mirroring::Horizontal => table >> 1,
+            crate::mapper::Mirroring::Vertical => table & 1,
             crate::mapper::Mirroring::SingleScreenLower => 0,
             crate::mapper::Mirroring::SingleScreenUpper => 1,
             crate::mapper::Mirroring::FourScreen => table,
         };
-
-        mapped_table * 0x400 + offset
+        (mapped_table << 10) | offset
     }
 
     pub fn write_ctrl(&mut self, value: u8) {
         let prev_nmi = self.ctrl.nmi_enable();
         self.ctrl = PpuCtrl::from_bytes([value]);
-
         self.t = (self.t & !0x0C00) | ((value as u16 & 0x03) << 10);
 
         if !prev_nmi && self.ctrl.nmi_enable() && self.status.vblank() {
@@ -693,7 +641,6 @@ impl Ppu {
         if self.scanline == 241 && (self.dot == 1 || self.dot == 2) {
             self.suppress_nmi = true;
         }
-
         status_byte
     }
 
@@ -735,12 +682,12 @@ impl Ppu {
 
     pub fn read_data(&mut self, mapper: &mut dyn crate::mapper::Mapper) -> u8 {
         let addr = self.v;
-        let increment = if self.ctrl.vram_addr_inc() != 0 {
+        let inc = if self.ctrl.vram_addr_inc() != 0 {
             32
         } else {
             1
         };
-        self.v = self.v.wrapping_add(increment);
+        self.v = self.v.wrapping_add(inc);
 
         if addr < 0x3F00 {
             let data = self.read_buffer;
@@ -748,25 +695,24 @@ impl Ppu {
             data
         } else {
             self.read_buffer = self.read_vram(addr & 0x2FFF, mapper);
-            let data = self.read_vram(addr, mapper);
-            (data & 0x3F) | (self.open_bus & 0xC0)
+            (self.read_vram(addr, mapper) & 0x3F) | (self.open_bus & 0xC0)
         }
     }
 
     pub fn write_data(&mut self, value: u8, mapper: &mut dyn crate::mapper::Mapper) {
         let addr = self.v;
         self.write_vram(addr, value, mapper);
-        let increment = if self.ctrl.vram_addr_inc() != 0 {
+        let inc = if self.ctrl.vram_addr_inc() != 0 {
             32
         } else {
             1
         };
-        self.v = self.v.wrapping_add(increment);
+        self.v = self.v.wrapping_add(inc);
     }
 
     pub fn write_oam_dma(&mut self, data: &[u8]) {
         for (i, &byte) in data.iter().enumerate() {
-            self.oam[(self.oam_addr.wrapping_add(i as u8)) as usize] = byte;
+            self.oam[self.oam_addr.wrapping_add(i as u8) as usize] = byte;
         }
     }
 
@@ -775,11 +721,9 @@ impl Ppu {
             self.nmi_delay = false;
             return false;
         }
-
         if self.scanline == 241 && (self.dot == 1 || self.dot == 2) {
             return false;
         }
-
         if self.nmi_pending {
             self.nmi_pending = false;
             true
@@ -802,12 +746,8 @@ impl Ppu {
             0xFF000000,
         ];
 
-        static PALETTE: LazyLock<[Color32; 64]> = LazyLock::new(|| {
-            PALETTE_COLORS.map(|c| {
-                let [a, r, g, b] = c.to_be_bytes();
-                Color32::from_rgba_unmultiplied(r, g, b, a)
-            })
-        });
-        PALETTE[index as usize & 0x3F]
+        let c = PALETTE_COLORS[(index & 0x3F) as usize];
+        let [a, r, g, b] = c.to_be_bytes();
+        Color32::from_rgba_unmultiplied(r, g, b, a)
     }
 }
