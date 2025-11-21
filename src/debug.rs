@@ -14,12 +14,14 @@ pub struct DebugState {
     pub stack: RwLock<[u8; 0x100]>,
 }
 
+#[allow(unused_macros)]
 macro_rules! profile {
     ($name:expr) => {
         #[cfg(all(debug_assertions, not(target_arch = "wasm32")))]
         puffin::profile_scope!($name);
     };
 }
+#[allow(unused_imports)]
 pub(crate) use profile;
 
 impl Default for DebugState {
