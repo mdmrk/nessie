@@ -1,7 +1,9 @@
+use crate::audio::Audio;
 use bytesize::ByteSize;
 use egui::{Color32, Key};
 use egui_extras::{Column, TableBuilder};
 use log::{error, info};
+use ringbuf::{HeapRb, traits::Split};
 
 #[cfg(target_arch = "wasm32")]
 use rfd::AsyncFileDialog;
@@ -216,6 +218,7 @@ pub struct Ui {
     event_rx: Option<mpsc::Receiver<Event>>,
     #[cfg(not(target_arch = "wasm32"))]
     emu_thread_handle: Option<JoinHandle<()>>,
+    audio: Option<Audio>,
 
     #[cfg(target_arch = "wasm32")]
     emu: Option<Emu>,
@@ -254,6 +257,7 @@ impl Ui {
             event_rx: None,
             #[cfg(not(target_arch = "wasm32"))]
             emu_thread_handle: None,
+            audio: None,
 
             #[cfg(target_arch = "wasm32")]
             emu: None,
@@ -335,6 +339,21 @@ impl Ui {
 
         #[cfg(not(target_arch = "wasm32"))]
         {
+            let rb = HeapRb::<f32>::new(4096);
+            let (producer, consumer) = rb.split();
+            let (audio_handle, sample_rate) = match Audio::new(consumer) {
+                Ok(audio) => {
+                    let rate = audio.sample_rate;
+                    (Some(audio), rate)
+                }
+                Err(e) => {
+                    error!("Failed to initialize audio: {}", e);
+                    (None, 44100.0)
+                }
+            };
+
+            self.audio = audio_handle;
+
             let args = self.args.clone();
             let rom = rom.to_owned();
             let pause = args.pause;
@@ -345,6 +364,7 @@ impl Ui {
 
             self.command_tx = Some(command_tx);
             self.event_rx = Some(event_rx);
+
             let event_tx_clone = event_tx.clone();
 
             self.emu_error_msg = None;
@@ -353,7 +373,15 @@ impl Ui {
                 .name("emu_thread".to_string())
                 .spawn(move || {
                     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        emu_thread(command_rx, event_tx, debug_state, &args, &rom);
+                        emu_thread(
+                            command_rx,
+                            event_tx,
+                            debug_state,
+                            &args,
+                            &rom,
+                            producer,
+                            sample_rate,
+                        );
                     }));
 
                     if let Err(e) = result {
@@ -362,10 +390,10 @@ impl Ui {
                         } else if let Some(s) = e.downcast_ref::<String>() {
                             s.clone()
                         } else {
-                            "Unknown panic type".to_string()
+                            "Unknown emulator crash".to_string()
                         };
-                        error!("Emulator thread panicked: {:?}", msg);
-                        _ = event_tx_clone.send(Event::Crashed(format!("{:?}", msg)));
+
+                        let _ = event_tx_clone.send(Event::Crashed(msg));
                     }
                 })
                 .expect("Failed to spawn emu thread");
@@ -378,8 +406,23 @@ impl Ui {
 
     #[cfg(target_arch = "wasm32")]
     pub fn spawn_emu_wasm(&mut self, rom_data: Vec<u8>) {
+        let rb = HeapRb::<f32>::new(4096);
+        let (producer, consumer) = rb.split();
+
+        let (audio_handle, sample_rate) = match Audio::new(consumer) {
+            Ok(audio) => {
+                let rate = audio.sample_rate;
+                (Some(audio), rate)
+            }
+            Err(e) => {
+                error!("Failed to initialize audio: {}", e);
+                (None, 44100.0)
+            }
+        };
+        self.audio = audio_handle;
         let (tx, _) = mpsc::channel();
-        let mut emu = Emu::new(tx, false);
+        let mut emu = Emu::new(tx, false, producer, sample_rate);
+
         emu.load_rom_from_bytes(rom_data);
         self.emu = Some(emu);
         self.running = true;
@@ -495,10 +538,12 @@ impl Ui {
                         self.emu_stop();
                     }
                 });
-                ui.separator();
-                #[cfg(not(target_arch = "wasm32"))]
-                if ui.button("📷 Take snapshot").clicked() {
-                    self.take_snapshot();
+                {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    ui.separator();
+                    if ui.button("📷 Take snapshot").clicked() {
+                        self.take_snapshot();
+                    }
                 }
                 #[cfg(not(target_arch = "wasm32"))]
                 ui.checkbox(&mut self.show_debug_panels, "Show debug panels");
@@ -724,6 +769,65 @@ impl Ui {
                     });
             }
         });
+    }
+
+    fn draw_apu_inspector(&self, ui: &mut egui::Ui) {
+        ui.label(egui::RichText::new("APU").strong());
+        if let Ok(apu) = self.debug_state.apu.read() {
+            egui::CollapsingHeader::new("Pulse 1 & 2").show(ui, |ui| {
+                TableBuilder::new(ui)
+                    .id_salt("apu_pulse")
+                    .striped(true)
+                    .column(Column::auto())
+                    .column(Column::remainder())
+                    .body(|mut body| {
+                        let hz1 = if apu.pulse1.timer_period > 0 { 1789773.0 / (16.0 * (apu.pulse1.timer_period as f32 + 1.0)) } else { 0.0 };
+                        let hz2 = if apu.pulse2.timer_period > 0 { 1789773.0 / (16.0 * (apu.pulse2.timer_period as f32 + 1.0)) } else { 0.0 };
+
+                        make_rows!(body,
+                            "P1 Enable" => format!("{}", apu.pulse1.enabled),
+                            "P1 Freq" => format!("{:.1} Hz", hz1),
+                            "P1 Vol" => format!("{}", if apu.pulse1.envelope.constant_volume { apu.pulse1.envelope.divider_period } else { apu.pulse1.envelope.decay_count }),
+                            "P1 Duty" => format!("{}", apu.pulse1.duty_mode),
+                            "P2 Enable" => format!("{}", apu.pulse2.enabled),
+                            "P2 Freq" => format!("{:.1} Hz", hz2),
+                            "P2 Vol" => format!("{}", if apu.pulse2.envelope.constant_volume { apu.pulse2.envelope.divider_period } else { apu.pulse2.envelope.decay_count }),
+                        );
+                    });
+            });
+
+            egui::CollapsingHeader::new("Triangle & Noise").show(ui, |ui| {
+                TableBuilder::new(ui)
+                    .id_salt("apu_t_n")
+                    .striped(true)
+                    .column(Column::auto())
+                    .column(Column::remainder())
+                    .body(|mut body| {
+                        make_rows!(body,
+                            "Tri Enable" => format!("{}", apu.triangle.enabled),
+                            "Tri Linear" => format!("{}", apu.triangle.linear_counter),
+                            "Noise Enable" => format!("{}", apu.noise.enabled),
+                            "Noise Mode" => format!("{}", apu.noise.mode),
+                        );
+                    });
+            });
+
+            egui::CollapsingHeader::new("DMC & Frame").show(ui, |ui| {
+                TableBuilder::new(ui)
+                .id_salt("apu_dmc")
+                .striped(true)
+                .column(Column::auto())
+                .column(Column::remainder())
+                .body(|mut body| {
+                     make_rows!(body,
+                        "DMC Enable" => format!("{}", apu.dmc.enabled),
+                        "DMC Bytes" => format!("{}", apu.dmc.current_length),
+                        "Frame Mode" => if apu.frame_mode { "5-Step" } else { "4-Step" },
+                        "IRQ Pending" => format!("{}", apu.frame_irq_pending || apu.dmc.irq_pending),
+                    );
+                });
+            });
+        }
     }
 
     fn draw_ppu_inspector(&mut self, ui: &mut egui::Ui) {
@@ -1126,6 +1230,8 @@ impl Ui {
                         ui.vertical(|ui| {
                             self.draw_cpu_inspector(ui);
                             ui.separator();
+                            self.draw_apu_inspector(ui);
+                            ui.separator();
                             self.draw_ppu_inspector(ui);
                         });
                     });
@@ -1233,6 +1339,7 @@ impl Drop for Ui {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn get_unique_path() -> PathBuf {
     let directory = ".";
     let filename = "screenshot";

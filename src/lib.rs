@@ -1,5 +1,7 @@
 pub mod app;
+pub mod apu;
 pub mod args;
+pub mod audio;
 pub mod bus;
 pub mod cart;
 pub mod cpu;

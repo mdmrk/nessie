@@ -482,6 +482,9 @@ impl Cpu {
 
         bus.ppu
             .step(bus.cart.as_mut().unwrap().mapper.as_mut(), total_cycles);
+        for _ in 0..total_cycles {
+            bus.apu.step();
+        }
         let nmi_current_state = bus.ppu.check_nmi();
         if nmi_current_state && !self.nmi_previous_state {
             self.nmi_pending = true;
@@ -565,6 +568,9 @@ impl Cpu {
         self.cycle_count += cycles as usize;
         bus.ppu
             .step(bus.cart.as_mut().unwrap().mapper.as_mut(), cycles);
+        for _ in 0..cycles {
+            bus.apu.step();
+        }
     }
 
     fn handle_irq(&mut self, bus: &mut Bus) {
@@ -586,6 +592,9 @@ impl Cpu {
         self.cycle_count += cycles as usize;
         bus.ppu
             .step(bus.cart.as_mut().unwrap().mapper.as_mut(), cycles);
+        for _ in 0..cycles {
+            bus.apu.step();
+        }
     }
 
     fn update_nz(&mut self, value: u8) {

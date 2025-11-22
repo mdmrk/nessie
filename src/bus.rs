@@ -1,6 +1,6 @@
 use log::warn;
 
-use crate::{cart::Cart, ppu::Ppu};
+use crate::{apu::Apu, cart::Cart, ppu::Ppu};
 
 #[derive(Default, Clone)]
 pub struct Controller {
@@ -10,9 +10,9 @@ pub struct Controller {
     strobe: bool,
 }
 
-#[derive(Clone)]
 pub struct Bus {
     mem: [u8; 0x800],
+    pub apu: Apu,
     pub ppu: Ppu,
     pub cart: Option<Cart>,
     pub controller1: Controller,
@@ -24,6 +24,7 @@ impl Default for Bus {
     fn default() -> Self {
         Self {
             mem: [0; 0x800],
+            apu: Default::default(),
             ppu: Default::default(),
             cart: None,
             controller1: Default::default(),
@@ -38,12 +39,27 @@ impl Bus {
         Default::default()
     }
 
+    pub fn tick_apu(&mut self) {
+        self.apu.step();
+        if let Some(addr) = self.apu.poll_dmc_dma() {
+            let val = self.read_byte(addr);
+            self.apu.fill_dmc_buffer(val);
+        }
+    }
+
     pub fn insert_cartridge(&mut self, cart: Cart) {
         self.cart = Some(cart);
     }
 
     fn read_mem(&self, addr: u16) -> u8 {
         self.mem[(addr & 0x7FF) as usize]
+    }
+
+    fn read_apu(&mut self, addr: u16) -> u8 {
+        match addr {
+            0x4015 => self.apu.read_status(),
+            _ => self.open_bus,
+        }
     }
 
     fn read_ppu(&mut self, addr: u16) -> u8 {
@@ -108,7 +124,7 @@ impl Bus {
             0x0000..=0x1FFF => self.read_mem(addr),
             0x2000..=0x3FFF => self.read_ppu(addr),
             0x4014 => self.open_bus,
-            0x4015 => self.open_bus, // TODO: APU
+            0x4015 => self.read_apu(addr),
             0x4016 => self.read_controller1(),
             0x4017 => self.read_controller2(),
             0x4000..=0x401F => self.open_bus,
@@ -147,6 +163,10 @@ impl Bus {
 
     fn write_mem(&mut self, addr: u16, value: u8) {
         self.mem[(addr & 0x7FF) as usize] = value;
+    }
+
+    fn write_apu(&mut self, addr: u16, value: u8) {
+        self.apu.write_register(addr, value);
     }
 
     fn write_ppu(&mut self, addr: u16, value: u8) {
@@ -200,8 +220,10 @@ impl Bus {
             0x0000..=0x1FFF => self.write_mem(addr, value),
             0x2000..=0x3FFF => self.write_ppu(addr, value),
             0x4014 => self.write_dma(value),
+            0x4015 => self.write_apu(addr, value),
             0x4016 => self.write_controller(value),
-            0x4000..=0x401F => {} // TODO: APU
+            0x4017 => self.write_apu(addr, value),
+            0x4000..=0x401F => self.write_apu(addr, value),
             0x4020..=0xFFFF => {
                 if let Some(cart) = &mut self.cart {
                     cart.mapper.write_prg(addr, value);
