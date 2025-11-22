@@ -7,7 +7,6 @@ edition = "2024"
 argh = "0.1.13"
 bitflags = "2.10.0"
 bytesize = "2.2.0"
-console_error_panic_hook = "0.1.7"
 eframe = { version = "0.33.2", default-features = false, features = [
   "default_fonts",
   "glow",
@@ -19,16 +18,19 @@ egui_extras = { version = "0.33.2", features = ["image"] }
 image = { version = "0.25.9", default-features = false, features = ["png"] }
 log = "0.4.28"
 modular-bitfield = "0.13.0"
-phf = { version = "0.13.1", features = ["macros"],default-features = false}
+phf = { version = "0.13.1", default-features = false, features = ["macros"] }
 rfd = "0.15.4"
-wasm-bindgen-futures = "0.4.55"
-web-sys = "0.3.82"
-web-time = "1.1.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+env_logger = "0.11.8"
 puffin = "0.19.1"
 puffin_http = "0.16.1"
-env_logger = "0.11.8"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen-futures = "0.4.55"
+console_error_panic_hook = "0.1.7"
+web-sys = "0.3.82"
+web-time = "1.1.0"
 
 [profile.release]
 lto = true
