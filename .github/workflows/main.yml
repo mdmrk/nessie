@@ -93,6 +93,8 @@ jobs:
   wasm:
     name: wasm (web)
     runs-on: ubuntu-latest
+    env:
+      public_url: "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -102,7 +104,7 @@ jobs:
       - name: Install Trunk
         uses: jetli/trunk-action@v0.5.1
       - name: Build Release
-        run: trunk build --release --minify
+        run: trunk build --release --minify --public-url $public_url
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
