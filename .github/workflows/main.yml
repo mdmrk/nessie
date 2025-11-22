@@ -1,17 +1,24 @@
 name: ci
+
 on:
   push:
     branches: [main, master]
   pull_request:
     branches: [main, master]
   workflow_dispatch:
+
 permissions:
   contents: read
+  pages: write
+  id-token: write
+
 env:
   CARGO_TERM_COLOR: always
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
 jobs:
   fmt:
     runs-on: ubuntu-latest
@@ -23,6 +30,7 @@ jobs:
         with:
           components: rustfmt
       - run: cargo fmt --all -- --check
+
   clippy:
     runs-on: ubuntu-latest
     steps:
@@ -34,6 +42,7 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --all-targets --all-features -- -D warnings
+
   build:
     name: build (${{ matrix.target }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -80,3 +89,33 @@ jobs:
           path: |
             target/${{ matrix.target }}/release/nessie${{ matrix.bin_ext }}
           if-no-files-found: error
+
+  wasm:
+    name: wasm (web)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Trunk
+        uses: jetli/trunk-action@v0.5.0
+      - name: Build Release
+        run: trunk build --release
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: wasm
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
