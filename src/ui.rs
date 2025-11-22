@@ -538,8 +538,8 @@ impl Ui {
                         self.emu_stop();
                     }
                 });
+                #[cfg(not(target_arch = "wasm32"))]
                 {
-                    #[cfg(not(target_arch = "wasm32"))]
                     ui.separator();
                     if ui.button("📷 Take snapshot").clicked() {
                         self.take_snapshot();
