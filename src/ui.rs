@@ -496,6 +496,7 @@ impl Ui {
                     }
                 });
                 ui.separator();
+                #[cfg(not(target_arch = "wasm32"))]
                 if ui.button("📷 Take snapshot").clicked() {
                     self.take_snapshot();
                 }
@@ -1200,6 +1201,7 @@ impl Ui {
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn take_snapshot(&self) {
         let frame_data: Vec<u8> = self
             .screen
