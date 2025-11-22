@@ -102,7 +102,7 @@ jobs:
       - name: Install Trunk
         uses: jetli/trunk-action@v0.5.1
       - name: Build Release
-        run: trunk build --release --minify --public-url "/mdmrk/nessie/"
+        run: trunk build --release --minify
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
