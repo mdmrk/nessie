@@ -91,8 +91,11 @@ jobs:
           if-no-files-found: error
 
   wasm:
-    name: wasm (web)
+    name: build and deploy (wasm32-unknown-unknown, ${{ matrix.os }})
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     env:
       public_url: "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
     steps:
@@ -109,15 +112,6 @@ jobs:
         uses: actions/upload-pages-artifact@v4
         with:
           path: dist
-
-  deploy:
-    needs: wasm
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
