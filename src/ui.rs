@@ -2,14 +2,27 @@ use bytesize::ByteSize;
 use egui::{Color32, Key};
 use egui_extras::{Column, TableBuilder};
 use log::{error, info};
+
+#[cfg(target_arch = "wasm32")]
+use rfd::AsyncFileDialog;
 #[cfg(not(target_arch = "wasm32"))]
 use rfd::FileDialog;
+
+#[cfg(target_arch = "wasm32")]
+use crate::emu::Emu;
+
 use std::{
     path::{Path, PathBuf},
     sync::{Arc, mpsc},
-    thread::{self, JoinHandle},
-    time::{Duration, Instant},
 };
+
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::{Duration, Instant};
+#[cfg(target_arch = "wasm32")]
+use web_time::{Duration, Instant};
+
+#[cfg(not(target_arch = "wasm32"))]
+use std::thread::{self, JoinHandle};
 
 use crate::{
     args::Args,
@@ -197,12 +210,21 @@ impl Input {
 
 pub struct Ui {
     screen: Screen,
+    #[cfg(not(target_arch = "wasm32"))]
     command_tx: Option<mpsc::Sender<Command>>,
+    #[cfg(not(target_arch = "wasm32"))]
     event_rx: Option<mpsc::Receiver<Event>>,
+    #[cfg(not(target_arch = "wasm32"))]
+    emu_thread_handle: Option<JoinHandle<()>>,
+
+    #[cfg(target_arch = "wasm32")]
+    emu: Option<Emu>,
+    #[cfg(target_arch = "wasm32")]
+    rom_loader_rx: Option<mpsc::Receiver<Vec<u8>>>,
+
     args: Args,
     pub debug_state: Arc<DebugState>,
 
-    emu_thread_handle: Option<JoinHandle<()>>,
     emu_error_msg: Option<String>,
 
     mem_search: String,
@@ -226,11 +248,20 @@ impl Ui {
     pub fn new(debug_state: Arc<DebugState>, args: Args) -> Self {
         Self {
             screen: Screen::new(),
+            #[cfg(not(target_arch = "wasm32"))]
             command_tx: None,
+            #[cfg(not(target_arch = "wasm32"))]
             event_rx: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            emu_thread_handle: None,
+
+            #[cfg(target_arch = "wasm32")]
+            emu: None,
+            #[cfg(target_arch = "wasm32")]
+            rom_loader_rx: None,
+
             args,
             debug_state,
-            emu_thread_handle: None,
             emu_error_msg: None,
             mem_search: "".into(),
             prev_mem_search_addr: 0,
@@ -260,34 +291,39 @@ impl Ui {
                 self.controller1_input.down = i.key_down(Key::ArrowDown);
                 self.controller1_input.left = i.key_down(Key::ArrowLeft);
                 self.controller1_input.right = i.key_down(Key::ArrowRight);
-
-                // TODO
-                // self.controller2_input.a = i.key_down(Key::A);
-                // self.controller2_input.b = i.key_down(Key::B);
-                // self.controller2_input.start = i.key_down(Key::Z);
-                // self.controller2_input.select = i.key_down(Key::N);
-                // self.controller2_input.up = i.key_down(Key::ArrowUp);
-                // self.controller2_input.down = i.key_down(Key::ArrowDown);
-                // self.controller2_input.left = i.key_down(Key::ArrowLeft);
-                // self.controller2_input.right = i.key_down(Key::ArrowRight);
             });
         }
-        self.send_command(Command::ControllerInputs(
-            (self.controller2_input.as_byte() as u16) << 8
-                | self.controller1_input.as_byte() as u16,
-        ));
+
+        let input_val = (self.controller2_input.as_byte() as u16) << 8
+            | self.controller1_input.as_byte() as u16;
+
+        #[cfg(not(target_arch = "wasm32"))]
+        self.send_command(Command::ControllerInputs(input_val));
+
+        #[cfg(target_arch = "wasm32")]
+        if let Some(emu) = &mut self.emu {
+            emu.bus.controller1.realtime = (input_val & 0xFF) as u8;
+            emu.bus.controller2.realtime = (input_val >> 8 & 0xFF) as u8;
+        }
     }
 
     fn stop_emu_thread(&mut self) {
-        if let Some(command_tx) = self.command_tx.take() {
-            let _ = command_tx.send(Command::Stop);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if let Some(command_tx) = self.command_tx.take() {
+                let _ = command_tx.send(Command::Stop);
 
-            if let Some(handle) = self.emu_thread_handle.take() {
-                let _ = handle.join();
+                if let Some(handle) = self.emu_thread_handle.take() {
+                    let _ = handle.join();
+                }
             }
+            self.event_rx = None;
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            self.emu = None;
         }
 
-        self.event_rx = None;
         self.running = false;
         self.paused = false;
     }
@@ -297,46 +333,60 @@ impl Ui {
             self.stop_emu_thread();
         }
 
-        let args = self.args.clone();
-        let rom = rom.to_owned();
-        let pause = args.pause;
-        let debug_state = self.debug_state.clone();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let args = self.args.clone();
+            let rom = rom.to_owned();
+            let pause = args.pause;
+            let debug_state = self.debug_state.clone();
 
-        let (command_tx, command_rx) = mpsc::channel();
-        let (event_tx, event_rx) = mpsc::channel();
+            let (command_tx, command_rx) = mpsc::channel();
+            let (event_tx, event_rx) = mpsc::channel();
 
-        self.command_tx = Some(command_tx);
-        self.event_rx = Some(event_rx);
-        let event_tx_clone = event_tx.clone();
+            self.command_tx = Some(command_tx);
+            self.event_rx = Some(event_rx);
+            let event_tx_clone = event_tx.clone();
 
-        self.emu_error_msg = None;
+            self.emu_error_msg = None;
 
-        let handle = thread::Builder::new()
-            .name("emu_thread".to_string())
-            .spawn(move || {
-                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    emu_thread(command_rx, event_tx, debug_state, &args, &rom);
-                }));
+            let handle = thread::Builder::new()
+                .name("emu_thread".to_string())
+                .spawn(move || {
+                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        emu_thread(command_rx, event_tx, debug_state, &args, &rom);
+                    }));
 
-                if let Err(e) = result {
-                    let msg = if let Some(s) = e.downcast_ref::<&str>() {
-                        s.to_string()
-                    } else if let Some(s) = e.downcast_ref::<String>() {
-                        s.clone()
-                    } else {
-                        "Unknown panic type".to_string()
-                    };
-                    error!("Emulator thread panicked: {:?}", msg);
-                    _ = event_tx_clone.send(Event::Crashed(format!("{:?}", msg)));
-                }
-            })
-            .expect("Failed to spawn emu thread");
+                    if let Err(e) = result {
+                        let msg = if let Some(s) = e.downcast_ref::<&str>() {
+                            s.to_string()
+                        } else if let Some(s) = e.downcast_ref::<String>() {
+                            s.clone()
+                        } else {
+                            "Unknown panic type".to_string()
+                        };
+                        error!("Emulator thread panicked: {:?}", msg);
+                        _ = event_tx_clone.send(Event::Crashed(format!("{:?}", msg)));
+                    }
+                })
+                .expect("Failed to spawn emu thread");
 
-        self.emu_thread_handle = Some(handle);
-        self.running = true;
-        self.paused = pause;
+            self.emu_thread_handle = Some(handle);
+            self.running = true;
+            self.paused = pause;
+        }
     }
 
+    #[cfg(target_arch = "wasm32")]
+    pub fn spawn_emu_wasm(&mut self, rom_data: Vec<u8>) {
+        let (tx, _) = mpsc::channel();
+        let mut emu = Emu::new(tx, false);
+        emu.load_rom_from_bytes(rom_data);
+        self.emu = Some(emu);
+        self.running = true;
+        self.paused = false;
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     fn send_command(&self, command: Command) {
         if let Some(command_tx) = &self.command_tx
             && let Err(e) = command_tx.send(command)
@@ -347,19 +397,36 @@ impl Ui {
 
     pub fn emu_step(&mut self) {
         if self.running && self.paused {
+            #[cfg(not(target_arch = "wasm32"))]
             self.send_command(Command::Step);
+            #[cfg(target_arch = "wasm32")]
+            if let Some(emu) = &mut self.emu {
+                emu.want_step = true;
+            }
         }
     }
 
     pub fn emu_resume(&mut self) {
         if self.running && self.paused {
+            #[cfg(not(target_arch = "wasm32"))]
             self.send_command(Command::Resume);
+            #[cfg(target_arch = "wasm32")]
+            if let Some(emu) = &mut self.emu {
+                emu.paused = false;
+                self.paused = false;
+            }
         }
     }
 
     pub fn emu_pause(&mut self) {
         if self.running && !self.paused {
+            #[cfg(not(target_arch = "wasm32"))]
             self.send_command(Command::Pause);
+            #[cfg(target_arch = "wasm32")]
+            if let Some(emu) = &mut self.emu {
+                emu.paused = true;
+                self.paused = true;
+            }
         }
     }
 
@@ -377,7 +444,6 @@ impl Ui {
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button("File", |ui| {
                 #[cfg(not(target_arch = "wasm32"))]
-                // TODO: implement wasm file dialog (https://github.com/PolyMeilex/rfd/blob/master/examples/web-trunk/src/main.rs)
                 if ui.button("📥 Select rom...").clicked()
                     && let Some(rom) = FileDialog::new()
                         .add_filter("NES rom", &["nes"])
@@ -385,6 +451,24 @@ impl Ui {
                 {
                     self.spawn_emu_thread(&rom.into_os_string().into_string().unwrap());
                 }
+
+                #[cfg(target_arch = "wasm32")]
+                if ui.button("📥 Select rom...").clicked() {
+                    let (tx, rx) = mpsc::channel();
+                    self.rom_loader_rx = Some(rx);
+                    let task = async move {
+                        if let Some(file) = AsyncFileDialog::new()
+                            .add_filter("NES rom", &["nes"])
+                            .pick_file()
+                            .await
+                        {
+                            let data = file.read().await;
+                            let _ = tx.send(data);
+                        }
+                    };
+                    wasm_bindgen_futures::spawn_local(task);
+                }
+
                 ui.separator();
                 if ui.button("✖ Quit").clicked() {
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
@@ -415,6 +499,7 @@ impl Ui {
                 if ui.button("📷 Take snapshot").clicked() {
                     self.take_snapshot();
                 }
+                #[cfg(not(target_arch = "wasm32"))]
                 ui.checkbox(&mut self.show_debug_panels, "Show debug panels");
             });
             ui.menu_button("Help", |ui| {
@@ -480,6 +565,7 @@ impl Ui {
             }
             let start_addr = start_row * BYTES_PER_ROW;
             if start_addr != self.prev_mem_search_addr {
+                #[cfg(not(target_arch = "wasm32"))]
                 self.send_command(Command::MemoryAddress(start_addr));
                 self.prev_mem_search_addr = start_addr;
             }
@@ -491,6 +577,7 @@ impl Ui {
                         .text_style(egui::TextStyle::Monospace),
                 );
                 if ui.button("Dump").clicked() {
+                    #[cfg(not(target_arch = "wasm32"))]
                     self.send_command(Command::DumpMemory);
                 }
             });
@@ -1006,12 +1093,29 @@ impl Ui {
     }
 
     pub fn draw(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        #[cfg(target_arch = "wasm32")]
+        if let Some(rx) = &self.rom_loader_rx {
+            if let Ok(data) = rx.try_recv() {
+                self.spawn_emu_wasm(data);
+                self.rom_loader_rx = None;
+            }
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        if let Some(emu) = &mut self.emu {
+            if let Some(frame) = emu.step_frame() {
+                self.pixels_buffer = Some(frame);
+                self.frame_ready = true;
+            }
+        }
+
         egui::TopBottomPanel::top("menubar")
             .resizable(false)
             .show(ctx, |ui| {
                 self.draw_menubar(ui);
             });
         if self.running {
+            #[cfg(not(target_arch = "wasm32"))]
             if self.show_debug_panels {
                 egui::SidePanel::left("left_panel")
                     .resizable(true)
@@ -1055,6 +1159,7 @@ impl Ui {
                     self.draw_screen(ctx, ui);
                 });
             });
+            #[cfg(not(target_arch = "wasm32"))]
             self.send_command(Command::Update);
         } else {
             egui::CentralPanel::default().show(ctx, |ui| {
@@ -1067,6 +1172,7 @@ impl Ui {
     }
 
     pub fn handle_emu_events(&mut self, _ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(event_rx) = &self.event_rx {
             while let Ok(event) = event_rx.try_recv() {
                 match event {

@@ -631,6 +631,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "console_error_panic_hook"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a06aeb73f470f66dcdbf7223caeebb85984942f22f1adb2a088cf9668146bbbc"
+dependencies = [
+ "cfg-if",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1808,6 +1818,7 @@ dependencies = [
  "argh",
  "bitflags 2.10.0",
  "bytesize",
+ "console_error_panic_hook",
  "eframe",
  "egui",
  "egui_extras",
@@ -1821,6 +1832,7 @@ dependencies = [
  "rfd",
  "wasm-bindgen-futures",
  "web-sys",
+ "web-time",
 ]
 
 [[package]]

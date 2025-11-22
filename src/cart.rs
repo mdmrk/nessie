@@ -47,7 +47,7 @@ pub enum TVSystem2 {
     NTSC = 0,
     DualCompatible = 1,
     PAL = 2,
-    DualCompatible2 = 3, // FIXME: 1 and 3 are dual compatible
+    DualCompatible2 = 3,
 }
 
 #[bitfield(bytes = 1)]
@@ -102,40 +102,55 @@ pub struct Cart {
 }
 
 impl Cart {
+    pub fn from_bytes(contents: Vec<u8>) -> Option<Self> {
+        if contents.len() < size_of::<Header>() {
+            return None;
+        }
+        let header = unsafe { std::ptr::read(contents.as_ptr() as *const Header) };
+        let header_magic = [0x4E, 0x45, 0x53, 0x1A];
+        if header.magic != header_magic {
+            error!("Wrong ROM magic number");
+            return None;
+        }
+        let rom = contents.clone();
+        let prg_rom_size = 16 * 1024 * header.prg_rom_size as usize;
+        let prg_rom_offset = if header.flags6.has_trainer() {
+            size_of::<Header>() + 512
+        } else {
+            size_of::<Header>()
+        };
+
+        if prg_rom_offset + prg_rom_size > rom.len() {
+            return None;
+        }
+
+        let prg_rom = rom[prg_rom_offset..prg_rom_offset + prg_rom_size].to_vec();
+        let chr_rom_size = 8 * 1024 * header.chr_rom_size as usize;
+        let chr_rom_offset = prg_rom_offset + prg_rom_size;
+
+        let chr_rom = if chr_rom_offset + chr_rom_size <= rom.len() {
+            rom[chr_rom_offset..chr_rom_offset + chr_rom_size].to_vec()
+        } else {
+            vec![0; chr_rom_size]
+        };
+
+        let mirroring = if header.flags6.nametable_arrangement() == NametableArrangement::Vertical {
+            Mirroring::Vertical
+        } else {
+            Mirroring::Horizontal
+        };
+        let mapper = header.make_mapper(prg_rom, chr_rom, mirroring);
+
+        Some(Self {
+            header,
+            rom,
+            mapper,
+        })
+    }
+
     pub fn insert(rom_path: &str) -> Option<Self> {
         match std::fs::read(rom_path) {
-            Ok(contents) => {
-                let header = unsafe { std::ptr::read(contents.as_ptr() as *const Header) };
-                let header_magic = [0x4E, 0x45, 0x53, 0x1A]; // (ASCII "NES" followed by MS-DOS end-of-file)
-                if header.magic != header_magic {
-                    error!("Wrong ROM magic number");
-                    return None;
-                }
-                let rom = contents.clone();
-                let prg_rom_size = 16 * 1024 * header.prg_rom_size as usize;
-                let prg_rom_offset = if header.flags6.has_trainer() {
-                    size_of::<Header>() + 512
-                } else {
-                    size_of::<Header>()
-                };
-                let prg_rom = rom[prg_rom_offset..prg_rom_offset + prg_rom_size].to_vec();
-                let chr_rom_size = 8 * 1024 * header.chr_rom_size as usize;
-                let chr_rom_offset = prg_rom_offset + prg_rom_size;
-                let chr_rom = rom[chr_rom_offset..chr_rom_offset + chr_rom_size].to_vec();
-                let mirroring =
-                    if header.flags6.nametable_arrangement() == NametableArrangement::Vertical {
-                        Mirroring::Vertical
-                    } else {
-                        Mirroring::Horizontal
-                    };
-                let mapper = header.make_mapper(prg_rom, chr_rom, mirroring);
-
-                Some(Self {
-                    header,
-                    rom,
-                    mapper,
-                })
-            }
+            Ok(contents) => Self::from_bytes(contents),
             Err(e) => {
                 error!("{e}");
                 None

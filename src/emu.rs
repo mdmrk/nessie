@@ -58,6 +58,15 @@ impl Emu {
         }
     }
 
+    pub fn load_rom_from_bytes(&mut self, bytes: Vec<u8>) {
+        if let Some(cart) = Cart::from_bytes(bytes) {
+            self.bus.insert_cartridge(cart);
+            info!("Rom loaded from bytes");
+            self.bus.ppu.reset();
+            self.cpu.reset(&mut self.bus);
+        }
+    }
+
     pub fn load_rom(&mut self, rom_path: &str) {
         if let Some(cart) = Cart::insert(rom_path) {
             self.bus.insert_cartridge(cart);
@@ -80,6 +89,26 @@ impl Emu {
     pub fn resume(&mut self) {
         self.paused = false;
         self.send_event(Event::Resumed);
+    }
+
+    pub fn step_frame(&mut self) -> Option<Vec<Color32>> {
+        let mut frame_out = None;
+        if !self.paused || self.want_step {
+            loop {
+                if let Err(e) = self.cpu.step(&mut self.bus) {
+                    warn!("{e}. Emulator will be paused");
+                    self.paused = true;
+                    break;
+                }
+                if self.bus.ppu.frame_ready {
+                    self.bus.ppu.frame_ready = false;
+                    frame_out = Some(self.bus.ppu.screen.clone());
+                    break;
+                }
+            }
+            self.want_step = false;
+        }
+        frame_out
     }
 
     fn dump_memory(&mut self) {
@@ -152,7 +181,7 @@ pub fn emu_thread(
             if emu.bus.ppu.frame_ready {
                 emu.bus.ppu.frame_ready = false;
                 let frame_arc = emu.bus.ppu.screen.clone();
-                emu.send_event(Event::FrameReady(frame_arc));
+                emu.send_event(Event::FrameReady(frame_arc.clone()));
 
                 let elapsed = frame_start_time.elapsed();
                 if elapsed < frame_duration {

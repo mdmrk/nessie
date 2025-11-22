@@ -1,6 +1,6 @@
 use argh::FromArgs;
 
-#[derive(FromArgs, Clone)]
+#[derive(FromArgs, Clone, Default)]
 /// NES emulator
 pub struct Args {
     /// path to the ROM (.nes)

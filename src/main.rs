@@ -52,13 +52,16 @@ fn main() -> eframe::Result {
 
 #[cfg(target_arch = "wasm32")]
 fn main() {
+    use std::panic;
+
     use eframe::wasm_bindgen::JsCast as _;
 
+    panic::set_hook(Box::new(console_error_panic_hook::hook));
     eframe::WebLogger::init(log::LevelFilter::Info).ok();
     let options = eframe::WebOptions::default();
 
     wasm_bindgen_futures::spawn_local(async {
-        let args: Args = argh::from_env();
+        let args = Args::default();
         let document = web_sys::window()
             .expect("No window")
             .document()
@@ -68,6 +71,7 @@ fn main() {
             .expect("Failed to find the_canvas_id")
             .dyn_into::<web_sys::HtmlCanvasElement>()
             .expect("the_canvas_id was not a HtmlCanvasElement");
+
         let start_result = eframe::WebRunner::new()
             .start(
                 canvas,
@@ -75,6 +79,7 @@ fn main() {
                 Box::new(|_cc| Ok(Box::new(App::new(args)))),
             )
             .await;
+
         if let Some(loading_text) = document.get_element_by_id("loading_text") {
             match start_result {
                 Ok(_) => {
