@@ -27,6 +27,8 @@ fn start_puffin_server() {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
+    use nessie::ui::Ui;
+
     env_logger::init();
 
     let args: Args = argh::from_env();
@@ -37,7 +39,9 @@ fn main() -> eframe::Result {
     }
 
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([1280.0, 720.0]),
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([1280.0, 720.0])
+            .with_icon(Ui::app_icon()),
         ..Default::default()
     };
     eframe::run_native(
@@ -45,7 +49,7 @@ fn main() -> eframe::Result {
         options,
         Box::new(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);
-            Ok(Box::new(App::new(args)))
+            Ok(Box::new(App::new(&cc.egui_ctx, args)))
         }),
     )
 }
@@ -76,7 +80,10 @@ fn main() {
             .start(
                 canvas,
                 options,
-                Box::new(|_cc| Ok(Box::new(App::new(args)))),
+                Box::new(|cc| {
+                    egui_extras::install_image_loaders(&cc.egui_ctx);
+                    Ok(Box::new(App::new(&cc.egui_ctx, args)))
+                }),
             )
             .await;
 

@@ -1,6 +1,6 @@
 use crate::audio::Audio;
 use bytesize::ByteSize;
-use egui::{Color32, Key};
+use egui::{Color32, ColorImage, IconData, Key};
 use egui_extras::{Column, TableBuilder};
 use log::{error, info};
 use ringbuf::{HeapRb, traits::Split};
@@ -219,6 +219,7 @@ pub struct Ui {
     #[cfg(not(target_arch = "wasm32"))]
     emu_thread_handle: Option<JoinHandle<()>>,
     audio: Option<Audio>,
+    app_icon_texture: egui::TextureHandle,
 
     #[cfg(target_arch = "wasm32")]
     emu: Option<Emu>,
@@ -248,7 +249,10 @@ pub struct Ui {
 }
 
 impl Ui {
-    pub fn new(debug_state: Arc<DebugState>, args: Args) -> Self {
+    pub fn new(ctx: &egui::Context, debug_state: Arc<DebugState>, args: Args) -> Self {
+        let icon_image = load_image_from_memory(&Self::app_icon().rgba).unwrap();
+        let app_icon_texture =
+            ctx.load_texture("app_icon", icon_image, egui::TextureOptions::NEAREST);
         Self {
             screen: Screen::new(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -258,6 +262,7 @@ impl Ui {
             #[cfg(not(target_arch = "wasm32"))]
             emu_thread_handle: None,
             audio: None,
+            app_icon_texture,
 
             #[cfg(target_arch = "wasm32")]
             emu: None,
@@ -449,6 +454,14 @@ impl Ui {
         }
     }
 
+    pub fn app_icon() -> IconData {
+        IconData {
+            rgba: include_bytes!("../assets/icon-1024.png").to_vec(),
+            width: 1024,
+            height: 1024,
+        }
+    }
+
     pub fn emu_resume(&mut self) {
         if self.running && self.paused {
             #[cfg(not(target_arch = "wasm32"))]
@@ -555,7 +568,9 @@ impl Ui {
             if self.show_about {
                 let modal = egui::Modal::new(egui::Id::new("about_modal")).show(ui.ctx(), |ui| {
                     ui.set_width(320.0);
-                    ui.heading("Nessie");
+                    ui.image((self.app_icon_texture.id(), [80.0, 80.0].into()));
+                    ui.add_space(24.0);
+                    ui.label(egui::RichText::new("Nessie").strong());
                     ui.separator();
                     let platform = if cfg!(target_arch = "wasm32") {
                         "Web"
@@ -563,11 +578,14 @@ impl Ui {
                         std::env::consts::OS
                     };
                     let arch = std::env::consts::ARCH;
-                    ui.label(format!("Platform: {} ({})", platform, arch));
-                    ui.label(format!(
-                        "NES emulator - {platform} {arch} ({})",
-                        env!("CARGO_PKG_VERSION")
-                    ));
+                    ui.label("NES emulator");
+                    ui.label(format!("Platform: {} {}", platform, arch));
+                    let date = format!(
+                        "{} {}",
+                        compile_time::date_str!(),
+                        compile_time::time_str!()
+                    );
+                    ui.label(format!("Date: {date}"));
                     ui.hyperlink_to(" nessie on GitHub", "https://github.com/mdmrk/nessie");
                     ui.horizontal(|ui| {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -1366,4 +1384,12 @@ fn get_unique_path() -> PathBuf {
     }
 
     path
+}
+
+pub fn load_image_from_memory(image_data: &[u8]) -> Result<ColorImage, image::ImageError> {
+    let image = image::load_from_memory(image_data)?;
+    let size = [image.width() as _, image.height() as _];
+    let image_buffer = image.to_rgba8();
+    let pixels = image_buffer.as_flat_samples();
+    Ok(ColorImage::from_rgba_unmultiplied(size, pixels.as_slice()))
 }

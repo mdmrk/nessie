@@ -14,10 +14,10 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(args: Args) -> Self {
+    pub fn new(ctx: &egui::Context, args: Args) -> Self {
         let debug_state = Arc::new(DebugState::new());
 
-        let mut ui = Ui::new(debug_state, args.clone());
+        let mut ui = Ui::new(ctx, debug_state, args.clone());
         if let Some(rom) = &args.rom {
             ui.spawn_emu_thread(rom);
         }
