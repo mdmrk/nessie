@@ -544,9 +544,8 @@ impl Ui {
                     if ui.button("📷 Take snapshot").clicked() {
                         self.take_snapshot();
                     }
+                    ui.checkbox(&mut self.show_debug_panels, "Show debug panels");
                 }
-                #[cfg(not(target_arch = "wasm32"))]
-                ui.checkbox(&mut self.show_debug_panels, "Show debug panels");
             });
             ui.menu_button("Help", |ui| {
                 if ui.button("ℹ About").clicked() {
@@ -557,6 +556,19 @@ impl Ui {
                 let modal = egui::Modal::new(egui::Id::new("about_modal")).show(ui.ctx(), |ui| {
                     ui.set_width(320.0);
                     ui.heading("Nessie");
+                    ui.separator();
+                    let platform = if cfg!(target_arch = "wasm32") {
+                        "Web"
+                    } else {
+                        std::env::consts::OS
+                    };
+                    let arch = std::env::consts::ARCH;
+                    ui.label(format!("Platform: {} ({})", platform, arch));
+                    ui.label(format!(
+                        "NES emulator - {platform} {arch} ({})",
+                        env!("CARGO_PKG_VERSION")
+                    ));
+                    ui.hyperlink_to(" nessie on GitHub", "https://github.com/mdmrk/nessie");
                     ui.horizontal(|ui| {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if ui.button("Close").clicked() {
