@@ -116,7 +116,7 @@ jobs:
       - name: Install Trunk
         uses: jetli/trunk-action@v0.5.1
       - name: Build Release
-        run: trunk build --release --minify --public-url $public_url
+        run: TRUNK_BUILD_ID=$(date +%s) trunk build --release --minify --public-url $public_url
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
