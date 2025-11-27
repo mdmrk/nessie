@@ -1138,6 +1138,59 @@ impl Ui {
         }
     }
 
+    fn draw_palette_colors(&self, ui: &mut egui::Ui) {
+        if let Ok(ppu) = self.debug_state.ppu.read() {
+            ui.label(egui::RichText::new("Palette Colors").strong());
+
+            egui::ScrollArea::vertical()
+                .id_salt("palette")
+                .auto_shrink(false)
+                .show(ui, |ui| {
+                    let square_size = 20.0;
+                    ui.label("Background Palettes");
+                    for palette_idx in 0..4 {
+                        ui.horizontal(|ui| {
+                            ui.label(format!("BG{}: ", palette_idx));
+                            for color_idx in 0..4 {
+                                let addr = palette_idx * 4 + color_idx;
+                                let color_byte = ppu.palette[addr];
+                                let color = ppu.get_color_from_palette(color_byte & 0x3F);
+
+                                let (rect, _response) = ui.allocate_exact_size(
+                                    egui::vec2(square_size, square_size),
+                                    egui::Sense::hover(),
+                                );
+                                ui.painter().rect_filled(rect, 0.0, color);
+                            }
+                        });
+                    }
+
+                    ui.add_space(8.0);
+
+                    ui.label("Sprite Palettes");
+                    for palette_idx in 0..4 {
+                        ui.horizontal(|ui| {
+                            ui.label(format!("SP{}: ", palette_idx));
+                            for color_idx in 0..4 {
+                                let addr = 0x10 + palette_idx * 4 + color_idx;
+                                let color_byte = match addr {
+                                    0x10 | 0x14 | 0x18 | 0x1C => ppu.palette[addr - 0x10],
+                                    _ => ppu.palette[addr],
+                                };
+                                let color = ppu.get_color_from_palette(color_byte & 0x3F);
+
+                                let (rect, _response) = ui.allocate_exact_size(
+                                    egui::vec2(square_size, square_size),
+                                    egui::Sense::hover(),
+                                );
+                                ui.painter().rect_filled(rect, 0.0, color);
+                            }
+                        });
+                    }
+                });
+        }
+    }
+
     fn draw_rom_details(&mut self, ui: &mut egui::Ui) {
         ui.label(egui::RichText::new("ROM details").strong());
         if let Ok(cart_header_opt) = self.debug_state.cart_header.read() {
@@ -1255,14 +1308,19 @@ impl Ui {
                 egui::SidePanel::left("left_panel")
                     .resizable(true)
                     .default_width(180.0)
-                    .width_range(..=500.0)
+                    .width_range(100.0..=500.0)
                     .show(ctx, |ui| {
-                        ui.vertical(|ui| {
-                            self.draw_cpu_inspector(ui);
-                            ui.separator();
-                            self.draw_apu_inspector(ui);
-                            ui.separator();
-                            self.draw_ppu_inspector(ui);
+                        ui.columns_const(|[col_1, col_2]| {
+                            col_1.vertical(|ui| {
+                                self.draw_cpu_inspector(ui);
+                                ui.separator();
+                                self.draw_apu_inspector(ui);
+                                ui.separator();
+                                self.draw_ppu_inspector(ui);
+                            });
+                            col_2.vertical(|ui| {
+                                self.draw_palette_colors(ui);
+                            });
                         });
                     });
                 egui::SidePanel::right("right_panel")
