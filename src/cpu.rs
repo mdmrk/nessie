@@ -485,6 +485,7 @@ impl Cpu {
         for _ in 0..total_cycles {
             bus.apu.step();
         }
+        self.irq_pending = bus.apu.irq_occurred();
         let nmi_current_state = bus.ppu.check_nmi();
         if nmi_current_state && !self.nmi_previous_state {
             self.nmi_pending = true;
