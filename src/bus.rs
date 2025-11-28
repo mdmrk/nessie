@@ -55,11 +55,8 @@ impl Bus {
         self.mem[(addr & 0x7FF) as usize]
     }
 
-    fn read_apu(&mut self, addr: u16) -> u8 {
-        match addr {
-            0x4015 => self.apu.read_status(),
-            _ => self.open_bus,
-        }
+    fn read_apu(&mut self) -> u8 {
+        (self.apu.read_status() & 0b1101_1111) | (self.open_bus & 0b0010_0000)
     }
 
     fn read_ppu(&mut self, addr: u16) -> u8 {
@@ -124,14 +121,16 @@ impl Bus {
             0x0000..=0x1FFF => self.read_mem(addr),
             0x2000..=0x3FFF => self.read_ppu(addr),
             0x4014 => self.open_bus,
-            0x4015 => self.read_apu(addr),
+            0x4015 => self.read_apu(),
             0x4016 => self.read_controller1(),
             0x4017 => self.read_controller2(),
             0x4000..=0x401F => self.open_bus,
             0x4020..=0xFFFF => self.read_cartridge(addr),
         };
 
-        self.open_bus = value;
+        if addr != 0x4015 {
+            self.open_bus = value;
+        }
         value
     }
 
