@@ -490,7 +490,7 @@ impl Ppu {
         };
 
         let color_index = self.palette[final_palette_index as usize] & 0x3F;
-        self.screen[y * 256 + x] = self.get_color_from_palette(color_index);
+        self.screen[y * 256 + x] = Ppu::get_color_from_palette(color_index);
     }
 
     fn clear_secondary_oam(&mut self) {
@@ -737,7 +737,7 @@ impl Ppu {
         }
     }
 
-    pub fn get_color_from_palette(&self, index: u8) -> Color32 {
+    pub fn get_color_from_palette(index: u8) -> Color32 {
         const PALETTE_COLORS: [u32; 64] = [
             0xFF666666, 0xFF002A88, 0xFF1412A7, 0xFF3B00A4, 0xFF5C007E, 0xFF6E0040, 0xFF6C0600,
             0xFF561D00, 0xFF333500, 0xFF0B4800, 0xFF005200, 0xFF004F08, 0xFF00404D, 0xFF000000,

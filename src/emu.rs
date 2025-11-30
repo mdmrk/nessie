@@ -1,6 +1,6 @@
 use std::{
     fs,
-    sync::{Arc, mpsc},
+    sync::mpsc,
     thread,
     time::{Duration, Instant},
 };
@@ -9,7 +9,13 @@ use log::{error, info, warn};
 use ringbuf::HeapProd;
 use ringbuf::traits::Producer;
 
-use crate::{args::Args, bus::Bus, cart::Cart, cpu::Cpu, debug::DebugState};
+use crate::{
+    args::Args,
+    bus::Bus,
+    cart::Cart,
+    cpu::Cpu,
+    debug::{DebugSnapshot, MEM_BLOCK_SIZE},
+};
 use egui::Color32;
 
 pub enum Command {
@@ -19,7 +25,6 @@ pub enum Command {
     Step,
     MemoryAddress(usize),
     DumpMemory,
-    Update,
     ControllerInputs(u16),
 }
 
@@ -38,6 +43,7 @@ pub struct Emu {
     pub paused: bool,
     pub want_step: bool,
     pub event_tx: mpsc::Sender<Event>,
+    pub debug_tx: mpsc::Sender<DebugSnapshot>,
     pub mem_chunk_addr: usize,
     pub audio_producer: HeapProd<f32>,
     pub cycles_per_sample: f32,
@@ -49,6 +55,7 @@ pub struct Emu {
 impl Emu {
     pub fn new(
         event_tx: mpsc::Sender<Event>,
+        debug_tx: mpsc::Sender<DebugSnapshot>,
         enable_logging: bool,
         audio_producer: HeapProd<f32>,
         sample_rate: f32,
@@ -60,6 +67,7 @@ impl Emu {
             paused: false,
             want_step: false,
             event_tx,
+            debug_tx,
             mem_chunk_addr: 0,
             audio_producer,
             cycles_per_sample: 1789773.0 / sample_rate,
@@ -144,6 +152,23 @@ impl Emu {
                 if self.bus.ppu.frame_ready {
                     self.bus.ppu.frame_ready = false;
                     frame_out = Some(self.bus.ppu.screen.clone());
+
+                    let memory_slice = self
+                        .bus
+                        .read_only_range(self.mem_chunk_addr as u16, MEM_BLOCK_SIZE as u16);
+                    let stack_slice = self.bus.read_only_range(0x100, 0x100);
+                    let cart_header = self.bus.cart.as_ref().map(|c| &c.header);
+
+                    let snapshot = DebugSnapshot::new(
+                        &self.cpu,
+                        &self.bus.ppu,
+                        &self.bus.apu,
+                        cart_header,
+                        &memory_slice,
+                        &stack_slice,
+                    );
+                    let _ = self.debug_tx.send(snapshot);
+
                     break;
                 }
             }
@@ -168,13 +193,13 @@ impl Emu {
 pub fn emu_thread(
     command_rx: mpsc::Receiver<Command>,
     event_tx: mpsc::Sender<Event>,
-    debug_state: Arc<DebugState>,
+    debug_tx: mpsc::Sender<DebugSnapshot>,
     args: &Args,
     rom: &str,
     audio_producer: HeapProd<f32>,
     sample_rate: f32,
 ) {
-    let mut emu = Emu::new(event_tx, args.log, audio_producer, sample_rate);
+    let mut emu = Emu::new(event_tx, debug_tx, args.log, audio_producer, sample_rate);
 
     emu.load_rom(rom);
     if args.pause {
@@ -205,9 +230,6 @@ pub fn emu_thread(
                 Command::DumpMemory => {
                     emu.dump_memory();
                 }
-                Command::Update => {
-                    debug_state.update(&mut emu);
-                }
                 Command::ControllerInputs(input) => {
                     emu.bus.controller1.realtime = (input & 0xFF) as u8;
                     emu.bus.controller2.realtime = (input >> 8 & 0xFF) as u8;
@@ -217,37 +239,8 @@ pub fn emu_thread(
 
         let should_run = !emu.paused || emu.want_step;
         if should_run {
-            let cycles_before = emu.cpu.cycle_count;
-
-            if let Err(e) = emu.cpu.step(&mut emu.bus) {
-                warn!("{e}. Emulator will be paused");
-                emu.pause();
-            }
-
-            let cycles_delta = emu.cpu.cycle_count - cycles_before;
-            for _ in 0..cycles_delta {
-                emu.bus.tick_apu();
-                emu.sample_sum += emu.bus.apu.output();
-                emu.sample_count += 1.0;
-                emu.cycles_accumulator += 1.0;
-
-                if emu.cycles_accumulator >= emu.cycles_per_sample {
-                    let sample = if emu.sample_count > 0.0 {
-                        emu.sample_sum / emu.sample_count
-                    } else {
-                        0.0
-                    };
-                    let _ = emu.audio_producer.try_push(sample);
-                    emu.cycles_accumulator -= emu.cycles_per_sample;
-                    emu.sample_sum = 0.0;
-                    emu.sample_count = 0.0;
-                }
-            }
-
-            if emu.bus.ppu.frame_ready {
-                emu.bus.ppu.frame_ready = false;
-                let frame_arc = emu.bus.ppu.screen.clone();
-                emu.send_event(Event::FrameReady(frame_arc.clone()));
+            if let Some(frame) = emu.step_frame() {
+                emu.send_event(Event::FrameReady(frame));
 
                 let elapsed = frame_start_time.elapsed();
                 if elapsed < frame_duration {
@@ -255,7 +248,6 @@ pub fn emu_thread(
                 }
                 frame_start_time = Instant::now();
             }
-            emu.want_step = false;
         } else {
             thread::yield_now();
         }

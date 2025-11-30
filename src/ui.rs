@@ -1,4 +1,4 @@
-use crate::audio::Audio;
+use crate::{audio::Audio, ppu::Ppu};
 use bytesize::ByteSize;
 use egui::{Color32, ColorImage, IconData, Key};
 use egui_extras::{Column, TableBuilder};
@@ -16,7 +16,7 @@ use crate::emu::Emu;
 
 use std::{
     path::{Path, PathBuf},
-    sync::{Arc, mpsc},
+    sync::mpsc,
 };
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -29,8 +29,7 @@ use std::thread::{self, JoinHandle};
 
 use crate::{
     args::Args,
-    cpu::Flags,
-    debug::{BYTES_PER_ROW, DebugState, ROWS_TO_SHOW},
+    debug::{BYTES_PER_ROW, DebugSnapshot, ROWS_TO_SHOW},
     emu::{Command, Event, emu_thread},
     mapper::MapperIcon,
 };
@@ -218,6 +217,8 @@ pub struct Ui {
     #[cfg(not(target_arch = "wasm32"))]
     event_rx: Option<mpsc::Receiver<Event>>,
     #[cfg(not(target_arch = "wasm32"))]
+    debug_rx: Option<mpsc::Receiver<DebugSnapshot>>,
+    #[cfg(not(target_arch = "wasm32"))]
     emu_thread_handle: Option<JoinHandle<()>>,
     audio: Option<Audio>,
     app_icon_texture: egui::TextureHandle,
@@ -228,7 +229,7 @@ pub struct Ui {
     rom_loader_rx: Option<mpsc::Receiver<Vec<u8>>>,
 
     args: Args,
-    pub debug_state: Arc<DebugState>,
+    snapshot: DebugSnapshot,
 
     emu_error_msg: Option<String>,
 
@@ -250,7 +251,7 @@ pub struct Ui {
 }
 
 impl Ui {
-    pub fn new(ctx: &egui::Context, debug_state: Arc<DebugState>, args: Args) -> Self {
+    pub fn new(ctx: &egui::Context, args: Args) -> Self {
         let icon_image = load_image_from_memory(&Self::app_icon().rgba).unwrap();
         let app_icon_texture =
             ctx.load_texture("app_icon", icon_image, egui::TextureOptions::NEAREST);
@@ -260,6 +261,8 @@ impl Ui {
             command_tx: None,
             #[cfg(not(target_arch = "wasm32"))]
             event_rx: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            debug_rx: None,
             #[cfg(not(target_arch = "wasm32"))]
             emu_thread_handle: None,
             audio: None,
@@ -271,7 +274,7 @@ impl Ui {
             rom_loader_rx: None,
 
             args,
-            debug_state,
+            snapshot: Default::default(),
             emu_error_msg: None,
             mem_search: "".into(),
             prev_mem_search_addr: 0,
@@ -328,6 +331,7 @@ impl Ui {
                 }
             }
             self.event_rx = None;
+            self.debug_rx = None;
         }
         #[cfg(target_arch = "wasm32")]
         {
@@ -363,13 +367,14 @@ impl Ui {
             let args = self.args.clone();
             let rom = rom.to_owned();
             let pause = args.pause;
-            let debug_state = self.debug_state.clone();
 
             let (command_tx, command_rx) = mpsc::channel();
             let (event_tx, event_rx) = mpsc::channel();
+            let (debug_tx, debug_rx) = mpsc::channel();
 
             self.command_tx = Some(command_tx);
             self.event_rx = Some(event_rx);
+            self.debug_rx = Some(debug_rx);
 
             let event_tx_clone = event_tx.clone();
 
@@ -382,7 +387,7 @@ impl Ui {
                         emu_thread(
                             command_rx,
                             event_tx,
-                            debug_state,
+                            debug_tx,
                             &args,
                             &rom,
                             producer,
@@ -427,7 +432,8 @@ impl Ui {
         };
         self.audio = audio_handle;
         let (tx, _) = mpsc::channel();
-        let mut emu = Emu::new(tx, false, producer, sample_rate);
+        let (debug_tx, _) = mpsc::channel();
+        let mut emu = Emu::new(tx, debug_tx, false, producer, sample_rate);
 
         emu.load_rom_from_bytes(rom_data);
         self.emu = Some(emu);
@@ -659,275 +665,277 @@ impl Ui {
                 }
             });
 
-            if let Ok(mem_chunk) = self.debug_state.mem_chunk.read() {
-                TableBuilder::new(ui)
-                    .striped(true)
-                    .column(Column::auto())
-                    .column(Column::auto())
-                    .column(Column::auto())
-                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                    .body(|mut body| {
-                        for (i, lines) in mem_chunk
-                            .chunks(BYTES_PER_ROW)
-                            .take(ROWS_TO_SHOW)
-                            .enumerate()
-                        {
-                            let bytes_str: Vec<String> =
-                                lines.iter().map(|b| format!("{:02X}", b)).collect();
-                            let bytes_ascii: Vec<char> = lines
-                                .iter()
-                                .map(|b| {
-                                    if !b.is_ascii_graphic() {
-                                        '.'
-                                    } else {
-                                        *b as char
-                                    }
-                                })
-                                .collect();
+            TableBuilder::new(ui)
+                .striped(true)
+                .column(Column::auto())
+                .column(Column::auto())
+                .column(Column::auto())
+                .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                .body(|mut body| {
+                    for (i, lines) in self
+                        .snapshot
+                        .mem_chunk
+                        .chunks(BYTES_PER_ROW)
+                        .take(ROWS_TO_SHOW)
+                        .enumerate()
+                    {
+                        let bytes_str: Vec<String> =
+                            lines.iter().map(|b| format!("{:02X}", b)).collect();
+                        let bytes_ascii: Vec<char> = lines
+                            .iter()
+                            .map(|b| {
+                                if !b.is_ascii_graphic() {
+                                    '.'
+                                } else {
+                                    *b as char
+                                }
+                            })
+                            .collect();
 
-                            let row_addr = start_addr + (i * BYTES_PER_ROW);
+                        let row_addr = start_addr + (i * BYTES_PER_ROW);
 
-                            body.row(20.0, |mut row| {
-                                row.col(|ui| {
-                                    ui.label(
-                                        egui::RichText::new(format!("0x{:04X}", row_addr))
-                                            .strong()
-                                            .text_style(egui::TextStyle::Monospace),
-                                    );
-                                });
-                                row.col(|ui| {
-                                    ui.label(
-                                        egui::RichText::new(bytes_str.join(" "))
-                                            .text_style(egui::TextStyle::Monospace),
-                                    );
-                                });
-                                row.col(|ui| {
-                                    ui.label(
-                                        egui::RichText::new(
-                                            String::from_iter(bytes_ascii).to_string(),
-                                        )
+                        body.row(20.0, |mut row| {
+                            row.col(|ui| {
+                                ui.label(
+                                    egui::RichText::new(format!("0x{:04X}", row_addr))
+                                        .strong()
                                         .text_style(egui::TextStyle::Monospace),
-                                    );
-                                });
+                                );
                             });
-                        }
-                    });
-                ui.shrink_width_to_current();
-                egui::TextEdit::singleline(&mut self.mem_search)
-                    .hint_text("27, 0xD0D0, ...")
-                    .char_limit(8)
-                    .desired_width(f32::INFINITY)
-                    .show(ui);
-            }
+                            row.col(|ui| {
+                                ui.label(
+                                    egui::RichText::new(bytes_str.join(" "))
+                                        .text_style(egui::TextStyle::Monospace),
+                                );
+                            });
+                            row.col(|ui| {
+                                ui.label(
+                                    egui::RichText::new(String::from_iter(bytes_ascii).to_string())
+                                        .text_style(egui::TextStyle::Monospace),
+                                );
+                            });
+                        });
+                    }
+                });
+            ui.shrink_width_to_current();
+            egui::TextEdit::singleline(&mut self.mem_search)
+                .hint_text("27, 0xD0D0, ...")
+                .char_limit(8)
+                .desired_width(f32::INFINITY)
+                .show(ui);
         });
     }
 
     fn draw_cpu_inspector(&mut self, ui: &mut egui::Ui) {
-        if let Ok(cpu) = self.debug_state.cpu.read() {
-            ui.label(egui::RichText::new("CPU").strong());
+        let cpu = &self.snapshot.cpu;
+        ui.label(egui::RichText::new("CPU").strong());
+        TableBuilder::new(ui)
+            .id_salt("cpu")
+            .striped(true)
+            .column(Column::auto())
+            .column(Column::auto())
+            .column(Column::remainder())
+            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+            .body(|mut body| {
+                make_rows!(body,
+                    "sp" => format!("{}", cpu.sp as usize + 0x100), format!("0x{:04X}", cpu.sp as usize + 0x100),
+                    "pc" => format!("{}", cpu.pc), format!("0x{:04X}", cpu.pc),
+                    "a" => format!("{}", cpu.a), format!("0x{:02X}", cpu.a),
+                    "x" => format!("{}", cpu.x), format!("0x{:02X}", cpu.x),
+                    "y" => format!("{}", cpu.y), format!("0x{:02X}", cpu.y),
+                    "p" => format!("{}", cpu.p), format!("0x{:02X}", cpu.p),
+                );
+            });
+
+        let flags = [
+            (cpu.flags_n, "N"),
+            (cpu.flags_v, "V"),
+            (cpu.flags_b, "B"),
+            (cpu.flags_d, "D"),
+            (cpu.flags_i, "I"),
+            (cpu.flags_z, "Z"),
+            (cpu.flags_c, "C"),
+        ];
+
+        egui::CollapsingHeader::new("Flags").show(ui, |ui| {
             TableBuilder::new(ui)
-                .id_salt("cpu")
-                .striped(true)
-                .column(Column::auto())
-                .column(Column::auto())
+                .id_salt("flags")
+                .column(Column::remainder())
+                .column(Column::remainder())
+                .column(Column::remainder())
+                .column(Column::remainder())
+                .column(Column::remainder())
+                .column(Column::remainder())
                 .column(Column::remainder())
                 .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
                 .body(|mut body| {
-                    make_rows!(body,
-                        "sp" => format!("{}", cpu.sp as usize + 0x100), format!("0x{:04X}", cpu.sp as usize + 0x100),
-                        "pc" => format!("{}", cpu.pc), format!("0x{:04X}", cpu.pc),
-                        "a" => format!("{}", cpu.a), format!("0x{:02X}", cpu.a),
-                        "x" => format!("{}", cpu.x), format!("0x{:02X}", cpu.x),
-                        "y" => format!("{}", cpu.y), format!("0x{:02X}", cpu.y),
-                        "p" => format!("{}", cpu.p.bits()), format!("0x{:02X}", cpu.p.bits()),
-                    );
+                    body.row(16.0, |mut row| {
+                        for (mut val, label) in flags {
+                            row.col(|ui| {
+                                ui.add_enabled(false, egui::Checkbox::new(&mut val, label));
+                            });
+                        }
+                    })
                 });
-
-            let mut flags = [
-                (Flags::N, "N", false),
-                (Flags::V, "V", false),
-                (Flags::B, "B", false),
-                (Flags::D, "D", false),
-                (Flags::I, "I", false),
-                (Flags::Z, "Z", false),
-                (Flags::C, "C", false),
-            ];
-
-            egui::CollapsingHeader::new("Flags").show(ui, |ui| {
-                TableBuilder::new(ui)
-                    .id_salt("flags")
-                    .column(Column::remainder())
-                    .column(Column::remainder())
-                    .column(Column::remainder())
-                    .column(Column::remainder())
-                    .column(Column::remainder())
-                    .column(Column::remainder())
-                    .column(Column::remainder())
-                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                    .body(|mut body| {
-                        body.row(16.0, |mut row| {
-                            for flag in &mut flags {
-                                flag.2 = cpu.p.contains(flag.0);
-                                row.col(|ui| {
-                                    ui.add_enabled(false, egui::Checkbox::new(&mut flag.2, flag.1));
-                                });
-                            }
-                        })
-                    });
-            });
-        }
+        });
 
         egui::CollapsingHeader::new("Stack").show(ui, |ui| {
-            if let Ok(stack) = self.debug_state.stack.read() {
-                egui::ScrollArea::vertical()
-                    .max_height(200.0)
-                    .show(ui, |ui| {
-                        TableBuilder::new(ui)
-                            .id_salt("stack")
-                            .striped(true)
-                            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                            .column(Column::auto())
-                            .column(Column::auto())
-                            .column(Column::remainder())
-                            .body(|mut body| {
-                                for (i, n) in stack.iter().enumerate().rev() {
-                                    make_rows!(body,
-                                        format!("0x{:04X}", i + 0x100) =>
-                                            format!("{}", n),
-                                            format!("0x{:02X}",n));
-                                }
-                            });
-                    });
-            }
+            egui::ScrollArea::vertical()
+                .max_height(200.0)
+                .show(ui, |ui| {
+                    TableBuilder::new(ui)
+                        .id_salt("stack")
+                        .striped(true)
+                        .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                        .column(Column::auto())
+                        .column(Column::auto())
+                        .column(Column::remainder())
+                        .body(|mut body| {
+                            for (i, n) in self.snapshot.stack.iter().enumerate().rev() {
+                                make_rows!(body,
+                                    format!("0x{:04X}", i + 0x100) =>
+                                        format!("{}", n),
+                                        format!("0x{:02X}",n));
+                            }
+                        });
+                });
         });
     }
 
     fn draw_apu_inspector(&self, ui: &mut egui::Ui) {
         ui.label(egui::RichText::new("APU").strong());
-        if let Ok(apu) = self.debug_state.apu.read() {
-            egui::CollapsingHeader::new("Pulse 1 & 2").show(ui, |ui| {
-                TableBuilder::new(ui)
-                    .id_salt("apu_pulse")
-                    .striped(true)
-                    .column(Column::auto())
-                    .column(Column::remainder())
-                    .body(|mut body| {
-                        let hz1 = if apu.pulse1.timer_period > 0 { 1789773.0 / (16.0 * (apu.pulse1.timer_period as f32 + 1.0)) } else { 0.0 };
-                        let hz2 = if apu.pulse2.timer_period > 0 { 1789773.0 / (16.0 * (apu.pulse2.timer_period as f32 + 1.0)) } else { 0.0 };
+        let apu = &self.snapshot.apu;
+        egui::CollapsingHeader::new("Pulse 1 & 2").show(ui, |ui| {
+            TableBuilder::new(ui)
+                .id_salt("apu_pulse")
+                .striped(true)
+                .column(Column::auto())
+                .column(Column::remainder())
+                .body(|mut body| {
+                    let hz1 = if apu.pulse1_period > 0 {
+                        1789773.0 / (16.0 * (apu.pulse1_period as f32 + 1.0))
+                    } else {
+                        0.0
+                    };
+                    let hz2 = if apu.pulse2_period > 0 {
+                        1789773.0 / (16.0 * (apu.pulse2_period as f32 + 1.0))
+                    } else {
+                        0.0
+                    };
 
-                        make_rows!(body,
-                            "P1 Enable" => format!("{}", apu.pulse1.enabled),
-                            "P1 Freq" => format!("{:.1} Hz", hz1),
-                            "P1 Vol" => format!("{}", if apu.pulse1.envelope.constant_volume { apu.pulse1.envelope.divider_period } else { apu.pulse1.envelope.decay_count }),
-                            "P1 Duty" => format!("{}", apu.pulse1.duty_mode),
-                            "P2 Enable" => format!("{}", apu.pulse2.enabled),
-                            "P2 Freq" => format!("{:.1} Hz", hz2),
-                            "P2 Vol" => format!("{}", if apu.pulse2.envelope.constant_volume { apu.pulse2.envelope.divider_period } else { apu.pulse2.envelope.decay_count }),
-                        );
-                    });
-            });
+                    make_rows!(body,
+                        "P1 Enable" => format!("{}", apu.pulse1_enabled),
+                        "P1 Freq" => format!("{:.1} Hz", hz1),
+                        "P1 Vol" => format!("{}", apu.pulse1_vol),
+                        "P1 Duty" => format!("{}", apu.pulse1_duty),
+                        "P2 Enable" => format!("{}", apu.pulse2_enabled),
+                        "P2 Freq" => format!("{:.1} Hz", hz2),
+                        "P2 Vol" => format!("{}", apu.pulse2_vol),
+                    );
+                });
+        });
 
-            egui::CollapsingHeader::new("Triangle & Noise").show(ui, |ui| {
-                TableBuilder::new(ui)
-                    .id_salt("apu_t_n")
-                    .striped(true)
-                    .column(Column::auto())
-                    .column(Column::remainder())
-                    .body(|mut body| {
-                        make_rows!(body,
-                            "Tri Enable" => format!("{}", apu.triangle.enabled),
-                            "Tri Linear" => format!("{}", apu.triangle.linear_counter),
-                            "Noise Enable" => format!("{}", apu.noise.enabled),
-                            "Noise Mode" => format!("{}", apu.noise.mode),
-                        );
-                    });
-            });
+        egui::CollapsingHeader::new("Triangle & Noise").show(ui, |ui| {
+            TableBuilder::new(ui)
+                .id_salt("apu_t_n")
+                .striped(true)
+                .column(Column::auto())
+                .column(Column::remainder())
+                .body(|mut body| {
+                    make_rows!(body,
+                        "Tri Enable" => format!("{}", apu.tri_enabled),
+                        "Tri Linear" => format!("{}", apu.tri_linear),
+                        "Noise Enable" => format!("{}", apu.noise_enabled),
+                        "Noise Mode" => format!("{}", apu.noise_mode),
+                    );
+                });
+        });
 
-            egui::CollapsingHeader::new("DMC & Frame").show(ui, |ui| {
-                TableBuilder::new(ui)
+        egui::CollapsingHeader::new("DMC & Frame").show(ui, |ui| {
+            TableBuilder::new(ui)
                 .id_salt("apu_dmc")
                 .striped(true)
                 .column(Column::auto())
                 .column(Column::remainder())
                 .body(|mut body| {
-                     make_rows!(body,
-                        "DMC Enable" => format!("{}", apu.dmc.enabled),
-                        "DMC Bytes" => format!("{}", apu.dmc.current_length),
+                    make_rows!(body,
+                        "DMC Enable" => format!("{}", apu.dmc_enabled),
+                        "DMC Bytes" => format!("{}", apu.dmc_len),
                         "Frame Mode" => if apu.frame_mode { "5-Step" } else { "4-Step" },
-                        "IRQ Pending" => format!("{}", apu.frame_irq_pending || apu.dmc.irq_pending),
+                        "IRQ Pending" => format!("{}", apu.frame_irq || apu.dmc_irq),
                     );
                 });
-            });
-        }
+        });
     }
 
     fn draw_ppu_inspector(&mut self, ui: &mut egui::Ui) {
-        if let Ok(ppu) = self.debug_state.ppu.read() {
-            ui.label(egui::RichText::new("PPU").strong());
-            egui::ScrollArea::vertical()
-                .auto_shrink(false)
-                .show(ui, |ui| {
+        let ppu = &self.snapshot.ppu;
+        ui.label(egui::RichText::new("PPU").strong());
+        egui::ScrollArea::vertical()
+            .auto_shrink(false)
+            .show(ui, |ui| {
+                TableBuilder::new(ui)
+                    .id_salt("ppu")
+                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                    .column(Column::auto())
+                    .column(Column::remainder())
+                    .body(|mut body| {
+                        make_rows!(body,
+                            "Dot" => format!("{}", ppu.dot),
+                            "Scanline" => format!("{}", ppu.scanline),
+                            "Frame" => format!("{}", ppu.frame),
+                        );
+                    });
+                egui::CollapsingHeader::new("PPU Ctrl ($2000)").show(ui, |ui| {
                     TableBuilder::new(ui)
-                        .id_salt("ppu")
-                        .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                        .id_salt("ppuctrl")
+                        .striped(true)
                         .column(Column::auto())
                         .column(Column::remainder())
+                        .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
                         .body(|mut body| {
+                            let base_nt_addr = match ppu.ctrl.base_nametable_addr() {
+                                0 => 0x2000,
+                                1 => 0x2400,
+                                2 => 0x2800,
+                                _ => 0x2C00,
+                            };
+                            let vram_inc = if ppu.ctrl.vram_addr_inc() != 0 { 32 } else { 1 };
+                            let sprite_pt_addr = if ppu.ctrl.sprite_pattern_table() != 0 {
+                                0x1000
+                            } else {
+                                0x0000
+                            };
+                            let bg_pt_addr = if ppu.ctrl.bg_pattern_table() != 0 {
+                                0x1000
+                            } else {
+                                0x0000
+                            };
+                            let sprite_size = if ppu.ctrl.sprite_size() != 0 {
+                                "8x16"
+                            } else {
+                                "8x8"
+                            };
+                            let master_slave = if ppu.ctrl.master_slave() != 0 {
+                                "Slave"
+                            } else {
+                                "Master"
+                            };
+                            let nmi_enable = ppu.ctrl.nmi_enable();
+
                             make_rows!(body,
-                                "Dot" => format!("{}", ppu.dot),
-                                "Scanline" => format!("{}", ppu.scanline),
-                                "Frame" => format!("{}", ppu.frame),
+                                "Base nametable" => format!("0x{:04X}", base_nt_addr),
+                                "VRAM addr increment" => format!("{}", vram_inc),
+                                "Sprite pattern table" => format!("0x{:04X}", sprite_pt_addr),
+                                "BG pattern table" => format!("0x{:04X}", bg_pt_addr),
+                                "Sprite size" => format!("{}", sprite_size),
+                                "Master/slave" => format!("{}", master_slave),
+                                "NMI enable" => format!("{}", nmi_enable)
                             );
                         });
-                    egui::CollapsingHeader::new("PPU Ctrl ($2000)").show(ui, |ui| {
-                        TableBuilder::new(ui)
-                            .id_salt("ppuctrl")
-                            .striped(true)
-                            .column(Column::auto())
-                            .column(Column::remainder())
-                            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                            .body(|mut body| {
-                                let base_nt_addr = match ppu.ctrl.base_nametable_addr() {
-                                    0 => 0x2000,
-                                    1 => 0x2400,
-                                    2 => 0x2800,
-                                    _ => 0x2C00,
-                                };
-                                let vram_inc = if ppu.ctrl.vram_addr_inc() != 0 { 32 } else { 1 };
-                                let sprite_pt_addr = if ppu.ctrl.sprite_pattern_table() != 0 {
-                                    0x1000
-                                } else {
-                                    0x0000
-                                };
-                                let bg_pt_addr = if ppu.ctrl.bg_pattern_table() != 0 {
-                                    0x1000
-                                } else {
-                                    0x0000
-                                };
-                                let sprite_size = if ppu.ctrl.sprite_size() != 0 {
-                                    "8x16"
-                                } else {
-                                    "8x8"
-                                };
-                                let master_slave = if ppu.ctrl.master_slave() != 0 {
-                                    "Slave"
-                                } else {
-                                    "Master"
-                                };
-
-                                make_rows!(body,
-                                    "Base nametable" => format!("0x{:04X}", base_nt_addr),
-                                    "VRAM addr increment" => format!("{}", vram_inc),
-                                    "Sprite pattern table" => format!("0x{:04X}", sprite_pt_addr),
-                                    "BG pattern table" => format!("0x{:04X}", bg_pt_addr),
-                                    "Sprite size" => format!("{}", sprite_size),
-                                    "Master/slave" => format!("{}", master_slave),
-                                    "NMI enable" => format!("{}", ppu.ctrl.nmi_enable())
-                                );
-                            });
-                    });
-                    egui::CollapsingHeader::new("PPU Mask ($2001)").show(ui, |ui| {
-                        TableBuilder::new(ui)
+                });
+                egui::CollapsingHeader::new("PPU Mask ($2001)").show(ui, |ui| {
+                    TableBuilder::new(ui)
                         .id_salt("ppumask")
                         .striped(true)
                         .column(Column::auto())
@@ -945,9 +953,9 @@ impl Ui {
                                 "Emphasize blue" => format!("{}", ppu.mask.emphasize_blue()),
                             );
                         });
-                    });
-                    egui::CollapsingHeader::new("PPU Status ($2002)").show(ui, |ui| {
-                        TableBuilder::new(ui)
+                });
+                egui::CollapsingHeader::new("PPU Status ($2002)").show(ui, |ui| {
+                    TableBuilder::new(ui)
                         .id_salt("ppustatus")
                         .striped(true)
                         .column(Column::auto())
@@ -960,305 +968,294 @@ impl Ui {
                                 "VBlank" => format!("{}", ppu.status.vblank()),
                             );
                         });
-                    });
-                    egui::CollapsingHeader::new("OAM Address ($2003)").show(ui, |ui| {
-                        TableBuilder::new(ui)
-                            .id_salt("oamaddr")
-                            .striped(true)
-                            .column(Column::auto())
-                            .column(Column::remainder())
-                            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                            .body(|mut body| {
-                                make_rows!(body,
-                                    "OAM Address" => format!("0x{:02X}", ppu.oam_addr),
-                                );
-                            });
-                    });
-                    egui::CollapsingHeader::new("OAM Data ($2004)").show(ui, |ui| {
-                        egui::ScrollArea::vertical()
-                            .max_height(200.0)
-                            .show(ui, |ui| {
-                                TableBuilder::new(ui)
-                                    .id_salt("oamdata")
-                                    .striped(true)
-                                    .column(Column::auto())
-                                    .column(Column::remainder())
-                                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                                    .body(|mut body| {
-                                        for (i, chunk) in ppu.oam.chunks(4).enumerate() {
-                                            if i >= 64 {
-                                                break;
-                                            }
-                                            body.row(16.0, |mut row| {
-                                                row.col(|ui| {
-                                                    ui.label(
-                                                        egui::RichText::new(format!(
-                                                            "Sprite {}",
-                                                            i
-                                                        ))
-                                                        .strong(),
-                                                    );
-                                                });
-                                                row.col(|ui| {
-                                                    ui.label(format!(
-                                                        "Y:{} Tile:{:02X} Attr:{:02X} X:{}",
-                                                        chunk[0], chunk[1], chunk[2], chunk[3]
-                                                    ));
-                                                });
-                                            });
-                                        }
-                                    });
-                            });
-                    });
-                    egui::CollapsingHeader::new("PPU Registers ($2005-$2007)").show(ui, |ui| {
-                        TableBuilder::new(ui)
-                            .id_salt("ppuregs")
-                            .striped(true)
-                            .column(Column::auto())
-                            .column(Column::remainder())
-                            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                            .body(|mut body| {
-                                make_rows!(body,
-                                    "v (current VRAM addr)" => format!("0x{:04X}", ppu.v),
-                                    "t (temp VRAM addr)" => format!("0x{:04X}", ppu.t),
-                                    "x (fine X scroll)" => format!("{}", ppu.x),
-                                    "w (write toggle)" => format!("{}", ppu.w),
-                                );
-                            });
-                    });
-
-                    egui::CollapsingHeader::new("Palette RAM").show(ui, |ui| {
-                        egui::ScrollArea::vertical()
-                            .max_height(200.0)
-                            .show(ui, |ui| {
-                                TableBuilder::new(ui)
-                                    .id_salt("palette_ram")
-                                    .striped(false)
-                                    .column(Column::auto())
-                                    .column(Column::auto())
-                                    .column(Column::auto())
-                                    .column(Column::auto())
-                                    .column(Column::auto())
-                                    .column(Column::auto().at_least(10.0))
-                                    .column(Column::auto())
-                                    .column(Column::auto())
-                                    .column(Column::auto())
-                                    .column(Column::auto())
-                                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                                    .body(|mut body| {
-                                        for (row_idx, row_colors) in
-                                            ppu.palette.chunks(8).enumerate()
-                                        {
-                                            let base_addr = row_idx * 8;
-                                            body.row(16.0, |mut row| {
-                                                row.col(|ui| {
-                                                    ui.label(
-                                                        egui::RichText::new(format!(
-                                                            "${:04X}:",
-                                                            0x3F00 + base_addr
-                                                        ))
-                                                        .strong()
-                                                        .text_style(egui::TextStyle::Monospace),
-                                                    );
-                                                });
-                                                for (i, &color_idx) in
-                                                    row_colors.iter().take(4).enumerate()
-                                                {
-                                                    let palette_addr = base_addr + i;
-                                                    let displayed_idx = match palette_addr {
-                                                        0x10 | 0x14 | 0x18 | 0x1C => {
-                                                            ppu.palette[palette_addr - 0x10]
-                                                        }
-                                                        _ => color_idx,
-                                                    };
-                                                    let color = ppu.get_color_from_palette(
-                                                        displayed_idx & 0x3F,
-                                                    );
-
-                                                    let mut text = egui::RichText::new(format!(
-                                                        "{:02X}",
-                                                        color_idx
-                                                    ))
-                                                    .text_style(egui::TextStyle::Monospace);
-                                                    if [0x10, 0x14, 0x18, 0x1C]
-                                                        .contains(&palette_addr)
-                                                    {
-                                                        text = text.strikethrough();
-                                                    }
-
-                                                    row.col(|ui| {
-                                                        ui.colored_label(color, text);
-                                                    });
-                                                }
-
-                                                row.col(|ui| {
-                                                    ui.label(
-                                                        egui::RichText::new(format!(
-                                                            "${:04X}:",
-                                                            0x3F00 + base_addr + 4
-                                                        ))
-                                                        .strong()
-                                                        .text_style(egui::TextStyle::Monospace),
-                                                    );
-                                                });
-                                                for (i, &color_idx) in
-                                                    row_colors.iter().skip(4).enumerate()
-                                                {
-                                                    let palette_addr = base_addr + 4 + i;
-                                                    let displayed_idx = match palette_addr {
-                                                        0x10 | 0x14 | 0x18 | 0x1C => {
-                                                            ppu.palette[palette_addr - 0x10]
-                                                        }
-                                                        _ => color_idx,
-                                                    };
-                                                    let color = ppu.get_color_from_palette(
-                                                        displayed_idx & 0x3F,
-                                                    );
-
-                                                    let mut text = egui::RichText::new(format!(
-                                                        "{:02X}",
-                                                        color_idx
-                                                    ))
-                                                    .text_style(egui::TextStyle::Monospace);
-                                                    if [0x10, 0x14, 0x18, 0x1C]
-                                                        .contains(&palette_addr)
-                                                    {
-                                                        text = text.strikethrough();
-                                                    }
-
-                                                    row.col(|ui| {
-                                                        ui.colored_label(color, text);
-                                                    });
-                                                }
-                                            });
-                                        }
-                                    });
-                            });
-                    });
                 });
-        }
+                egui::CollapsingHeader::new("OAM Address ($2003)").show(ui, |ui| {
+                    TableBuilder::new(ui)
+                        .id_salt("oamaddr")
+                        .striped(true)
+                        .column(Column::auto())
+                        .column(Column::remainder())
+                        .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                        .body(|mut body| {
+                            make_rows!(body,
+                                "OAM Address" => format!("0x{:02X}", ppu.oam_addr),
+                            );
+                        });
+                });
+                egui::CollapsingHeader::new("OAM Data ($2004)").show(ui, |ui| {
+                    egui::ScrollArea::vertical()
+                        .max_height(200.0)
+                        .show(ui, |ui| {
+                            TableBuilder::new(ui)
+                                .id_salt("oamdata")
+                                .striped(true)
+                                .column(Column::auto())
+                                .column(Column::remainder())
+                                .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                                .body(|mut body| {
+                                    for (i, chunk) in ppu.oam.chunks(4).enumerate() {
+                                        if i >= 64 {
+                                            break;
+                                        }
+                                        body.row(16.0, |mut row| {
+                                            row.col(|ui| {
+                                                ui.label(
+                                                    egui::RichText::new(format!("Sprite {}", i))
+                                                        .strong(),
+                                                );
+                                            });
+                                            row.col(|ui| {
+                                                ui.label(format!(
+                                                    "Y:{} Tile:{:02X} Attr:{:02X} X:{}",
+                                                    chunk[0], chunk[1], chunk[2], chunk[3]
+                                                ));
+                                            });
+                                        });
+                                    }
+                                });
+                        });
+                });
+                egui::CollapsingHeader::new("PPU Registers ($2005-$2007)").show(ui, |ui| {
+                    TableBuilder::new(ui)
+                        .id_salt("ppuregs")
+                        .striped(true)
+                        .column(Column::auto())
+                        .column(Column::remainder())
+                        .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                        .body(|mut body| {
+                            make_rows!(body,
+                                "v (current VRAM addr)" => format!("0x{:04X}", ppu.v),
+                                "t (temp VRAM addr)" => format!("0x{:04X}", ppu.t),
+                                "x (fine X scroll)" => format!("{}", ppu.x),
+                                "w (write toggle)" => format!("{}", ppu.w),
+                            );
+                        });
+                });
+
+                egui::CollapsingHeader::new("Palette RAM").show(ui, |ui| {
+                    egui::ScrollArea::vertical()
+                        .max_height(200.0)
+                        .show(ui, |ui| {
+                            TableBuilder::new(ui)
+                                .id_salt("palette_ram")
+                                .striped(false)
+                                .column(Column::auto())
+                                .column(Column::auto())
+                                .column(Column::auto())
+                                .column(Column::auto())
+                                .column(Column::auto())
+                                .column(Column::auto().at_least(10.0))
+                                .column(Column::auto())
+                                .column(Column::auto())
+                                .column(Column::auto())
+                                .column(Column::auto())
+                                .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                                .body(|mut body| {
+                                    for (row_idx, row_colors) in ppu.palette.chunks(8).enumerate() {
+                                        let base_addr = row_idx * 8;
+                                        body.row(16.0, |mut row| {
+                                            row.col(|ui| {
+                                                ui.label(
+                                                    egui::RichText::new(format!(
+                                                        "${:04X}:",
+                                                        0x3F00 + base_addr
+                                                    ))
+                                                    .strong()
+                                                    .text_style(egui::TextStyle::Monospace),
+                                                );
+                                            });
+                                            for (i, &color_idx) in
+                                                row_colors.iter().take(4).enumerate()
+                                            {
+                                                let palette_addr = base_addr + i;
+                                                let displayed_idx = match palette_addr {
+                                                    0x10 | 0x14 | 0x18 | 0x1C => {
+                                                        ppu.palette[palette_addr - 0x10]
+                                                    }
+                                                    _ => color_idx,
+                                                };
+
+                                                let color = Ppu::get_color_from_palette(
+                                                    displayed_idx & 0x3F,
+                                                );
+
+                                                let mut text = egui::RichText::new(format!(
+                                                    "{:02X}",
+                                                    color_idx
+                                                ))
+                                                .text_style(egui::TextStyle::Monospace);
+                                                if [0x10, 0x14, 0x18, 0x1C].contains(&palette_addr)
+                                                {
+                                                    text = text.strikethrough();
+                                                }
+
+                                                row.col(|ui| {
+                                                    ui.colored_label(color, text);
+                                                });
+                                            }
+
+                                            row.col(|ui| {
+                                                ui.label(
+                                                    egui::RichText::new(format!(
+                                                        "${:04X}:",
+                                                        0x3F00 + base_addr + 4
+                                                    ))
+                                                    .strong()
+                                                    .text_style(egui::TextStyle::Monospace),
+                                                );
+                                            });
+                                            for (i, &color_idx) in
+                                                row_colors.iter().skip(4).enumerate()
+                                            {
+                                                let palette_addr = base_addr + 4 + i;
+                                                let displayed_idx = match palette_addr {
+                                                    0x10 | 0x14 | 0x18 | 0x1C => {
+                                                        ppu.palette[palette_addr - 0x10]
+                                                    }
+                                                    _ => color_idx,
+                                                };
+                                                let color = Ppu::get_color_from_palette(
+                                                    displayed_idx & 0x3F,
+                                                );
+
+                                                let mut text = egui::RichText::new(format!(
+                                                    "{:02X}",
+                                                    color_idx
+                                                ))
+                                                .text_style(egui::TextStyle::Monospace);
+                                                if [0x10, 0x14, 0x18, 0x1C].contains(&palette_addr)
+                                                {
+                                                    text = text.strikethrough();
+                                                }
+
+                                                row.col(|ui| {
+                                                    ui.colored_label(color, text);
+                                                });
+                                            }
+                                        });
+                                    }
+                                });
+                        });
+                });
+            });
     }
 
     fn draw_sound_waves(&mut self, ui: &mut egui::Ui) {
-        if let Ok(apu) = self.debug_state.apu.read() {
-            ui.label(egui::RichText::new("Pulse 1 & 2").strong());
-            Plot::new("pulses").view_aspect(2.0).show(ui, |plot_ui| {
-                let hz1 = if apu.pulse1.timer_period > 0 {
-                    1789773.0 / (16.0 * (apu.pulse1.timer_period as f32 + 1.0))
-                } else {
-                    0.0
-                };
-                let hz2 = if apu.pulse2.timer_period > 0 {
-                    1789773.0 / (16.0 * (apu.pulse2.timer_period as f32 + 1.0))
-                } else {
-                    0.0
-                };
-                let points1 = generate_pulse_wave(hz1 as f64, 1.0, 0.5, 0.016);
-                let points2 = generate_pulse_wave(hz2 as f64, 1.0, 0.5, 0.016);
-                let line1 = Line::new("pulse1", PlotPoints::new(points1)).width(2.0);
-                let line2 = Line::new("pulse2", PlotPoints::new(points2)).width(2.0);
-                plot_ui.line(line1);
-                plot_ui.line(line2);
-            });
-        }
+        let apu = &self.snapshot.apu;
+        ui.label(egui::RichText::new("Pulse 1 & 2").strong());
+        Plot::new("pulses").view_aspect(2.0).show(ui, |plot_ui| {
+            let hz1 = if apu.pulse1_period > 0 {
+                1789773.0 / (16.0 * (apu.pulse1_period as f32 + 1.0))
+            } else {
+                0.0
+            };
+            let hz2 = if apu.pulse2_period > 0 {
+                1789773.0 / (16.0 * (apu.pulse2_period as f32 + 1.0))
+            } else {
+                0.0
+            };
+            let points1 = generate_pulse_wave(hz1 as f64, 1.0, 0.5, 0.016);
+            let points2 = generate_pulse_wave(hz2 as f64, 1.0, 0.5, 0.016);
+            let line1 = Line::new("pulse1", PlotPoints::new(points1)).width(2.0);
+            let line2 = Line::new("pulse2", PlotPoints::new(points2)).width(2.0);
+            plot_ui.line(line1);
+            plot_ui.line(line2);
+        });
     }
 
     fn draw_palette_colors(&self, ui: &mut egui::Ui) {
-        if let Ok(ppu) = self.debug_state.ppu.read() {
-            ui.label(egui::RichText::new("Palette Colors").strong());
+        let ppu = &self.snapshot.ppu;
+        ui.label(egui::RichText::new("Palette Colors").strong());
 
-            egui::ScrollArea::vertical()
-                .id_salt("palette")
-                .show(ui, |ui| {
-                    let square_size = 20.0;
-                    ui.label("Background Palettes");
-                    for palette_idx in 0..4 {
-                        ui.horizontal(|ui| {
-                            ui.label(format!("BG{}: ", palette_idx));
-                            for color_idx in 0..4 {
-                                let addr = palette_idx * 4 + color_idx;
-                                let color_byte = ppu.palette[addr];
-                                let color = ppu.get_color_from_palette(color_byte & 0x3F);
+        egui::ScrollArea::vertical()
+            .id_salt("palette")
+            .show(ui, |ui| {
+                let square_size = 20.0;
+                ui.label("Background Palettes");
+                for palette_idx in 0..4 {
+                    ui.horizontal(|ui| {
+                        ui.label(format!("BG{}: ", palette_idx));
+                        for color_idx in 0..4 {
+                            let addr = palette_idx * 4 + color_idx;
+                            let color_byte = ppu.palette[addr];
+                            let color = Ppu::get_color_from_palette(color_byte & 0x3F);
 
-                                let (rect, _response) = ui.allocate_exact_size(
-                                    egui::vec2(square_size, square_size),
-                                    egui::Sense::hover(),
-                                );
-                                ui.painter().rect_filled(rect, 0.0, color);
-                            }
-                        });
-                    }
+                            let (rect, _response) = ui.allocate_exact_size(
+                                egui::vec2(square_size, square_size),
+                                egui::Sense::hover(),
+                            );
+                            ui.painter().rect_filled(rect, 0.0, color);
+                        }
+                    });
+                }
 
-                    ui.add_space(8.0);
+                ui.add_space(8.0);
 
-                    ui.label("Sprite Palettes");
-                    for palette_idx in 0..4 {
-                        ui.horizontal(|ui| {
-                            ui.label(format!("SP{}: ", palette_idx));
-                            for color_idx in 0..4 {
-                                let addr = 0x10 + palette_idx * 4 + color_idx;
-                                let color_byte = match addr {
-                                    0x10 | 0x14 | 0x18 | 0x1C => ppu.palette[addr - 0x10],
-                                    _ => ppu.palette[addr],
-                                };
-                                let color = ppu.get_color_from_palette(color_byte & 0x3F);
+                ui.label("Sprite Palettes");
+                for palette_idx in 0..4 {
+                    ui.horizontal(|ui| {
+                        ui.label(format!("SP{}: ", palette_idx));
+                        for color_idx in 0..4 {
+                            let addr = 0x10 + palette_idx * 4 + color_idx;
+                            let color_byte = match addr {
+                                0x10 | 0x14 | 0x18 | 0x1C => ppu.palette[addr - 0x10],
+                                _ => ppu.palette[addr],
+                            };
+                            let color = Ppu::get_color_from_palette(color_byte & 0x3F);
 
-                                let (rect, _response) = ui.allocate_exact_size(
-                                    egui::vec2(square_size, square_size),
-                                    egui::Sense::hover(),
-                                );
-                                ui.painter().rect_filled(rect, 0.0, color);
-                            }
-                        });
-                    }
-                });
-        }
+                            let (rect, _response) = ui.allocate_exact_size(
+                                egui::vec2(square_size, square_size),
+                                egui::Sense::hover(),
+                            );
+                            ui.painter().rect_filled(rect, 0.0, color);
+                        }
+                    });
+                }
+            });
     }
 
     fn draw_rom_details(&mut self, ui: &mut egui::Ui) {
         ui.label(egui::RichText::new("ROM details").strong());
-        if let Ok(cart_header_opt) = self.debug_state.cart_header.read() {
-            match &*cart_header_opt {
-                Some(cart_header) => {
-                    TableBuilder::new(ui)
-                        .striped(true)
-                        .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                        .column(Column::auto())
-                        .column(Column::remainder())
-                        .body(|mut body| {
-                            make_rows!(body,
-                                "Magic" =>
-                                    String::from_utf8(cart_header.magic.to_vec())
-                                        .unwrap_or("".to_string())
-                                        .to_string(),
-                                "Trainer?" =>
-                                    format!("{}", cart_header.flags6.has_trainer()),
-                                "PRG ROM Size" =>
-                                    format!("{}", ByteSize::kib(16) * cart_header.prg_rom_size),
-                                "CHR ROM Size" =>
-                                    format!("{}", ByteSize::kib(8) * cart_header.chr_rom_size),
-                            );
-                            body.row(16.0, |mut row| {
-                                row.col(|ui| {
-                                    ui.label(egui::RichText::new("Mapper").strong());
-                                });
-                                row.col(|ui| {
-                                    let mapper_num = cart_header.mapper_number();
+        match &self.snapshot.cart {
+            Some(cart) => {
+                TableBuilder::new(ui)
+                    .striped(true)
+                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                    .column(Column::auto())
+                    .column(Column::remainder())
+                    .body(|mut body| {
+                        make_rows!(body,
+                            "Magic" =>
+                                String::from_utf8(cart.magic.to_vec())
+                                    .unwrap_or("".to_string())
+                                    .to_string(),
+                            "Trainer?" =>
+                                format!("{}", cart.has_trainer),
+                            "PRG ROM Size" =>
+                                format!("{}", ByteSize::kib(16) * (cart.prg_rom_size as u64)),
+                            "CHR ROM Size" =>
+                                format!("{}", ByteSize::kib(8) * (cart.chr_rom_size as u64)),
+                        );
+                        body.row(16.0, |mut row| {
+                            row.col(|ui| {
+                                ui.label(egui::RichText::new("Mapper").strong());
+                            });
+                            row.col(|ui| {
+                                let mapper_num = cart.mapper_number;
 
-                                    let icon = egui::Image::from_bytes(
-                                        format!("mapper_icon_{}", mapper_num),
-                                        MapperIcon::from_mapper_number(mapper_num).bytes(),
-                                    );
+                                let icon = egui::Image::from_bytes(
+                                    format!("mapper_icon_{}", mapper_num),
+                                    MapperIcon::from_mapper_number(mapper_num).bytes(),
+                                );
 
-                                    ui.add(icon);
-                                    ui.label(format!("{}", cart_header.mapper_number()));
-                                });
+                                ui.add(icon);
+                                ui.label(format!("{}", mapper_num));
                             });
                         });
-                }
-                None => {
-                    ui.label("Not loaded");
-                }
+                    });
+            }
+            None => {
+                ui.label("Not loaded");
             }
         }
     }
@@ -1274,13 +1271,8 @@ impl Ui {
                 .stick_to_bottom(true)
                 .auto_shrink(false)
                 .show(ui, |ui| {
-                    if let Ok(cpu) = self.debug_state.cpu.read()
-                        && let Some(log) = cpu.log.as_ref()
-                    {
-                        ui.label(
-                            egui::RichText::new(log.iter().collect::<String>())
-                                .text_style(egui::TextStyle::Monospace),
-                        );
+                    if let Some(log) = &self.snapshot.cpu.log {
+                        ui.label(egui::RichText::new(log).text_style(egui::TextStyle::Monospace));
                     }
                 });
         });
@@ -1318,6 +1310,13 @@ impl Ui {
             if let Some(frame) = emu.step_frame() {
                 self.pixels_buffer = Some(frame);
                 self.frame_ready = true;
+            }
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(rx) = &self.debug_rx {
+            while let Ok(snapshot) = rx.try_recv() {
+                self.snapshot = snapshot;
             }
         }
 
@@ -1380,8 +1379,6 @@ impl Ui {
                     self.draw_screen(ctx, ui);
                 });
             });
-            #[cfg(not(target_arch = "wasm32"))]
-            self.send_command(Command::Update);
         } else {
             egui::CentralPanel::default().show(ctx, |ui| {
                 ui.centered_and_justified(|ui| {
