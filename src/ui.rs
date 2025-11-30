@@ -2,6 +2,7 @@ use crate::audio::Audio;
 use bytesize::ByteSize;
 use egui::{Color32, ColorImage, IconData, Key};
 use egui_extras::{Column, TableBuilder};
+use egui_plot::{Line, Plot, PlotPoints};
 use log::{error, info};
 use ringbuf::{HeapRb, traits::Split};
 
@@ -1138,13 +1139,36 @@ impl Ui {
         }
     }
 
+    fn draw_sound_waves(&mut self, ui: &mut egui::Ui) {
+        if let Ok(apu) = self.debug_state.apu.read() {
+            ui.label(egui::RichText::new("Pulse 1 & 2").strong());
+            Plot::new("pulses").view_aspect(2.0).show(ui, |plot_ui| {
+                let hz1 = if apu.pulse1.timer_period > 0 {
+                    1789773.0 / (16.0 * (apu.pulse1.timer_period as f32 + 1.0))
+                } else {
+                    0.0
+                };
+                let hz2 = if apu.pulse2.timer_period > 0 {
+                    1789773.0 / (16.0 * (apu.pulse2.timer_period as f32 + 1.0))
+                } else {
+                    0.0
+                };
+                let points1 = generate_pulse_wave(hz1 as f64, 1.0, 0.5, 0.016);
+                let points2 = generate_pulse_wave(hz2 as f64, 1.0, 0.5, 0.016);
+                let line1 = Line::new("pulse1", PlotPoints::new(points1)).width(2.0);
+                let line2 = Line::new("pulse2", PlotPoints::new(points2)).width(2.0);
+                plot_ui.line(line1);
+                plot_ui.line(line2);
+            });
+        }
+    }
+
     fn draw_palette_colors(&self, ui: &mut egui::Ui) {
         if let Ok(ppu) = self.debug_state.ppu.read() {
             ui.label(egui::RichText::new("Palette Colors").strong());
 
             egui::ScrollArea::vertical()
                 .id_salt("palette")
-                .auto_shrink(false)
                 .show(ui, |ui| {
                     let square_size = 20.0;
                     ui.label("Background Palettes");
@@ -1320,6 +1344,8 @@ impl Ui {
                             });
                             col_2.vertical(|ui| {
                                 self.draw_palette_colors(ui);
+                                ui.separator();
+                                self.draw_sound_waves(ui);
                             });
                         });
                     });
@@ -1450,4 +1476,34 @@ pub fn load_image_from_memory(image_data: &[u8]) -> Result<ColorImage, image::Im
     let image_buffer = image.to_rgba8();
     let pixels = image_buffer.as_flat_samples();
     Ok(ColorImage::from_rgba_unmultiplied(size, pixels.as_slice()))
+}
+
+fn generate_pulse_wave(freq: f64, amp: f64, duty_cycle: f64, duration: f64) -> Vec<[f64; 2]> {
+    let mut points = Vec::new();
+    let period = 1.0 / freq;
+
+    let high_duration = period * duty_cycle;
+    let low_duration = period - high_duration;
+
+    let mut current_time = 0.0;
+
+    while current_time < duration {
+        let high_start = current_time;
+        let high_end = (high_start + high_duration).min(duration);
+
+        points.push([high_start, amp]);
+        points.push([high_end, amp]);
+
+        current_time = high_end;
+        if current_time >= duration {
+            break;
+        }
+        let low_start = current_time;
+        let low_end = (low_start + low_duration).min(duration);
+        points.push([low_start, 0.0]);
+        points.push([low_end, 0.0]);
+
+        current_time = low_end;
+    }
+    points
 }

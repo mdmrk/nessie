@@ -330,7 +330,7 @@ impl Ppu {
 
     #[inline]
     fn update_shifters(&mut self) {
-        if self.mask.show_bg() {
+        if self.mask.rendering_enabled() {
             self.bg_shifter_pattern_lo <<= 1;
             self.bg_shifter_pattern_hi <<= 1;
             self.bg_shifter_attrib_lo <<= 1;
