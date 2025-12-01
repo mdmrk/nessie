@@ -1,7 +1,7 @@
 use crate::{
     apu::Apu,
     cart::Header,
-    cpu::Cpu,
+    cpu::{Cpu, Flags},
     ppu::{Ppu, PpuCtrl, PpuMask, PpuStatus},
 };
 
