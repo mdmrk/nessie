@@ -532,9 +532,12 @@ impl Ui {
                     wasm_bindgen_futures::spawn_local(task);
                 }
 
-                ui.separator();
-                if ui.button("✖ Quit").clicked() {
-                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    ui.separator();
+                    if ui.button("✖ Quit").clicked() {
+                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
                 }
             });
             ui.menu_button("Emulator", |ui| {
