@@ -507,7 +507,7 @@ impl Ui {
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button("File", |ui| {
                 #[cfg(not(target_arch = "wasm32"))]
-                if ui.button("📥 Select rom...").clicked()
+                if ui.button("🎮 Open ROM...").clicked()
                     && let Some(rom) = FileDialog::new()
                         .add_filter("NES rom", &["nes"])
                         .pick_file()
@@ -516,7 +516,7 @@ impl Ui {
                 }
 
                 #[cfg(target_arch = "wasm32")]
-                if ui.button("📥 Select rom...").clicked() {
+                if ui.button("🎮 Open ROM...").clicked() {
                     let (tx, rx) = mpsc::channel();
                     self.rom_loader_rx = Some(rx);
                     let task = async move {
