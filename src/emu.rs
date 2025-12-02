@@ -1,5 +1,7 @@
+use savefile::prelude::*;
 use std::{
     fs,
+    path::PathBuf,
     sync::mpsc,
     thread,
     time::{Duration, Instant},
@@ -13,7 +15,7 @@ use crate::{
     args::Args,
     bus::Bus,
     cart::Cart,
-    cpu::Cpu,
+    cpu::{Cpu, Flags},
     debug::{DebugSnapshot, MEM_BLOCK_SIZE},
 };
 use egui::Color32;
@@ -25,6 +27,8 @@ pub enum Command {
     Step,
     MemoryAddress(usize),
     DumpMemory,
+    SaveState,
+    LoadState(PathBuf),
     ControllerInputs(u16),
 }
 
@@ -34,6 +38,36 @@ pub enum Event {
     Resumed,
     Crashed(String),
     FrameReady(Vec<Color32>),
+}
+
+#[derive(Savefile)]
+struct CpuState {
+    pub sp: u8,
+    pub pc: u16,
+    pub a: u8,
+    pub x: u8,
+    pub y: u8,
+    pub cycles: u64,
+    pub flags_n: bool,
+    pub flags_v: bool,
+    pub flags_b: bool,
+    pub flags_d: bool,
+    pub flags_i: bool,
+    pub flags_z: bool,
+    pub flags_c: bool,
+    pub nmi_pending: bool,
+    pub nmi_previous_state: bool,
+    pub irq_pending: bool,
+}
+
+#[derive(Savefile)]
+struct EmuState {
+    pub cpu: CpuState,
+    pub bus: Bus,
+    pub cycles_per_sample: f32,
+    pub cycles_accumulator: f32,
+    pub sample_sum: f32,
+    pub sample_count: f32,
 }
 
 pub struct Emu {
@@ -101,6 +135,72 @@ impl Emu {
         }
     }
 
+    fn save_state(&self) {
+        let state = EmuState {
+            cpu: CpuState {
+                sp: self.cpu.sp,
+                pc: self.cpu.pc,
+                a: self.cpu.a,
+                x: self.cpu.x,
+                y: self.cpu.y,
+                cycles: self.cpu.cycles,
+                flags_n: self.cpu.p.contains(Flags::N),
+                flags_v: self.cpu.p.contains(Flags::V),
+                flags_b: self.cpu.p.contains(Flags::B),
+                flags_d: self.cpu.p.contains(Flags::D),
+                flags_i: self.cpu.p.contains(Flags::I),
+                flags_z: self.cpu.p.contains(Flags::Z),
+                flags_c: self.cpu.p.contains(Flags::C),
+                nmi_pending: self.cpu.nmi_pending,
+                nmi_previous_state: self.cpu.nmi_previous_state,
+                irq_pending: self.cpu.irq_pending,
+            },
+            bus: self.bus.clone(),
+            cycles_per_sample: self.cycles_per_sample,
+            cycles_accumulator: self.cycles_accumulator,
+            sample_sum: self.sample_sum,
+            sample_count: self.sample_count,
+        };
+        let path = format!("{}.bin", self.bus.cart.as_ref().unwrap().hash);
+        match save_file(&path, 0, &state) {
+            Ok(()) => info!("Saved state to {}", path),
+            Err(e) => error!("Couldn't save state: {}", e),
+        }
+    }
+
+    fn load_state(&mut self, path: &PathBuf) {
+        if self.bus.cart.as_ref().unwrap().hash != path.file_stem().unwrap().to_str().unwrap() {
+            error!("Saved state is not compatible with this game");
+            return;
+        }
+
+        let file = load_emu_state(path);
+
+        self.cpu.sp = file.cpu.sp;
+        self.cpu.pc = file.cpu.pc;
+        self.cpu.a = file.cpu.a;
+        self.cpu.x = file.cpu.x;
+        self.cpu.y = file.cpu.y;
+        self.cpu.cycles = file.cpu.cycles;
+        self.cpu.p.set(Flags::N, file.cpu.flags_n);
+        self.cpu.p.set(Flags::V, file.cpu.flags_v);
+        self.cpu.p.set(Flags::B, file.cpu.flags_b);
+        self.cpu.p.set(Flags::D, file.cpu.flags_d);
+        self.cpu.p.set(Flags::I, file.cpu.flags_i);
+        self.cpu.p.set(Flags::Z, file.cpu.flags_z);
+        self.cpu.p.set(Flags::C, file.cpu.flags_c);
+        self.cpu.nmi_pending = file.cpu.nmi_pending;
+        self.cpu.nmi_previous_state = file.cpu.nmi_previous_state;
+        self.cpu.irq_pending = file.cpu.irq_pending;
+
+        self.bus = file.bus;
+
+        self.cycles_per_sample = file.cycles_per_sample;
+        self.cycles_accumulator = file.cycles_accumulator;
+        self.sample_sum = file.sample_sum;
+        self.sample_count = file.sample_count;
+    }
+
     pub fn stop(&mut self) {
         self.running = false;
         self.send_event(Event::Stopped);
@@ -120,14 +220,14 @@ impl Emu {
         let mut frame_out = None;
         if !self.paused || self.want_step {
             loop {
-                let cycles_before = self.cpu.cycle_count;
+                let cycles_before = self.cpu.cycles;
                 if let Err(e) = self.cpu.step(&mut self.bus) {
                     warn!("{e}. Emulator will be paused");
                     self.paused = true;
                     break;
                 }
 
-                let cycles_delta = self.cpu.cycle_count - cycles_before;
+                let cycles_delta = self.cpu.cycles - cycles_before;
 
                 for _ in 0..cycles_delta {
                     self.bus.tick_apu();
@@ -221,6 +321,12 @@ pub fn emu_thread(
                 Command::Resume => {
                     emu.resume();
                 }
+                Command::SaveState => {
+                    emu.save_state();
+                }
+                Command::LoadState(path) => {
+                    emu.load_state(&path);
+                }
                 Command::Step => {
                     emu.want_step = true;
                 }
@@ -256,4 +362,8 @@ pub fn emu_thread(
         }
     }
     info!("Stopping emulation");
+}
+
+fn load_emu_state(path: &PathBuf) -> EmuState {
+    load_file(path, 0).unwrap()
 }

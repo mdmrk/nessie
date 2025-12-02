@@ -1,8 +1,9 @@
 use log::warn;
+use savefile::prelude::*;
 
 use crate::{apu::Apu, cart::Cart, ppu::Ppu};
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Savefile)]
 pub struct Controller {
     pub realtime: u8,
     latched: u8,
@@ -10,10 +11,13 @@ pub struct Controller {
     strobe: bool,
 }
 
+#[derive(Clone, Savefile)]
 pub struct Bus {
     mem: [u8; 0x800],
     pub apu: Apu,
     pub ppu: Ppu,
+    #[savefile_introspect_ignore]
+    #[savefile_ignore]
     pub cart: Option<Cart>,
     pub controller1: Controller,
     pub controller2: Controller,

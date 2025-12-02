@@ -535,6 +535,19 @@ impl Ui {
                 #[cfg(not(target_arch = "wasm32"))]
                 {
                     ui.separator();
+                    ui.add_enabled_ui(self.running, |ui| {
+                        if ui.button("📥 Save state").clicked() {
+                            self.send_command(Command::SaveState);
+                        }
+                        if ui.button("📤 Load state").clicked()
+                            && let Some(state) = FileDialog::new()
+                                .add_filter("State file", &["bin"])
+                                .pick_file()
+                        {
+                            self.send_command(Command::LoadState(state));
+                        }
+                    });
+                    ui.separator();
                     if ui.button("✖ Quit").clicked() {
                         ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                     }
@@ -746,7 +759,6 @@ impl Ui {
                     "a" => format!("{}", cpu.a), format!("0x{:02X}", cpu.a),
                     "x" => format!("{}", cpu.x), format!("0x{:02X}", cpu.x),
                     "y" => format!("{}", cpu.y), format!("0x{:02X}", cpu.y),
-                    "p" => format!("{}", cpu.p), format!("0x{:02X}", cpu.p),
                 );
             });
 

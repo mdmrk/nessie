@@ -1,4 +1,5 @@
 use modular_bitfield::prelude::*;
+use savefile::prelude::*;
 
 static LENGTH_TABLE: [u8; 32] = [
     10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14, 12, 16, 24, 18, 48, 20, 96, 22,
@@ -21,7 +22,7 @@ static DMC_RATE_TABLE: [u16; 16] = [
 ];
 
 #[bitfield(bytes = 1)]
-#[derive(Debug, Clone, Default, Copy)]
+#[derive(Debug, Clone, Default, Copy, Savefile)]
 pub struct ApuStatus {
     pub enable_dmc: bool,
     pub enable_noise: bool,
@@ -33,7 +34,7 @@ pub struct ApuStatus {
     pub dmc_active: bool,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Savefile)]
 pub struct Envelope {
     pub start: bool,
     pub disable: bool,
@@ -75,7 +76,7 @@ impl Envelope {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Savefile)]
 pub struct Sweep {
     pub enabled: bool,
     pub period: u8,
@@ -115,7 +116,7 @@ impl Sweep {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Savefile)]
 pub struct Pulse {
     pub enabled: bool,
     pub channel_idx: u8,
@@ -203,7 +204,7 @@ impl Pulse {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Savefile)]
 pub struct Triangle {
     pub enabled: bool,
     pub length_value: u8,
@@ -276,7 +277,7 @@ impl Triangle {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Savefile)]
 pub struct Noise {
     pub enabled: bool,
     pub length_value: u8,
@@ -347,7 +348,7 @@ impl Noise {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Savefile)]
 pub struct Dmc {
     pub enabled: bool,
     pub value: u8,
@@ -429,7 +430,7 @@ impl Dmc {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Savefile)]
 pub struct HighPassFilter {
     c: f32,
     prev_out: f32,
@@ -456,7 +457,7 @@ impl HighPassFilter {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Savefile)]
 pub struct Apu {
     pub status: ApuStatus,
     pub pulse1: Pulse,

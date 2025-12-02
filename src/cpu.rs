@@ -415,7 +415,7 @@ pub struct Cpu {
     pub a: u8,
     pub x: u8,
     pub y: u8,
-    pub cycle_count: usize,
+    pub cycles: u64,
     pub log: Option<VecDeque<char>>,
     pub nmi_pending: bool,
     pub nmi_previous_state: bool,
@@ -437,7 +437,7 @@ impl Cpu {
             a: 0,
             x: 0,
             y: 0,
-            cycle_count: 7,
+            cycles: 7,
             log: if enable_logging {
                 Some(VecDeque::with_capacity(MAX_LOG_SIZE))
             } else {
@@ -456,7 +456,7 @@ impl Cpu {
 
         self.sp = 0xFD;
         self.p = Flags::I | Flags::_1;
-        self.cycle_count = 7;
+        self.cycles = 7;
     }
 
     fn fetch(&self, bus: &mut Bus) -> u8 {
@@ -478,7 +478,7 @@ impl Cpu {
         self.pc = self.pc.wrapping_add(1 + operand_bytes);
         let extra_cycles = (op.execute)(self, bus, op.mode, &operands);
         let total_cycles = op.base_cycles + extra_cycles;
-        self.cycle_count += total_cycles as usize;
+        self.cycles += total_cycles as u64;
 
         bus.ppu
             .step(bus.cart.as_mut().unwrap().mapper.as_mut(), total_cycles);
@@ -513,7 +513,7 @@ impl Cpu {
             self.sp,
             bus.ppu.scanline,
             bus.ppu.dot,
-            self.cycle_count
+            self.cycles
         );
         for c in step_str.chars() {
             log.push_back(c);
@@ -566,7 +566,7 @@ impl Cpu {
         self.pc = u16::from_le_bytes([lo, hi]);
 
         let cycles: u8 = 7;
-        self.cycle_count += cycles as usize;
+        self.cycles += cycles as u64;
         bus.ppu
             .step(bus.cart.as_mut().unwrap().mapper.as_mut(), cycles);
         for _ in 0..cycles {
@@ -590,7 +590,7 @@ impl Cpu {
         self.pc = u16::from_le_bytes([lo, hi]);
 
         let cycles: u8 = 7;
-        self.cycle_count += cycles as usize;
+        self.cycles += cycles as u64;
         bus.ppu
             .step(bus.cart.as_mut().unwrap().mapper.as_mut(), cycles);
         for _ in 0..cycles {
