@@ -109,7 +109,7 @@ impl Cart {
         hasher.update(&contents);
         let hash = hasher.digest().to_string();
         let header = unsafe { std::ptr::read(contents.as_ptr() as *const Header) };
-        let header_magic = [0x4E, 0x45, 0x53, 0x1A];
+        let header_magic = [b'N', b'E', b'S', 0x1A];
         if header.magic != header_magic {
             error!("Wrong ROM magic number");
             return None;
