@@ -1232,8 +1232,6 @@ impl Ui {
                                 String::from_utf8(cart.magic.to_vec())
                                     .unwrap_or("".to_string())
                                     .to_string(),
-                            "Trainer?" =>
-                                format!("{}", cart.has_trainer),
                             "PRG ROM Size" =>
                                 format!("{}", ByteSize::kib(16) * (cart.prg_rom_size as u64)),
                             "CHR ROM Size" =>

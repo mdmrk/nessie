@@ -125,7 +125,6 @@ pub struct ApuSnapshot {
 #[derive(Default, Clone)]
 pub struct CartSnapshot {
     pub magic: [u8; 4],
-    pub has_trainer: bool,
     pub prg_rom_size: usize,
     pub chr_rom_size: usize,
     pub mapper_number: u8,
@@ -211,7 +210,6 @@ impl DebugSnapshot {
             },
             cart: cart.map(|h| CartSnapshot {
                 magic: h.magic,
-                has_trainer: h.flags6.has_trainer(),
                 prg_rom_size: h.prg_rom_size as usize,
                 chr_rom_size: h.chr_rom_size as usize,
                 mapper_number: h.mapper_number(),

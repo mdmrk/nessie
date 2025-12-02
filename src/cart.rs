@@ -1,5 +1,6 @@
 use log::error;
 use modular_bitfield::prelude::*;
+use sha1_smol::Sha1;
 
 use crate::mapper::{Mapper, Mapper0, Mapper1, Mirroring};
 
@@ -99,13 +100,14 @@ pub struct Cart {
     pub header: Header,
     pub rom: Vec<u8>,
     pub mapper: Box<dyn Mapper>,
+    pub hash: String,
 }
 
 impl Cart {
     pub fn from_bytes(contents: Vec<u8>) -> Option<Self> {
-        if contents.len() < size_of::<Header>() {
-            return None;
-        }
+        let mut hasher = Sha1::new();
+        hasher.update(&contents);
+        let hash = hasher.digest().to_string();
         let header = unsafe { std::ptr::read(contents.as_ptr() as *const Header) };
         let header_magic = [0x4E, 0x45, 0x53, 0x1A];
         if header.magic != header_magic {
@@ -145,6 +147,7 @@ impl Cart {
             header,
             rom,
             mapper,
+            hash,
         })
     }
 
@@ -165,6 +168,7 @@ impl Clone for Cart {
             header: self.header.clone(),
             rom: self.rom.clone(),
             mapper: self.mapper.clone_mapper(),
+            hash: self.hash.clone(),
         }
     }
 }
