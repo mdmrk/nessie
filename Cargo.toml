@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow = {version = "1.0.100", default-features = false}
+anyhow = { version = "1.0.100", default-features = false }
 argh = "0.1.13"
 bitflags = "2.10.0"
 bytesize = "2.3.1"
@@ -18,20 +18,20 @@ eframe = { version = "0.33.2", default-features = false, features = [
 ] }
 egui = "0.33.2"
 egui_extras = { version = "0.33.2", features = ["image"] }
+egui_plot = "0.34.0"
+image = { version = "0.25.9", default-features = false, features = ["png"] }
 log = "0.4.28"
 modular-bitfield = "0.13.0"
 phf = { version = "0.13.1", default-features = false, features = ["macros"] }
 rfd = "0.16.0"
 ringbuf = "0.4.8"
-image = { version = "0.25.9", default-features = false, features = ["png"] }
-egui_plot = "0.34.0"
 sha1_smol = "1.0.1"
-savefile = { version = "0.20.2", features = ["bzip2"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger = "0.11.8"
 puffin = "0.19.1"
 puffin_http = "0.16.1"
+savefile = { version = "0.20.2", features = ["bzip2"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.7"

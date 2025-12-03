@@ -1,9 +1,11 @@
 use log::warn;
+#[cfg(not(target_arch = "wasm32"))]
 use savefile::prelude::*;
 
 use crate::{apu::Apu, cart::Cart, ppu::Ppu};
 
-#[derive(Default, Clone, Savefile)]
+#[derive(Default, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Savefile))]
 pub struct Controller {
     pub realtime: u8,
     latched: u8,
@@ -11,13 +13,14 @@ pub struct Controller {
     strobe: bool,
 }
 
-#[derive(Clone, Savefile)]
+#[derive(Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Savefile))]
 pub struct Bus {
     pub mem: [u8; 0x800],
     pub apu: Apu,
     pub ppu: Ppu,
-    #[savefile_introspect_ignore]
-    #[savefile_ignore]
+    #[cfg_attr(not(target_arch = "wasm32"), savefile_introspect_ignore)]
+    #[cfg_attr(not(target_arch = "wasm32"), savefile_ignore)]
     pub cart: Option<Cart>,
     pub controller1: Controller,
     pub controller2: Controller,
@@ -32,7 +35,7 @@ impl Default for Bus {
             ppu: Default::default(),
             cart: None,
             controller1: Default::default(),
-            controller2: Default::default(), // TODO: process controller 2
+            controller2: Default::default(),
             open_bus: 0,
         }
     }

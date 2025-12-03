@@ -1,4 +1,6 @@
 use modular_bitfield::prelude::*;
+
+#[cfg(not(target_arch = "wasm32"))]
 use savefile::prelude::*;
 
 static LENGTH_TABLE: [u8; 32] = [
@@ -22,7 +24,8 @@ static DMC_RATE_TABLE: [u16; 16] = [
 ];
 
 #[bitfield(bytes = 1)]
-#[derive(Debug, Clone, Default, Copy, Savefile)]
+#[derive(Debug, Clone, Default, Copy)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Savefile))]
 pub struct ApuStatus {
     pub enable_dmc: bool,
     pub enable_noise: bool,
@@ -34,7 +37,8 @@ pub struct ApuStatus {
     pub dmc_active: bool,
 }
 
-#[derive(Debug, Default, Clone, Savefile)]
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Savefile))]
 pub struct Envelope {
     pub start: bool,
     pub disable: bool,
@@ -76,7 +80,8 @@ impl Envelope {
     }
 }
 
-#[derive(Debug, Default, Clone, Savefile)]
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Savefile))]
 pub struct Sweep {
     pub enabled: bool,
     pub period: u8,
@@ -116,7 +121,8 @@ impl Sweep {
     }
 }
 
-#[derive(Debug, Default, Clone, Savefile)]
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Savefile))]
 pub struct Pulse {
     pub enabled: bool,
     pub channel_idx: u8,
@@ -204,7 +210,8 @@ impl Pulse {
     }
 }
 
-#[derive(Debug, Default, Clone, Savefile)]
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Savefile))]
 pub struct Triangle {
     pub enabled: bool,
     pub length_value: u8,
@@ -277,7 +284,8 @@ impl Triangle {
     }
 }
 
-#[derive(Debug, Default, Clone, Savefile)]
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Savefile))]
 pub struct Noise {
     pub enabled: bool,
     pub length_value: u8,
@@ -348,7 +356,8 @@ impl Noise {
     }
 }
 
-#[derive(Debug, Default, Clone, Savefile)]
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Savefile))]
 pub struct Dmc {
     pub enabled: bool,
     pub value: u8,
@@ -430,7 +439,8 @@ impl Dmc {
     }
 }
 
-#[derive(Debug, Clone, Copy, Savefile)]
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Savefile))]
 pub struct HighPassFilter {
     c: f32,
     prev_out: f32,
@@ -457,7 +467,8 @@ impl HighPassFilter {
     }
 }
 
-#[derive(Debug, Clone, Savefile)]
+#[derive(Debug, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Savefile))]
 pub struct Apu {
     pub status: ApuStatus,
     pub pulse1: Pulse,

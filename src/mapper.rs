@@ -1,3 +1,4 @@
+#[cfg(not(target_arch = "wasm32"))]
 use savefile::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -86,7 +87,8 @@ pub trait Mapper {
     fn mirroring(&self) -> Mirroring;
 }
 
-#[derive(Debug, Savefile, Clone)]
+#[derive(Debug, Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Savefile))]
 pub enum MapperEnum {
     Mapper0(Mapper0),
     Mapper1(Mapper1),
@@ -125,7 +127,8 @@ impl MapperEnum {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Savefile)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Savefile))]
 pub enum Mirroring {
     Horizontal,
     Vertical,
@@ -134,10 +137,11 @@ pub enum Mirroring {
     FourScreen,
 }
 
-#[derive(Clone, Debug, Savefile)]
+#[derive(Clone, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Savefile))]
 pub struct Mapper0 {
     prg_rom: Vec<u8>,
-    chr_mem: Vec<u8>, // ROM or RAM
+    chr_mem: Vec<u8>,
     mirroring: Mirroring,
     is_chr_ram: bool,
 }
@@ -185,10 +189,11 @@ impl Mapper for Mapper0 {
     }
 }
 
-#[derive(Clone, Debug, Savefile)]
+#[derive(Clone, Debug)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Savefile))]
 pub struct Mapper1 {
     prg_rom: Vec<u8>,
-    chr_mem: Vec<u8>, // ROM or RAM
+    chr_mem: Vec<u8>,
     prg_ram: Vec<u8>,
     shift_register: u8,
     write_count: u8,
