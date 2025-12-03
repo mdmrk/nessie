@@ -592,31 +592,36 @@ impl Ui {
             if self.show_about {
                 let modal = egui::Modal::new(egui::Id::new("about_modal")).show(ui.ctx(), |ui| {
                     ui.set_width(600.0);
-                    ui.columns(2, |cols| {
-                        cols[0].with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
-                            ui.image((self.app_icon_texture.id(), [280.0, 280.0].into()));
-                        });
-                        cols[1].with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
-                            ui.add_space(28.0);
+                    ui.horizontal(|ui| {
+                        ui.image((self.app_icon_texture.id(), [280.0, 280.0].into()));
+                        ui.add_space(16.0);
+                        ui.vertical(|ui| {
+                            ui.add_space(16.0);
                             ui.label(egui::RichText::new("Nessie").strong().size(36.0));
                             ui.separator();
-                            ui.add_space(14.0);
+                            ui.add_space(16.0);
+
                             let platform = if cfg!(target_arch = "wasm32") {
                                 "Web"
                             } else {
                                 std::env::consts::OS
                             };
+
                             let arch = std::env::consts::ARCH;
+
                             ui.label(egui::RichText::new("Nes emulator").size(22.0));
                             ui.add_space(8.0);
                             ui.label(format!("Platform: {} {}", platform, arch));
+
                             let date = format!(
                                 "{} {}",
                                 compile_time::date_str!(),
                                 compile_time::time_str!()
                             );
+
                             ui.label(format!("Date: {date}"));
                             ui.add_space(8.0);
+
                             ui.hyperlink_to(
                                 " Nessie on GitHub",
                                 "https://github.com/mdmrk/nessie",
