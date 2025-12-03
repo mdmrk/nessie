@@ -21,6 +21,7 @@ concurrency:
 
 jobs:
   build-info:
+    name: build info
     runs-on: ubuntu-latest
     outputs:
       VERSION: ${{ steps.info.outputs.version }}
@@ -101,7 +102,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
-        env: 
+        env:
           VERSION: ${{ needs.build-info.outputs.VERSION }}
       - run: cargo build --release --locked --verbose --target ${{ matrix.target }}
       - name: Upload binary
