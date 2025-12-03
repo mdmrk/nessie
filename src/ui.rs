@@ -611,7 +611,7 @@ impl Ui {
 
                             ui.label(egui::RichText::new("Nes emulator").size(22.0));
                             ui.add_space(8.0);
-                            ui.label(format!("Platform: {} {}", platform, arch));
+                            ui.label(format!("Platform: {} ({})", platform, arch));
 
                             let date = format!(
                                 "{} {}",
