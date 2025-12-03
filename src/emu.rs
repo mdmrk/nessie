@@ -1,4 +1,4 @@
-use savefile::prelude::*;
+use savefile::{prelude::*, save_file_compressed};
 use std::{
     fs,
     path::PathBuf,
@@ -165,7 +165,7 @@ impl Emu {
             sample_count: self.sample_count,
         };
         let path = format!("{}.bin", self.bus.cart.as_ref().unwrap().hash);
-        match save_file(&path, 0, &state) {
+        match save_file_compressed(&path, 0, &state) {
             Ok(()) => info!("Saved state to {}", path),
             Err(e) => error!("Couldn't save state: {}", e),
         }
