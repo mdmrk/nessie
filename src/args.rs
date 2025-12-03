@@ -19,4 +19,8 @@ pub struct Args {
     /// enable logging
     #[argh(short = 'l', switch)]
     pub log: bool,
+
+    /// emulator version
+    #[argh(short = 'v', switch)]
+    pub version: bool,
 }

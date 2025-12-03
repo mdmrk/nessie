@@ -102,8 +102,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
-        env:
-          VERSION: ${{ needs.build-info.outputs.VERSION }}
       - run: cargo build --release --locked --verbose --target ${{ matrix.target }}
       - name: Upload binary
         uses: actions/upload-artifact@v5
@@ -112,6 +110,8 @@ jobs:
           path: |
             target/${{ matrix.target }}/release/nessie${{ matrix.bin_ext }}
           if-no-files-found: error
+        env:
+          VERSION: ${{ needs.build-info.outputs.VERSION }}
 
   wasm:
     name: build and deploy (wasm32-unknown-unknown, ${{ matrix.os }})

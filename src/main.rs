@@ -33,6 +33,10 @@ fn main() -> eframe::Result {
 
     let args: Args = argh::from_env();
 
+    if args.version {
+        println!("{}", option_env!("VERSION").unwrap_or("unknown"));
+        return Ok(());
+    }
     #[cfg(debug_assertions)]
     if args.profiling {
         start_puffin_server();
