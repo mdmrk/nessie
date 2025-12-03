@@ -620,6 +620,10 @@ impl Ui {
                             );
 
                             ui.label(format!("Date: {date}"));
+                            ui.label(format!(
+                                "Version: {}",
+                                option_env!("VERSION").unwrap_or("unknown")
+                            ));
                             ui.add_space(8.0);
 
                             ui.hyperlink_to(
