@@ -2,6 +2,8 @@ use egui::Color32;
 use modular_bitfield::prelude::*;
 use savefile::prelude::*;
 
+use crate::mapper::MapperEnum;
+
 #[bitfield(bytes = 1)]
 #[derive(Debug, Clone, Default, Copy, Savefile)]
 pub struct PpuCtrl {
@@ -227,13 +229,13 @@ impl Ppu {
         self.bg_shifter_attrib_hi = 0;
     }
 
-    pub fn step(&mut self, mapper: &mut dyn crate::mapper::Mapper, cpu_cycles: u8) {
+    pub fn step(&mut self, mapper: &mut MapperEnum, cpu_cycles: u8) {
         for _ in 0..(cpu_cycles * 3) {
             self.tick(mapper);
         }
     }
 
-    pub fn tick(&mut self, mapper: &mut dyn crate::mapper::Mapper) {
+    pub fn tick(&mut self, mapper: &mut MapperEnum) {
         if self.scanline == 241 && self.dot == 1 {
             if !self.suppress_vbl {
                 self.status.set_vblank(true);
@@ -296,7 +298,7 @@ impl Ppu {
         }
     }
 
-    fn process_bg_pipeline(&mut self, mapper: &mut dyn crate::mapper::Mapper) {
+    fn process_bg_pipeline(&mut self, mapper: &mut MapperEnum) {
         if !self.mask.rendering_enabled() {
             return;
         }
@@ -383,7 +385,7 @@ impl Ppu {
         (pixel, palette)
     }
 
-    fn get_sprite_pixel(&self, mapper: &mut dyn crate::mapper::Mapper) -> (u8, u8, u8, bool) {
+    fn get_sprite_pixel(&self, mapper: &mut MapperEnum) -> (u8, u8, u8, bool) {
         if !self.mask.show_sprites() {
             return (0, 0, 0, false);
         }
@@ -450,7 +452,7 @@ impl Ppu {
         (0, 0, 0, false)
     }
 
-    fn render_pixel(&mut self, mapper: &mut dyn crate::mapper::Mapper) {
+    fn render_pixel(&mut self, mapper: &mut MapperEnum) {
         let x = self.dot.wrapping_sub(1) as usize;
         let y = self.scanline as usize;
 
@@ -533,7 +535,7 @@ impl Ppu {
         }
     }
 
-    fn load_sprites(&mut self, _mapper: &mut dyn crate::mapper::Mapper) {}
+    fn load_sprites(&mut self, _mapper: &mut MapperEnum) {}
 
     #[inline]
     fn increment_coarse_x(&mut self) {
@@ -574,7 +576,7 @@ impl Ppu {
         self.v = (self.v & !0x7BE0) | (self.t & 0x7BE0);
     }
 
-    pub fn read_vram(&self, addr: u16, mapper: &mut dyn crate::mapper::Mapper) -> u8 {
+    pub fn read_vram(&self, addr: u16, mapper: &mut MapperEnum) -> u8 {
         let addr = addr & 0x3FFF;
         if addr < 0x2000 {
             mapper.read_chr(addr)
@@ -587,7 +589,7 @@ impl Ppu {
         }
     }
 
-    pub fn write_vram(&mut self, addr: u16, value: u8, mapper: &mut dyn crate::mapper::Mapper) {
+    pub fn write_vram(&mut self, addr: u16, value: u8, mapper: &mut MapperEnum) {
         let addr = addr & 0x3FFF;
         if addr < 0x2000 {
             mapper.write_chr(addr, value);
@@ -688,7 +690,7 @@ impl Ppu {
         }
     }
 
-    pub fn read_data(&mut self, mapper: &mut dyn crate::mapper::Mapper) -> u8 {
+    pub fn read_data(&mut self, mapper: &mut MapperEnum) -> u8 {
         let addr = self.v;
         let inc = if self.ctrl.vram_addr_inc() != 0 {
             32
@@ -707,7 +709,7 @@ impl Ppu {
         }
     }
 
-    pub fn write_data(&mut self, value: u8, mapper: &mut dyn crate::mapper::Mapper) {
+    pub fn write_data(&mut self, value: u8, mapper: &mut MapperEnum) {
         let addr = self.v;
         self.write_vram(addr, value, mapper);
         let inc = if self.ctrl.vram_addr_inc() != 0 {

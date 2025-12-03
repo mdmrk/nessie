@@ -13,7 +13,7 @@ pub struct Controller {
 
 #[derive(Clone, Savefile)]
 pub struct Bus {
-    mem: [u8; 0x800],
+    pub mem: [u8; 0x800],
     pub apu: Apu,
     pub ppu: Ppu,
     #[savefile_introspect_ignore]
@@ -78,7 +78,7 @@ impl Bus {
             7 => self
                 .cart
                 .as_mut()
-                .map(|c| self.ppu.read_data(&mut *c.mapper))
+                .map(|c| self.ppu.read_data(&mut c.mapper))
                 .unwrap_or(0),
             _ => self.ppu.open_bus,
         };
@@ -187,7 +187,7 @@ impl Bus {
             6 => self.ppu.write_addr(value),
             7 => {
                 if let Some(cart) = &mut self.cart {
-                    self.ppu.write_data(value, &mut *cart.mapper);
+                    self.ppu.write_data(value, &mut cart.mapper);
                 }
             }
             _ => unreachable!(),

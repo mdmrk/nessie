@@ -17,6 +17,7 @@ use crate::{
     cart::Cart,
     cpu::{Cpu, Flags},
     debug::{DebugSnapshot, MEM_BLOCK_SIZE},
+    mapper::MapperEnum,
 };
 use egui::Color32;
 
@@ -64,6 +65,7 @@ struct CpuState {
 struct EmuState {
     pub cpu: CpuState,
     pub bus: Bus,
+    pub mapper: MapperEnum,
     pub cycles_per_sample: f32,
     pub cycles_accumulator: f32,
     pub sample_sum: f32,
@@ -156,6 +158,7 @@ impl Emu {
                 irq_pending: self.cpu.irq_pending,
             },
             bus: self.bus.clone(),
+            mapper: self.bus.cart.as_ref().unwrap().mapper.clone(),
             cycles_per_sample: self.cycles_per_sample,
             cycles_accumulator: self.cycles_accumulator,
             sample_sum: self.sample_sum,
@@ -170,7 +173,7 @@ impl Emu {
 
     fn load_state(&mut self, path: &PathBuf) {
         if self.bus.cart.as_ref().unwrap().hash != path.file_stem().unwrap().to_str().unwrap() {
-            error!("Saved state is not compatible with this game");
+            error!("Saved state is not compatible with this game. Hashes do not coincide.");
             return;
         }
 
@@ -193,7 +196,14 @@ impl Emu {
         self.cpu.nmi_previous_state = file.cpu.nmi_previous_state;
         self.cpu.irq_pending = file.cpu.irq_pending;
 
-        self.bus = file.bus;
+        self.bus.mem = file.bus.mem;
+        self.bus.apu = file.bus.apu;
+        self.bus.ppu = file.bus.ppu;
+        self.bus.controller1 = file.bus.controller1;
+        self.bus.controller2 = file.bus.controller2;
+        self.bus.open_bus = file.bus.open_bus;
+        self.bus.cart.as_mut().unwrap().mapper = file.mapper;
+        self.bus.ppu.screen = vec![Color32::BLACK; 256 * 240];
 
         self.cycles_per_sample = file.cycles_per_sample;
         self.cycles_accumulator = file.cycles_accumulator;

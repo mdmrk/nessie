@@ -2,7 +2,7 @@ use log::error;
 use modular_bitfield::prelude::*;
 use sha1_smol::Sha1;
 
-use crate::mapper::{Mapper, Mapper0, Mapper1, Mirroring};
+use crate::mapper::{Mapper0, Mapper1, MapperEnum, Mirroring};
 
 #[derive(Clone, Copy, Debug, Specifier, PartialEq)]
 pub enum NametableArrangement {
@@ -85,12 +85,12 @@ impl Header {
         prg_rom: Vec<u8>,
         chr_rom: Vec<u8>,
         mirroring: Mirroring,
-    ) -> Box<dyn Mapper> {
+    ) -> MapperEnum {
         let mapper_num = self.mapper_number();
 
         match mapper_num {
-            0 => Box::new(Mapper0::new(prg_rom, chr_rom, mirroring)),
-            1 => Box::new(Mapper1::new(prg_rom, chr_rom, mirroring)),
+            0 => MapperEnum::Mapper0(Mapper0::new(prg_rom, chr_rom, mirroring)),
+            1 => MapperEnum::Mapper1(Mapper1::new(prg_rom, chr_rom, mirroring)),
             _ => panic!("Unsupported mapper ({})", mapper_num),
         }
     }
@@ -99,7 +99,7 @@ impl Header {
 pub struct Cart {
     pub header: Header,
     pub rom: Vec<u8>,
-    pub mapper: Box<dyn Mapper>,
+    pub mapper: MapperEnum,
     pub hash: String,
 }
 
@@ -167,7 +167,7 @@ impl Clone for Cart {
         Self {
             header: self.header.clone(),
             rom: self.rom.clone(),
-            mapper: self.mapper.clone_mapper(),
+            mapper: self.mapper.clone(),
             hash: self.hash.clone(),
         }
     }

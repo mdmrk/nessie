@@ -481,7 +481,7 @@ impl Cpu {
         self.cycles += total_cycles as u64;
 
         bus.ppu
-            .step(bus.cart.as_mut().unwrap().mapper.as_mut(), total_cycles);
+            .step(&mut bus.cart.as_mut().unwrap().mapper, total_cycles);
         for _ in 0..total_cycles {
             bus.apu.step();
         }
@@ -567,8 +567,7 @@ impl Cpu {
 
         let cycles: u8 = 7;
         self.cycles += cycles as u64;
-        bus.ppu
-            .step(bus.cart.as_mut().unwrap().mapper.as_mut(), cycles);
+        bus.ppu.step(&mut bus.cart.as_mut().unwrap().mapper, cycles);
         for _ in 0..cycles {
             bus.apu.step();
         }
@@ -591,8 +590,7 @@ impl Cpu {
 
         let cycles: u8 = 7;
         self.cycles += cycles as u64;
-        bus.ppu
-            .step(bus.cart.as_mut().unwrap().mapper.as_mut(), cycles);
+        bus.ppu.step(&mut bus.cart.as_mut().unwrap().mapper, cycles);
         for _ in 0..cycles {
             bus.apu.step();
         }

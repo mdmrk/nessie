@@ -1,3 +1,5 @@
+use savefile::prelude::*;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MapperIcon {
     Bad,
@@ -82,10 +84,48 @@ pub trait Mapper {
     fn read_chr(&self, addr: u16) -> u8;
     fn write_chr(&mut self, addr: u16, value: u8);
     fn mirroring(&self) -> Mirroring;
-    fn clone_mapper(&self) -> Box<dyn Mapper>;
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Savefile, Clone)]
+pub enum MapperEnum {
+    Mapper0(Mapper0),
+    Mapper1(Mapper1),
+}
+
+impl MapperEnum {
+    pub fn read_prg(&self, addr: u16) -> Option<u8> {
+        match self {
+            MapperEnum::Mapper0(m) => m.read_prg(addr),
+            MapperEnum::Mapper1(m) => m.read_prg(addr),
+        }
+    }
+    pub fn write_prg(&mut self, addr: u16, value: u8) {
+        match self {
+            MapperEnum::Mapper0(m) => m.write_prg(addr, value),
+            MapperEnum::Mapper1(m) => m.write_prg(addr, value),
+        }
+    }
+    pub fn read_chr(&self, addr: u16) -> u8 {
+        match self {
+            MapperEnum::Mapper0(m) => m.read_chr(addr),
+            MapperEnum::Mapper1(m) => m.read_chr(addr),
+        }
+    }
+    pub fn write_chr(&mut self, addr: u16, value: u8) {
+        match self {
+            MapperEnum::Mapper0(m) => m.write_chr(addr, value),
+            MapperEnum::Mapper1(m) => m.write_chr(addr, value),
+        }
+    }
+    pub fn mirroring(&self) -> Mirroring {
+        match self {
+            MapperEnum::Mapper0(m) => m.mirroring(),
+            MapperEnum::Mapper1(m) => m.mirroring(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Savefile)]
 pub enum Mirroring {
     Horizontal,
     Vertical,
@@ -94,7 +134,7 @@ pub enum Mirroring {
     FourScreen,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Savefile)]
 pub struct Mapper0 {
     prg_rom: Vec<u8>,
     chr_mem: Vec<u8>, // ROM or RAM
@@ -143,13 +183,9 @@ impl Mapper for Mapper0 {
     fn mirroring(&self) -> Mirroring {
         self.mirroring
     }
-
-    fn clone_mapper(&self) -> Box<dyn Mapper> {
-        Box::new(self.clone())
-    }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Savefile)]
 pub struct Mapper1 {
     prg_rom: Vec<u8>,
     chr_mem: Vec<u8>, // ROM or RAM
@@ -316,9 +352,5 @@ impl Mapper for Mapper1 {
             3 => Mirroring::Horizontal,
             _ => unreachable!(),
         }
-    }
-
-    fn clone_mapper(&self) -> Box<dyn Mapper> {
-        Box::new(self.clone())
     }
 }
