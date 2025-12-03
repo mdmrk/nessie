@@ -105,15 +105,15 @@ pub struct Cart {
 
 impl Cart {
     pub fn from_bytes(contents: Vec<u8>) -> Option<Self> {
-        let mut hasher = Sha1::new();
-        hasher.update(&contents);
-        let hash = hasher.digest().to_string();
         let header = unsafe { std::ptr::read(contents.as_ptr() as *const Header) };
         let header_magic = [b'N', b'E', b'S', 0x1A];
         if header.magic != header_magic {
             error!("Wrong ROM magic number");
             return None;
         }
+        let mut hasher = Sha1::new();
+        hasher.update(&contents);
+        let hash = hasher.digest().to_string();
         let rom = contents.clone();
         let prg_rom_size = 16 * 1024 * header.prg_rom_size as usize;
         let prg_rom_offset = if header.flags6.has_trainer() {
