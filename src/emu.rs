@@ -31,7 +31,9 @@ pub enum Command {
     Step,
     MemoryAddress(usize),
     DumpMemory,
+    #[cfg(not(target_arch = "wasm32"))]
     SaveState,
+    #[cfg(not(target_arch = "wasm32"))]
     LoadState(PathBuf),
     ControllerInputs(u16),
 }
@@ -307,10 +309,12 @@ pub fn emu_thread(
                 Command::Resume => {
                     emu.resume();
                 }
+                #[cfg(not(target_arch = "wasm32"))]
                 Command::SaveState => {
                     emu.save_state()
                         .unwrap_or_else(|e| error!("Failed to save state: {e}"));
                 }
+                #[cfg(not(target_arch = "wasm32"))]
                 Command::LoadState(path) => {
                     emu.load_state(&path)
                         .unwrap_or_else(|e| error!("Failed to load state: {e}"));

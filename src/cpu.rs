@@ -3,6 +3,7 @@ use std::collections::VecDeque;
 
 use bitflags::bitflags;
 use phf::phf_map;
+#[cfg(not(target_arch = "wasm32"))]
 use savefile::prelude::*;
 
 use crate::bus::Bus;
@@ -408,12 +409,14 @@ bitflags! {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl WithSchema for Flags {
     fn schema(_version: u32, _context: &mut WithSchemaContext) -> Schema {
         Schema::Primitive(SchemaPrimitive::schema_u8)
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Serialize for Flags {
     fn serialize(
         &self,
@@ -423,6 +426,7 @@ impl Serialize for Flags {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Deserialize for Flags {
     fn deserialize(
         deserializer: &mut Deserializer<impl std::io::Read>,
@@ -432,9 +436,11 @@ impl Deserialize for Flags {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Packed for Flags {}
 
-#[derive(Clone, Savefile)]
+#[derive(Clone)]
+#[cfg_attr(not(target_arch = "wasm32"), derive(Savefile))]
 pub struct Cpu {
     pub sp: u8,
     pub pc: u16,
