@@ -1255,10 +1255,7 @@ impl Ui {
                     .column(Column::remainder())
                     .body(|mut body| {
                         make_rows!(body,
-                            "Magic" =>
-                                String::from_utf8(cart.magic.to_vec())
-                                    .unwrap_or("".to_string())
-                                    .to_string(),
+                            "ROM hash" => format!("{}...", &cart.hash[0..8]),
                             "PRG ROM Size" =>
                                 format!("{}", ByteSize::kib(16) * (cart.prg_rom_size as u64)),
                             "CHR ROM Size" =>
@@ -1378,7 +1375,7 @@ impl Ui {
                     });
                 egui::SidePanel::right("right_panel")
                     .resizable(true)
-                    .default_width(180.0)
+                    .default_width(190.0)
                     .width_range(..=200.0)
                     .show(ctx, |ui| {
                         ui.vertical(|ui| {

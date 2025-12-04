@@ -1,6 +1,6 @@
 use crate::{
     apu::Apu,
-    cart::Header,
+    cart::Cart,
     cpu::{Cpu, Flags},
     ppu::{Ppu, PpuCtrl, PpuMask, PpuStatus},
 };
@@ -123,10 +123,10 @@ pub struct ApuSnapshot {
 
 #[derive(Default, Clone)]
 pub struct CartSnapshot {
-    pub magic: [u8; 4],
     pub prg_rom_size: usize,
     pub chr_rom_size: usize,
     pub mapper_number: u8,
+    pub hash: String,
 }
 
 impl DebugSnapshot {
@@ -134,7 +134,7 @@ impl DebugSnapshot {
         cpu: &Cpu,
         ppu: &Ppu,
         apu: &Apu,
-        cart: Option<&Header>,
+        cart: Option<&Cart>,
         memory: &[u8],
         stack: &[u8],
     ) -> Self {
@@ -207,10 +207,10 @@ impl DebugSnapshot {
                 frame_irq: apu.frame_irq_pending,
             },
             cart: cart.map(|h| CartSnapshot {
-                magic: h.magic,
-                prg_rom_size: h.prg_rom_size as usize,
-                chr_rom_size: h.chr_rom_size as usize,
-                mapper_number: h.mapper_number(),
+                prg_rom_size: h.header.prg_rom_size as usize,
+                chr_rom_size: h.header.chr_rom_size as usize,
+                mapper_number: h.header.mapper_number(),
+                hash: h.hash.clone(),
             }),
             mem_chunk,
             stack: stack_chunk,

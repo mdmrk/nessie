@@ -220,13 +220,12 @@ impl Emu {
                         .bus
                         .read_only_range(self.mem_chunk_addr as u16, MEM_BLOCK_SIZE as u16);
                     let stack_slice = self.bus.read_only_range(0x100, 0x100);
-                    let cart_header = self.bus.cart.as_ref().map(|c| &c.header);
 
                     let snapshot = DebugSnapshot::new(
                         &self.cpu,
                         &self.bus.ppu,
                         &self.bus.apu,
-                        cart_header,
+                        self.bus.cart.as_ref(),
                         &memory_slice,
                         &stack_slice,
                     );
