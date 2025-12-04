@@ -121,31 +121,50 @@ impl Emu {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn save_state(&self) {
+    fn save_state(&self) -> anyhow::Result<()> {
+        use anyhow::Context;
+
         let state = EmuState {
             cpu: self.cpu.clone(),
             bus: self.bus.clone(),
-            mapper: self.bus.cart.as_ref().unwrap().mapper.clone(),
+            mapper: self
+                .bus
+                .cart
+                .as_ref()
+                .context("Cartridge is missing when saving state")?
+                .mapper
+                .clone(),
             cycles_per_sample: self.cycles_per_sample,
             cycles_accumulator: self.cycles_accumulator,
             sample_sum: self.sample_sum,
             sample_count: self.sample_count,
         };
-        let path = format!("{}.bin", self.bus.cart.as_ref().unwrap().hash);
-        match save_file_compressed(&path, 0, &state) {
-            Ok(()) => info!("Saved state to {}", path),
-            Err(e) => error!("Couldn't save state: {}", e),
-        }
+        let hash = self
+            .bus
+            .cart
+            .as_ref()
+            .context("Cartridge is missing when saving state")?
+            .hash
+            .clone();
+
+        let cache_dir = get_project_dir(ProjDirKind::Cache)?.join(&hash);
+        std::fs::create_dir_all(&cache_dir).with_context(|| {
+            format!("Failed to create cache directory: {}", cache_dir.display())
+        })?;
+        let timestamp_millis = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_millis();
+        let path = cache_dir.join(format!("{}.bin", timestamp_millis));
+        save_file_compressed(&path, 0, &state)
+            .with_context(|| format!("Couldn't save state to {}", path.display()))?;
+
+        info!("Saved state to {}", path.display());
+        Ok(())
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn load_state(&mut self, path: &PathBuf) {
-        if self.bus.cart.as_ref().unwrap().hash != path.file_stem().unwrap().to_str().unwrap() {
-            error!("Saved state is not compatible with this game. Hashes do not coincide.");
-            return;
-        }
-
-        let file = load_emu_state(path);
+    fn load_state(&mut self, path: &PathBuf) -> anyhow::Result<()> {
+        let file = load_emu_state(path)?;
 
         self.cpu = file.cpu;
 
@@ -162,6 +181,8 @@ impl Emu {
         self.cycles_accumulator = file.cycles_accumulator;
         self.sample_sum = file.sample_sum;
         self.sample_count = file.sample_count;
+
+        Ok(())
     }
 
     pub fn stop(&mut self) {
@@ -287,10 +308,12 @@ pub fn emu_thread(
                     emu.resume();
                 }
                 Command::SaveState => {
-                    emu.save_state();
+                    emu.save_state()
+                        .unwrap_or_else(|e| error!("Failed to save state: {e}"));
                 }
                 Command::LoadState(path) => {
-                    emu.load_state(&path);
+                    emu.load_state(&path)
+                        .unwrap_or_else(|e| error!("Failed to load state: {e}"));
                 }
                 Command::Step => {
                     emu.want_step = true;
@@ -330,6 +353,25 @@ pub fn emu_thread(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn load_emu_state(path: &PathBuf) -> EmuState {
-    load_file(path, 0).unwrap()
+fn load_emu_state(path: &PathBuf) -> anyhow::Result<EmuState> {
+    use anyhow::Context;
+
+    load_file(path, 0).context("Failed to load file")
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub enum ProjDirKind {
+    Cache,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn get_project_dir(dir_kind: ProjDirKind) -> anyhow::Result<PathBuf> {
+    use anyhow::Context;
+    use directories::ProjectDirs;
+
+    let proj_dirs = ProjectDirs::from("com", "mdmrk", "nessie")
+        .context("Could not determine project directories")?;
+    Ok(match dir_kind {
+        ProjDirKind::Cache => proj_dirs.cache_dir().to_owned(),
+    })
 }

@@ -540,12 +540,17 @@ impl Ui {
                         if ui.button("📥 Save state").clicked() {
                             self.send_command(Command::SaveState);
                         }
-                        if ui.button("📤 Load state").clicked()
-                            && let Some(state) = FileDialog::new()
-                                .add_filter("State file", &["bin"])
-                                .pick_file()
-                        {
-                            self.send_command(Command::LoadState(state));
+                        if ui.button("📤 Load state").clicked() {
+                            use crate::emu::{ProjDirKind, get_project_dir};
+
+                            if let Ok(path) = get_project_dir(ProjDirKind::Cache)
+                                && let Some(state) = FileDialog::new()
+                                    .set_directory(path)
+                                    .add_filter("State file", &["bin"])
+                                    .pick_file()
+                            {
+                                self.send_command(Command::LoadState(state));
+                            }
                         }
                     });
                     ui.separator();
