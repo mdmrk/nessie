@@ -3,6 +3,7 @@ use std::collections::VecDeque;
 
 use bitflags::bitflags;
 use phf::phf_map;
+use savefile::prelude::*;
 
 use crate::bus::Bus;
 
@@ -407,19 +408,48 @@ bitflags! {
     }
 }
 
-#[derive(Clone)]
+impl WithSchema for Flags {
+    fn schema(_version: u32, _context: &mut WithSchemaContext) -> Schema {
+        Schema::Primitive(SchemaPrimitive::schema_u8)
+    }
+}
+
+impl Serialize for Flags {
+    fn serialize(
+        &self,
+        serializer: &mut Serializer<impl std::io::Write>,
+    ) -> Result<(), SavefileError> {
+        self.bits().serialize(serializer)
+    }
+}
+
+impl Deserialize for Flags {
+    fn deserialize(
+        deserializer: &mut Deserializer<impl std::io::Read>,
+    ) -> Result<Self, SavefileError> {
+        let raw = u8::deserialize(deserializer)?;
+        Ok(Flags::from_bits_retain(raw))
+    }
+}
+
+impl Packed for Flags {}
+
+#[derive(Clone, Savefile)]
 pub struct Cpu {
     pub sp: u8,
     pub pc: u16,
+    #[cfg_attr(not(target_arch = "wasm32"), savefile_introspect_ignore)]
     pub p: Flags,
     pub a: u8,
     pub x: u8,
     pub y: u8,
     pub cycles: u64,
-    pub log: Option<VecDeque<char>>,
     pub nmi_pending: bool,
     pub nmi_previous_state: bool,
     pub irq_pending: bool,
+    #[cfg_attr(not(target_arch = "wasm32"), savefile_introspect_ignore)]
+    #[cfg_attr(not(target_arch = "wasm32"), savefile_ignore)]
+    pub log: Option<VecDeque<char>>,
 }
 
 impl Default for Cpu {
@@ -438,14 +468,14 @@ impl Cpu {
             x: 0,
             y: 0,
             cycles: 7,
+            nmi_pending: false,
+            nmi_previous_state: false,
+            irq_pending: false,
             log: if enable_logging {
                 Some(VecDeque::with_capacity(MAX_LOG_SIZE))
             } else {
                 None
             },
-            nmi_pending: false,
-            nmi_previous_state: false,
-            irq_pending: false,
         }
     }
 
