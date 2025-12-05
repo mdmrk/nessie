@@ -543,13 +543,16 @@ impl Ui {
                         if ui.button("📤 Load state").clicked() {
                             use crate::emu::{ProjDirKind, get_project_dir};
 
-                            if let Ok(path) = get_project_dir(ProjDirKind::Cache)
-                                && let Some(state) = FileDialog::new()
-                                    .set_directory(path)
-                                    .add_filter("State file", &["bin"])
-                                    .pick_file()
-                            {
-                                self.send_command(Command::LoadState(state));
+                            if let Ok(path) = get_project_dir(ProjDirKind::Cache) {
+                                let path = path.join(&self.snapshot.cart.as_ref().unwrap().hash);
+                                let mut fd =
+                                    FileDialog::new().add_filter("ROM state file", &["bin"]);
+                                if std::fs::exists(&path).is_ok_and(|f| f) {
+                                    fd = fd.set_directory(path);
+                                }
+                                if let Some(state) = fd.pick_file() {
+                                    self.send_command(Command::LoadState(state));
+                                }
                             }
                         }
                     });
