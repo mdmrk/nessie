@@ -617,7 +617,7 @@ impl Ui {
 
                             let arch = std::env::consts::ARCH;
 
-                            ui.label(egui::RichText::new("Nes emulator").size(22.0));
+                            ui.label(egui::RichText::new("Nintendo NES emulator").size(22.0));
                             ui.add_space(8.0);
                             ui.label(format!("Platform: {} ({})", platform, arch));
 
@@ -634,9 +634,12 @@ impl Ui {
                             ));
                             ui.add_space(8.0);
 
-                            ui.hyperlink_to(
-                                " Nessie on GitHub",
-                                "https://github.com/mdmrk/nessie",
+                            ui.add(
+                                egui::Hyperlink::from_label_and_url(
+                                    " Nessie on GitHub",
+                                    "https://github.com/mdmrk/nessie",
+                                )
+                                .open_in_new_tab(true),
                             );
                         });
                     });

@@ -1,7 +1,7 @@
 use argh::FromArgs;
 
 #[derive(FromArgs, Clone, Default)]
-/// NES emulator
+/// Nintendo NES emulator
 pub struct Args {
     /// path to the ROM (.nes)
     #[argh(positional)]
