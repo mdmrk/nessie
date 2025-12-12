@@ -10,18 +10,18 @@ bitflags = "2.10.0"
 bytesize = "2.3.1"
 compile-time = "0.2.0"
 cpal = { version = "0.16.0", features = ["wasm-bindgen"] }
-eframe = { version = "0.33.2", default-features = false, features = [
+eframe = { version = "0.33.3", default-features = false, features = [
   "default_fonts",
   "glow",
   "wayland",
   "x11"
 ] }
-egui = "0.33.2"
-egui_extras = { version = "0.33.2", features = ["image"] }
+egui = "0.33.3"
+egui_extras = { version = "0.33.3", features = ["image"] }
 egui_plot = "0.34.0"
 image = { version = "0.25.9", default-features = false, features = ["png"] }
-log = "0.4.28"
-modular-bitfield = "0.13.0"
+log = "0.4.29"
+modular-bitfield = "0.13.1"
 phf = { version = "0.13.1", default-features = false, features = ["macros"] }
 rfd = "0.16.0"
 ringbuf = "0.4.8"
