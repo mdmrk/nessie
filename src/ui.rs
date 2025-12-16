@@ -69,16 +69,16 @@ macro_rules! make_rows {
 #[repr(usize)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum AppAction {
-    TogglePause = 0,
+    PauseResume = 0,
     Step,
     SaveState,
     LoadState,
-    // Reset,
-    // ToggleDebug,
-    // OpenRom,
+    TakeScreenshot, // Reset,
+                    // ToggleDebug,
+                    // OpenRom,
 }
 
-const APP_ACTION_COUNT: usize = 4;
+const APP_ACTION_COUNT: usize = 5;
 
 impl AppAction {
     #[inline(always)]
@@ -89,7 +89,7 @@ impl AppAction {
 
 const DEFAULT_SHORTCUTS: [(AppAction, KeyboardShortcut); APP_ACTION_COUNT] = [
     (
-        AppAction::TogglePause,
+        AppAction::PauseResume,
         KeyboardShortcut {
             modifiers: Modifiers::NONE,
             logical_key: Key::Space,
@@ -114,6 +114,13 @@ const DEFAULT_SHORTCUTS: [(AppAction, KeyboardShortcut); APP_ACTION_COUNT] = [
         KeyboardShortcut {
             modifiers: Modifiers::NONE,
             logical_key: Key::F6,
+        },
+    ),
+    (
+        AppAction::TakeScreenshot,
+        KeyboardShortcut {
+            modifiers: Modifiers::NONE,
+            logical_key: Key::F12,
         },
     ),
 ];
@@ -452,7 +459,7 @@ impl Ui {
 
     fn dispatch_action(&mut self, action: AppAction) {
         match action {
-            AppAction::TogglePause => {
+            AppAction::PauseResume => {
                 if self.paused {
                     self.emu_resume();
                 } else {
@@ -471,6 +478,10 @@ impl Ui {
             AppAction::LoadState => {
                 // #[cfg(not(target_arch = "wasm32"))]
                 // self.send_command(Command::LoadState); // FIXME
+            }
+            AppAction::TakeScreenshot => {
+                #[cfg(not(target_arch = "wasm32"))]
+                self.take_screenshot();
             }
         }
     }
@@ -742,7 +753,7 @@ impl Ui {
                 ui.add_enabled_ui(self.running && self.paused, |ui| {
                     if ui
                         .add(egui::Button::new("▶ Resume").shortcut_text(
-                            ui.ctx().format_shortcut(&AppAction::TogglePause.shortcut()),
+                            ui.ctx().format_shortcut(&AppAction::PauseResume.shortcut()),
                         ))
                         .clicked()
                     {
@@ -752,7 +763,7 @@ impl Ui {
                 ui.add_enabled_ui(self.running && !self.paused, |ui| {
                     if ui
                         .add(egui::Button::new("⏸ Pause").shortcut_text(
-                            ui.ctx().format_shortcut(&AppAction::TogglePause.shortcut()),
+                            ui.ctx().format_shortcut(&AppAction::PauseResume.shortcut()),
                         ))
                         .clicked()
                     {
@@ -769,7 +780,12 @@ impl Ui {
                     ui.separator();
                     ui.add_enabled_ui(self.running, |ui| {
                         if ui
-                            .add(egui::Button::new("📷 Take screenshot").shortcut_text("F12"))
+                            .add(
+                                egui::Button::new("📷 Take screenshot").shortcut_text(
+                                    ui.ctx()
+                                        .format_shortcut(&AppAction::TakeScreenshot.shortcut()),
+                                ),
+                            )
                             .clicked()
                         {
                             self.take_screenshot();
