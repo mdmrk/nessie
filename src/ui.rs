@@ -1,6 +1,6 @@
 use crate::{audio::Audio, ppu::Ppu};
 use bytesize::ByteSize;
-use egui::{Color32, ColorImage, IconData, Key};
+use egui::{Color32, ColorImage, IconData, Key, KeyboardShortcut, Modifiers};
 use egui_extras::{Column, TableBuilder};
 use egui_plot::{Line, Plot, PlotPoints};
 use log::{error, info};
@@ -64,6 +64,134 @@ macro_rules! make_rows {
             });
         )+
     };
+}
+
+#[repr(usize)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum AppAction {
+    TogglePause = 0,
+    Step,
+    SaveState,
+    LoadState,
+    // Reset,
+    // ToggleDebug,
+    // OpenRom,
+}
+
+const APP_ACTION_COUNT: usize = 4;
+
+impl AppAction {
+    #[inline(always)]
+    pub fn shortcut(&self) -> KeyboardShortcut {
+        DEFAULT_SHORTCUTS[*self as usize].1
+    }
+}
+
+const DEFAULT_SHORTCUTS: [(AppAction, KeyboardShortcut); APP_ACTION_COUNT] = [
+    (
+        AppAction::TogglePause,
+        KeyboardShortcut {
+            modifiers: Modifiers::NONE,
+            logical_key: Key::Space,
+        },
+    ),
+    (
+        AppAction::Step,
+        KeyboardShortcut {
+            modifiers: Modifiers::NONE,
+            logical_key: Key::Enter,
+        },
+    ),
+    (
+        AppAction::SaveState,
+        KeyboardShortcut {
+            modifiers: Modifiers::NONE,
+            logical_key: Key::F5,
+        },
+    ),
+    (
+        AppAction::LoadState,
+        KeyboardShortcut {
+            modifiers: Modifiers::NONE,
+            logical_key: Key::F6,
+        },
+    ),
+];
+
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
+pub struct ControllerState {
+    pub a: bool,
+    pub b: bool,
+    pub select: bool,
+    pub start: bool,
+    pub up: bool,
+    pub down: bool,
+    pub left: bool,
+    pub right: bool,
+}
+
+impl ControllerState {
+    pub fn to_u8(&self) -> u8 {
+        let mut byte = 0;
+        if self.a {
+            byte |= 1 << 0;
+        }
+        if self.b {
+            byte |= 1 << 1;
+        }
+        if self.select {
+            byte |= 1 << 2;
+        }
+        if self.start {
+            byte |= 1 << 3;
+        }
+        if self.up {
+            byte |= 1 << 4;
+        }
+        if self.down {
+            byte |= 1 << 5;
+        }
+        if self.left {
+            byte |= 1 << 6;
+        }
+        if self.right {
+            byte |= 1 << 7;
+        }
+        byte
+    }
+}
+
+#[derive(Default)]
+struct InputManager;
+
+impl InputManager {
+    fn update(&self, ctx: &egui::Context) -> (Vec<AppAction>, ControllerState) {
+        let mut triggered_actions = Vec::new();
+        let mut controller = ControllerState::default();
+
+        if ctx.wants_keyboard_input() {
+            return (triggered_actions, controller);
+        }
+
+        ctx.input_mut(|i| {
+            for (action, shortcut) in &DEFAULT_SHORTCUTS {
+                if i.consume_shortcut(shortcut) {
+                    triggered_actions.push(*action);
+                }
+            }
+
+            controller.a = i.key_down(Key::A);
+            controller.b = i.key_down(Key::B);
+            controller.start = i.key_down(Key::Z);
+            controller.select = i.key_down(Key::N);
+            controller.up = i.key_down(Key::ArrowUp);
+            controller.down = i.key_down(Key::ArrowDown);
+            controller.left = i.key_down(Key::ArrowLeft);
+            controller.right = i.key_down(Key::ArrowRight);
+        });
+
+        (triggered_actions, controller)
+    }
 }
 
 pub struct FrameStats {
@@ -232,6 +360,9 @@ pub struct Ui {
     args: Args,
     snapshot: DebugSnapshot,
 
+    input_manager: InputManager,
+    last_controller_input: u16,
+
     emu_error_msg: Option<String>,
 
     mem_search: String,
@@ -246,9 +377,6 @@ pub struct Ui {
     frame_stats: FrameStats,
 
     pixels_buffer: Option<Vec<Color32>>,
-
-    controller1_input: Input,
-    controller2_input: Input,
 }
 
 impl Ui {
@@ -276,48 +404,74 @@ impl Ui {
 
             args,
             snapshot: Default::default(),
+
+            input_manager: InputManager::default(),
+            last_controller_input: 0,
+
             emu_error_msg: None,
+
             mem_search: "".into(),
             prev_mem_search_addr: 0,
+
             show_about: false,
+            #[cfg(debug_assertions)]
             show_debug_panels: true,
+            #[cfg(not(debug_assertions))]
+            show_debug_panels: false,
+
             running: false,
             paused: false,
             frame_ready: false,
             frame_stats: FrameStats::new(60.0),
+
             pixels_buffer: None,
-            controller1_input: Default::default(),
-            controller2_input: Default::default(),
         }
     }
 
-    pub fn process_input(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if !self.running {
-            return;
+    pub fn handle_input(&mut self, ctx: &egui::Context) {
+        let (actions, controller) = self.input_manager.update(ctx);
+
+        let input_val = controller.to_u8() as u16;
+
+        if input_val != self.last_controller_input {
+            #[cfg(not(target_arch = "wasm32"))]
+            self.send_command(Command::ControllerInputs(input_val));
+
+            #[cfg(target_arch = "wasm32")]
+            if let Some(emu) = &mut self.emu {
+                emu.bus.controller1.realtime = (input_val & 0xFF) as u8;
+            }
+
+            self.last_controller_input = input_val;
         }
-        if !ctx.wants_keyboard_input() {
-            ctx.input_mut(|i| {
-                self.controller1_input.a = i.key_down(Key::A);
-                self.controller1_input.b = i.key_down(Key::B);
-                self.controller1_input.start = i.key_down(Key::Z);
-                self.controller1_input.select = i.key_down(Key::N);
-                self.controller1_input.up = i.key_down(Key::ArrowUp);
-                self.controller1_input.down = i.key_down(Key::ArrowDown);
-                self.controller1_input.left = i.key_down(Key::ArrowLeft);
-                self.controller1_input.right = i.key_down(Key::ArrowRight);
-            });
+
+        for action in actions {
+            self.dispatch_action(action);
         }
+    }
 
-        let input_val = (self.controller2_input.as_byte() as u16) << 8
-            | self.controller1_input.as_byte() as u16;
-
-        #[cfg(not(target_arch = "wasm32"))]
-        self.send_command(Command::ControllerInputs(input_val));
-
-        #[cfg(target_arch = "wasm32")]
-        if let Some(emu) = &mut self.emu {
-            emu.bus.controller1.realtime = (input_val & 0xFF) as u8;
-            emu.bus.controller2.realtime = (input_val >> 8 & 0xFF) as u8;
+    fn dispatch_action(&mut self, action: AppAction) {
+        match action {
+            AppAction::TogglePause => {
+                if self.paused {
+                    self.emu_resume();
+                } else {
+                    self.emu_pause();
+                }
+            }
+            AppAction::Step => {
+                if self.paused {
+                    self.emu_step();
+                }
+            }
+            AppAction::SaveState => {
+                #[cfg(not(target_arch = "wasm32"))]
+                self.send_command(Command::SaveState);
+            }
+            AppAction::LoadState => {
+                // #[cfg(not(target_arch = "wasm32"))]
+                // self.send_command(Command::LoadState); // FIXME
+            }
         }
     }
 
@@ -537,10 +691,20 @@ impl Ui {
                 {
                     ui.separator();
                     ui.add_enabled_ui(self.running, |ui| {
-                        if ui.button("📥 Save state").clicked() {
+                        if ui
+                            .add(egui::Button::new("📥 Save state").shortcut_text(
+                                ui.ctx().format_shortcut(&AppAction::SaveState.shortcut()),
+                            ))
+                            .clicked()
+                        {
                             self.send_command(Command::SaveState);
                         }
-                        if ui.button("📤 Load state").clicked() {
+                        if ui
+                            .add(egui::Button::new("📥 Load state").shortcut_text(
+                                ui.ctx().format_shortcut(&AppAction::LoadState.shortcut()),
+                            ))
+                            .clicked()
+                        {
                             use crate::emu::{ProjDirKind, get_project_dir};
 
                             if let Ok(path) = get_project_dir(ProjDirKind::Cache) {
@@ -564,17 +728,34 @@ impl Ui {
             });
             ui.menu_button("Emulator", |ui| {
                 ui.add_enabled_ui(self.running && self.paused, |ui| {
-                    if ui.button("⤵ Step").clicked() {
+                    if ui
+                        .add(
+                            egui::Button::new("⤵ Step").shortcut_text(
+                                ui.ctx().format_shortcut(&AppAction::Step.shortcut()),
+                            ),
+                        )
+                        .clicked()
+                    {
                         self.emu_step();
                     }
                 });
                 ui.add_enabled_ui(self.running && self.paused, |ui| {
-                    if ui.button("▶ Resume").clicked() {
+                    if ui
+                        .add(egui::Button::new("▶ Resume").shortcut_text(
+                            ui.ctx().format_shortcut(&AppAction::TogglePause.shortcut()),
+                        ))
+                        .clicked()
+                    {
                         self.emu_resume();
                     }
                 });
                 ui.add_enabled_ui(self.running && !self.paused, |ui| {
-                    if ui.button("⏸ Pause").clicked() {
+                    if ui
+                        .add(egui::Button::new("⏸ Pause").shortcut_text(
+                            ui.ctx().format_shortcut(&AppAction::TogglePause.shortcut()),
+                        ))
+                        .clicked()
+                    {
                         self.emu_pause();
                     }
                 });
@@ -586,9 +767,14 @@ impl Ui {
                 #[cfg(not(target_arch = "wasm32"))]
                 {
                     ui.separator();
-                    if ui.button("📷 Take snapshot").clicked() {
-                        self.take_snapshot();
-                    }
+                    ui.add_enabled_ui(self.running, |ui| {
+                        if ui
+                            .add(egui::Button::new("📷 Take screenshot").shortcut_text("F12"))
+                            .clicked()
+                        {
+                            self.take_screenshot();
+                        }
+                    });
                     ui.checkbox(&mut self.show_debug_panels, "Show debug panels");
                 }
             });
@@ -649,27 +835,6 @@ impl Ui {
                 }
             }
         });
-    }
-
-    fn show_input(&self, ui: &mut egui::Ui) {
-        ui.label(egui::RichText::new("Controller").strong());
-        TableBuilder::new(ui)
-            .id_salt("controller")
-            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-            .column(Column::auto())
-            .column(Column::remainder())
-            .body(|mut body| {
-                make_rows!(body,
-                    "A" => format!("{}", self.controller1_input.a),
-                    "B" => format!("{}", self.controller1_input.b),
-                    "Select" => format!("{}", self.controller1_input.select),
-                    "Start" => format!("{}", self.controller1_input.start),
-                    "Up" => format!("{}", self.controller1_input.up),
-                    "Down" => format!("{}", self.controller1_input.down),
-                    "Left" => format!("{}", self.controller1_input.left),
-                    "Right" => format!("{}", self.controller1_input.right),
-                );
-            });
     }
 
     fn draw_memory_viewer(&mut self, ui: &mut egui::Ui) {
@@ -1392,8 +1557,6 @@ impl Ui {
                         ui.vertical(|ui| {
                             self.draw_rom_details(ui);
                             ui.separator();
-                            self.show_input(ui);
-                            ui.separator();
                             self.draw_fps(ui);
                         });
                     });
@@ -1455,7 +1618,7 @@ impl Ui {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn take_snapshot(&self) {
+    fn take_screenshot(&self) {
         let frame_data: Vec<u8> = self
             .screen
             .pixels
