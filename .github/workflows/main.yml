@@ -114,7 +114,7 @@ jobs:
           if-no-files-found: error
 
   wasm:
-    name: build and deploy (wasm32-unknown-unknown, ${{ matrix.os }})
+    name: build and deploy (wasm32-unknown-unknown, ubuntu-latest)
     runs-on: ubuntu-latest
     needs: build-info
     environment:
