@@ -412,7 +412,7 @@ impl Ui {
             args,
             snapshot: Default::default(),
 
-            input_manager: InputManager::default(),
+            input_manager: Default::default(),
             last_controller_input: 0,
 
             emu_error_msg: None,
