@@ -20,17 +20,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-info:
-    name: build info
-    runs-on: ubuntu-latest
-    outputs:
-      VERSION: ${{ steps.info.outputs.version }}
-    steps:
-      - uses: actions/checkout@v6
-      - id: info
-        shell: bash
-        run: echo "version=$(date +'%Y%m%d')-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-
   fmt:
     runs-on: ubuntu-latest
     steps:
@@ -61,7 +50,6 @@ jobs:
   build:
     name: build (${{ matrix.target }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    needs: build-info
     strategy:
       fail-fast: false
       matrix:
@@ -103,8 +91,6 @@ jobs:
         with:
           key: ${{ matrix.target }}
       - run: cargo build --release --locked --verbose --target ${{ matrix.target }}
-        env:
-          VERSION: ${{ needs.build-info.outputs.VERSION }}
       - name: Upload binary
         uses: actions/upload-artifact@v5
         with:
@@ -116,7 +102,6 @@ jobs:
   wasm:
     name: build and deploy (wasm32-unknown-unknown, ubuntu-latest)
     runs-on: ubuntu-latest
-    needs: build-info
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -131,9 +116,9 @@ jobs:
       - name: Install Trunk
         uses: jetli/trunk-action@v0.5.1
       - name: Build Release
-        env:
-          VERSION: ${{ needs.build-info.outputs.VERSION }}
-        run: TRUNK_BUILD_ID=$(date +%s) trunk build --release --minify --public-url $public_url
+        run: |
+          VERSION=$(git describe --exact-match --tags HEAD 2>/dev/null || echo "$(date +'%Y%m%d')-$(git rev-parse --short HEAD)")
+          TRUNK_BUILD_ID=$(date +%s) trunk build --release --minify --public-url $public_url
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:

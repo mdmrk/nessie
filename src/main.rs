@@ -27,14 +27,14 @@ fn start_puffin_server() {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
-    use nessie::ui::Ui;
+    const VERSION: &str = env!("VERSION");
 
     env_logger::init();
 
     let args: Args = argh::from_env();
 
     if args.version {
-        println!("{}", option_env!("VERSION").unwrap_or("unknown"));
+        println!("{}", VERSION);
         return Ok(());
     }
     #[cfg(debug_assertions)]
@@ -45,7 +45,8 @@ fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1280.0, 720.0])
-            .with_icon(Ui::app_icon()),
+            .with_title(format!("Nessie {VERSION}"))
+            .with_icon(nessie::ui::Ui::app_icon()),
         ..Default::default()
     };
     eframe::run_native(
