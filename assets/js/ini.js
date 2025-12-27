@@ -1,3 +1,17 @@
+(function () {
+	function shim(prototype) {
+		const getExtension = prototype.getExtension;
+		prototype.getExtension = function (name) {
+			if (name === 'WEBGL_debug_renderer_info') {
+				return null;
+			}
+			return getExtension.apply(this, arguments);
+		};
+	}
+	if (typeof WebGLRenderingContext !== 'undefined') shim(WebGLRenderingContext.prototype);
+	if (typeof WebGL2RenderingContext !== 'undefined') shim(WebGL2RenderingContext.prototype);
+})();
+
 export default function () {
 	const progressContainer = document.getElementById('progress-container');
 	const progressBar = document.getElementById('progress-bar');
