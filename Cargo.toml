@@ -23,7 +23,7 @@ image = { version = "0.25.9", default-features = false, features = ["png"] }
 log = "0.4.29"
 modular-bitfield = "0.13.1"
 phf = { version = "0.13.1", default-features = false, features = ["macros"] }
-rfd = "0.16.0"
+rfd = "0.17.1"
 ringbuf = "0.4.8"
 sha1_smol = "1.0.1"
 
