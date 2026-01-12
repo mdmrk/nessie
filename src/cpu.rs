@@ -173,6 +173,7 @@ pub enum OpMnemonic {
     CLV,
     NOP,
     SLO,
+    RLA,
 }
 
 impl fmt::Display for OpMnemonic {
@@ -393,6 +394,13 @@ static OPCODES: phf::Map<u8, Op> = phf_map! {
     0x17u8 => op!(OpMnemonic::SLO, AddrMode::ZeroPageX  , 6, Cpu::slo,  true),
     0x1Bu8 => op!(OpMnemonic::SLO, AddrMode::AbsoluteY  , 7, Cpu::slo,  true),
     0x1Fu8 => op!(OpMnemonic::SLO, AddrMode::AbsoluteX  , 7, Cpu::slo,  true),
+    0x23u8 => op!(OpMnemonic::RLA, AddrMode::IndirectX  , 8, Cpu::rla,  true),
+    0x27u8 => op!(OpMnemonic::RLA, AddrMode::ZeroPage   , 5, Cpu::rla,  true),
+    0x2Fu8 => op!(OpMnemonic::RLA, AddrMode::Absolute   , 6, Cpu::rla,  true),
+    0x33u8 => op!(OpMnemonic::RLA, AddrMode::IndirectY  , 8, Cpu::rla,  true),
+    0x37u8 => op!(OpMnemonic::RLA, AddrMode::ZeroPageX  , 6, Cpu::rla,  true),
+    0x3Bu8 => op!(OpMnemonic::RLA, AddrMode::AbsoluteY  , 7, Cpu::rla,  true),
+    0x3Fu8 => op!(OpMnemonic::RLA, AddrMode::AbsoluteX  , 7, Cpu::rla,  true),
 };
 
 bitflags! {
@@ -1181,5 +1189,9 @@ impl Cpu {
         cpu.a |= result;
         cpu.update_nz(cpu.a);
         if page_crossed { 1 } else { 0 }
+    }
+
+    fn rla(cpu: &mut Cpu, bus: &mut Bus, mode: AddrMode, operands: &[u8]) -> u8 {
+        Cpu::rol(cpu, bus, mode, operands) + Cpu::and(cpu, bus, mode, operands)
     }
 }
