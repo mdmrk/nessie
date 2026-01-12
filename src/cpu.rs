@@ -1203,16 +1203,7 @@ impl Cpu {
     }
 
     fn slo(cpu: &mut Cpu, bus: &mut Bus, mode: AddrMode, operands: &[u8]) -> u8 {
-        let (value, page_crossed) = cpu.read_operand(bus, mode, operands);
-        cpu.write_operand(bus, mode, operands, value);
-        let result = value << 1;
-        cpu.p.set(Flags::C, (value & 0b1000_0000) != 0);
-        cpu.p.set(Flags::Z, result == 0);
-        cpu.p.set(Flags::N, (result & 0b1000_0000) != 0);
-        cpu.write_operand(bus, mode, operands, result);
-        cpu.a |= result;
-        cpu.update_nz(cpu.a);
-        if page_crossed { 1 } else { 0 }
+        Cpu::asl(cpu, bus, mode, operands) + Cpu::ora(cpu, bus, mode, operands)
     }
 
     fn rla(cpu: &mut Cpu, bus: &mut Bus, mode: AddrMode, operands: &[u8]) -> u8 {
