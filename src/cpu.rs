@@ -177,6 +177,7 @@ pub enum OpMnemonic {
     RRA,
     DCP,
     ISC,
+    SRE,
 }
 
 impl fmt::Display for OpMnemonic {
@@ -425,6 +426,13 @@ static OPCODES: phf::Map<u8, Op> = phf_map! {
     0xF7u8 => op!(OpMnemonic::ISC, AddrMode::ZeroPageX  , 6, Cpu::isc,  true),
     0xFBu8 => op!(OpMnemonic::ISC, AddrMode::AbsoluteY  , 7, Cpu::isc,  true),
     0xFFu8 => op!(OpMnemonic::ISC, AddrMode::AbsoluteX  , 7, Cpu::isc,  true),
+    0x43u8 => op!(OpMnemonic::SRE, AddrMode::IndirectX  , 8, Cpu::sre,  true),
+    0x47u8 => op!(OpMnemonic::SRE, AddrMode::ZeroPage   , 5, Cpu::sre,  true),
+    0x4Fu8 => op!(OpMnemonic::SRE, AddrMode::Absolute   , 6, Cpu::sre,  true),
+    0x53u8 => op!(OpMnemonic::SRE, AddrMode::IndirectY  , 8, Cpu::sre,  true),
+    0x57u8 => op!(OpMnemonic::SRE, AddrMode::ZeroPageX  , 6, Cpu::sre,  true),
+    0x5Bu8 => op!(OpMnemonic::SRE, AddrMode::AbsoluteY  , 7, Cpu::sre,  true),
+    0x5Fu8 => op!(OpMnemonic::SRE, AddrMode::AbsoluteX  , 7, Cpu::sre,  true),
 };
 
 bitflags! {
@@ -1220,5 +1228,9 @@ impl Cpu {
 
     fn isc(cpu: &mut Cpu, bus: &mut Bus, mode: AddrMode, operands: &[u8]) -> u8 {
         Cpu::inc(cpu, bus, mode, operands) + Cpu::sbc(cpu, bus, mode, operands)
+    }
+
+    fn sre(cpu: &mut Cpu, bus: &mut Bus, mode: AddrMode, operands: &[u8]) -> u8 {
+        Cpu::lsr(cpu, bus, mode, operands) + Cpu::eor(cpu, bus, mode, operands)
     }
 }
