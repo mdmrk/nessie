@@ -1216,27 +1216,39 @@ impl Cpu {
     }
 
     fn slo(cpu: &mut Cpu, bus: &mut Bus, mode: AddrMode, operands: &[u8]) -> u8 {
-        Cpu::asl(cpu, bus, mode, operands) + Cpu::ora(cpu, bus, mode, operands)
+        Cpu::asl(cpu, bus, mode, operands);
+        Cpu::ora(cpu, bus, mode, operands);
+        0
     }
 
     fn rla(cpu: &mut Cpu, bus: &mut Bus, mode: AddrMode, operands: &[u8]) -> u8 {
-        Cpu::rol(cpu, bus, mode, operands) + Cpu::and(cpu, bus, mode, operands)
+        Cpu::rol(cpu, bus, mode, operands);
+        Cpu::and(cpu, bus, mode, operands);
+        0
     }
 
     fn rra(cpu: &mut Cpu, bus: &mut Bus, mode: AddrMode, operands: &[u8]) -> u8 {
-        Cpu::ror(cpu, bus, mode, operands) + Cpu::adc(cpu, bus, mode, operands)
+        Cpu::ror(cpu, bus, mode, operands);
+        Cpu::adc(cpu, bus, mode, operands);
+        0
     }
 
     fn dcp(cpu: &mut Cpu, bus: &mut Bus, mode: AddrMode, operands: &[u8]) -> u8 {
-        Cpu::dec(cpu, bus, mode, operands) + Cpu::cmp(cpu, bus, mode, operands)
+        Cpu::dec(cpu, bus, mode, operands);
+        Cpu::cmp(cpu, bus, mode, operands);
+        0
     }
 
     fn isc(cpu: &mut Cpu, bus: &mut Bus, mode: AddrMode, operands: &[u8]) -> u8 {
-        Cpu::inc(cpu, bus, mode, operands) + Cpu::sbc(cpu, bus, mode, operands)
+        Cpu::inc(cpu, bus, mode, operands);
+        Cpu::sbc(cpu, bus, mode, operands);
+        0
     }
 
     fn sre(cpu: &mut Cpu, bus: &mut Bus, mode: AddrMode, operands: &[u8]) -> u8 {
-        Cpu::lsr(cpu, bus, mode, operands) + Cpu::eor(cpu, bus, mode, operands)
+        Cpu::lsr(cpu, bus, mode, operands);
+        Cpu::eor(cpu, bus, mode, operands);
+        0
     }
 
     fn sax(cpu: &mut Cpu, bus: &mut Bus, mode: AddrMode, operands: &[u8]) -> u8 {
