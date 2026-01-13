@@ -178,6 +178,7 @@ pub enum OpMnemonic {
     DCP,
     ISC,
     SRE,
+    SAX,
 }
 
 impl fmt::Display for OpMnemonic {
@@ -433,6 +434,10 @@ static OPCODES: phf::Map<u8, Op> = phf_map! {
     0x57u8 => op!(OpMnemonic::SRE, AddrMode::ZeroPageX  , 6, Cpu::sre,  true),
     0x5Bu8 => op!(OpMnemonic::SRE, AddrMode::AbsoluteY  , 7, Cpu::sre,  true),
     0x5Fu8 => op!(OpMnemonic::SRE, AddrMode::AbsoluteX  , 7, Cpu::sre,  true),
+    0x83u8 => op!(OpMnemonic::SAX, AddrMode::IndirectX  , 8, Cpu::sax,  true),
+    0x87u8 => op!(OpMnemonic::SAX, AddrMode::ZeroPage   , 5, Cpu::sax,  true),
+    0x8Fu8 => op!(OpMnemonic::SAX, AddrMode::Absolute   , 6, Cpu::sax,  true),
+    0x97u8 => op!(OpMnemonic::SAX, AddrMode::ZeroPageY  , 8, Cpu::sax,  true),
 };
 
 bitflags! {
@@ -1232,5 +1237,10 @@ impl Cpu {
 
     fn sre(cpu: &mut Cpu, bus: &mut Bus, mode: AddrMode, operands: &[u8]) -> u8 {
         Cpu::lsr(cpu, bus, mode, operands) + Cpu::eor(cpu, bus, mode, operands)
+    }
+
+    fn sax(cpu: &mut Cpu, bus: &mut Bus, mode: AddrMode, operands: &[u8]) -> u8 {
+        cpu.write_operand(bus, mode, operands, cpu.x & cpu.a);
+        0
     }
 }
