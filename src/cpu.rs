@@ -257,7 +257,8 @@ static OPCODES: phf::Map<u8, Op> = phf_map! {
     0x79u8 => op!(OpMnemonic::ADC, AddrMode::AbsoluteY  , 4, Cpu::adc, false),
     0x61u8 => op!(OpMnemonic::ADC, AddrMode::IndirectX  , 6, Cpu::adc, false),
     0x71u8 => op!(OpMnemonic::ADC, AddrMode::IndirectY  , 5, Cpu::adc, false),
-    0xE9u8 => op!(OpMnemonic::SBC, AddrMode::Immediate  , 2, Cpu::sbc, false),
+    0xE9u8 |
+    0xEBu8 => op!(OpMnemonic::SBC, AddrMode::Immediate  , 2, Cpu::sbc, false),
     0xE5u8 => op!(OpMnemonic::SBC, AddrMode::ZeroPage   , 3, Cpu::sbc, false),
     0xF5u8 => op!(OpMnemonic::SBC, AddrMode::ZeroPageX  , 4, Cpu::sbc, false),
     0xEDu8 => op!(OpMnemonic::SBC, AddrMode::Absolute   , 4, Cpu::sbc, false),
