@@ -9,7 +9,7 @@ argh = "0.1.13"
 bitflags = "2.10.0"
 bytesize = "2.3.1"
 compile-time = "0.2.0"
-cpal = { version = "0.16.0", features = ["wasm-bindgen"] }
+cpal = { version = "0.17.1", features = ["wasm-bindgen"] }
 eframe = { version = "0.33.3", default-features = false, features = [
   "default_fonts",
   "glow",
