@@ -73,12 +73,12 @@ enum AppAction {
     Step,
     SaveState,
     LoadState,
-    TakeScreenshot, // Reset,
-                    // ToggleDebug,
-                    // OpenRom,
+    TakeScreenshot,
+    OpenRom,
+    // Reset,
+    // ToggleDebug,
+    // OpenRom,
 }
-
-const APP_ACTION_COUNT: usize = 5;
 
 impl AppAction {
     #[inline(always)]
@@ -87,7 +87,7 @@ impl AppAction {
     }
 }
 
-const DEFAULT_SHORTCUTS: [(AppAction, KeyboardShortcut); APP_ACTION_COUNT] = [
+const DEFAULT_SHORTCUTS: &[(AppAction, KeyboardShortcut)] = &[
     (
         AppAction::PauseResume,
         KeyboardShortcut {
@@ -121,6 +121,13 @@ const DEFAULT_SHORTCUTS: [(AppAction, KeyboardShortcut); APP_ACTION_COUNT] = [
         KeyboardShortcut {
             modifiers: Modifiers::NONE,
             logical_key: Key::F12,
+        },
+    ),
+    (
+        AppAction::OpenRom,
+        KeyboardShortcut {
+            modifiers: Modifiers::CTRL,
+            logical_key: Key::O,
         },
     ),
 ];
@@ -181,7 +188,7 @@ impl InputManager {
         }
 
         ctx.input_mut(|i| {
-            for (action, shortcut) in &DEFAULT_SHORTCUTS {
+            for (action, shortcut) in DEFAULT_SHORTCUTS {
                 if i.consume_shortcut(shortcut) {
                     triggered_actions.push(*action);
                 }
@@ -483,6 +490,9 @@ impl Ui {
                 #[cfg(not(target_arch = "wasm32"))]
                 self.take_screenshot();
             }
+            AppAction::OpenRom => {
+                self.open_rom();
+            }
         }
     }
 
@@ -669,33 +679,46 @@ impl Ui {
         self.paused
     }
 
+    fn open_rom(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if let Some(rom) = FileDialog::new()
+                .add_filter("NES rom", &["nes"])
+                .pick_file()
+            {
+                self.spawn_emu_thread(&rom.into_os_string().into_string().unwrap());
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let (tx, rx) = mpsc::channel();
+            self.rom_loader_rx = Some(rx);
+            let task = async move {
+                if let Some(file) = AsyncFileDialog::new()
+                    .add_filter("NES rom", &["nes"])
+                    .pick_file()
+                    .await
+                {
+                    let data = file.read().await;
+                    let _ = tx.send(data);
+                }
+            };
+            wasm_bindgen_futures::spawn_local(task);
+        }
+    }
+
     fn draw_menubar(&mut self, ui: &mut egui::Ui) {
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button("File", |ui| {
-                #[cfg(not(target_arch = "wasm32"))]
-                if ui.button("🎮 Open ROM...").clicked()
-                    && let Some(rom) = FileDialog::new()
-                        .add_filter("NES rom", &["nes"])
-                        .pick_file()
+                if ui
+                    .add(
+                        egui::Button::new("🎮 Open ROM...").shortcut_text(
+                            ui.ctx().format_shortcut(&AppAction::OpenRom.shortcut()),
+                        ),
+                    )
+                    .clicked()
                 {
-                    self.spawn_emu_thread(&rom.into_os_string().into_string().unwrap());
-                }
-
-                #[cfg(target_arch = "wasm32")]
-                if ui.button("🎮 Open ROM...").clicked() {
-                    let (tx, rx) = mpsc::channel();
-                    self.rom_loader_rx = Some(rx);
-                    let task = async move {
-                        if let Some(file) = AsyncFileDialog::new()
-                            .add_filter("NES rom", &["nes"])
-                            .pick_file()
-                            .await
-                        {
-                            let data = file.read().await;
-                            let _ = tx.send(data);
-                        }
-                    };
-                    wasm_bindgen_futures::spawn_local(task);
+                    self.open_rom();
                 }
 
                 #[cfg(not(target_arch = "wasm32"))]
