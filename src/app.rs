@@ -17,8 +17,6 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        #[cfg(all(debug_assertions, not(target_arch = "wasm32")))]
-        puffin::GlobalProfiler::lock().new_frame();
         self.ui.handle_input(ctx);
         self.ui.handle_emu_events(ctx, frame);
         self.ui.draw(ctx, frame);

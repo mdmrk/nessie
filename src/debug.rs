@@ -5,16 +5,6 @@ use crate::{
     ppu::{Ppu, PpuCtrl, PpuMask, PpuStatus},
 };
 
-#[allow(unused_macros)]
-macro_rules! profile {
-    ($name:expr) => {
-        #[cfg(all(debug_assertions, not(target_arch = "wasm32")))]
-        puffin::profile_scope!($name);
-    };
-}
-#[allow(unused_imports)]
-pub(crate) use profile;
-
 pub const ROWS_TO_SHOW: usize = 7;
 pub const BYTES_PER_ROW: usize = 0x10;
 pub const MEM_BLOCK_SIZE: usize = ROWS_TO_SHOW * BYTES_PER_ROW;
