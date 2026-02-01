@@ -530,6 +530,8 @@ impl Ui {
 
         self.running = false;
         self.paused = false;
+        self.screen.pixels.clear();
+        self.pixels_buffer = None;
     }
 
     pub fn spawn_emu_thread(&mut self, rom: &str) {
