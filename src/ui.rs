@@ -1,6 +1,6 @@
 use crate::{audio::Audio, ppu::Ppu};
 use bytesize::ByteSize;
-use egui::{Color32, ColorImage, IconData, Key, KeyboardShortcut, Modifiers};
+use egui::{Color32, ColorImage, Context, IconData, Key, KeyboardShortcut, Modifiers};
 use egui_extras::{Column, TableBuilder};
 use egui_plot::{Line, Plot, PlotPoints};
 use log::{error, info};
@@ -75,9 +75,9 @@ enum AppAction {
     LoadState,
     TakeScreenshot,
     OpenRom,
+    Quit,
     // Reset,
     // ToggleDebug,
-    // OpenRom,
 }
 
 impl AppAction {
@@ -128,6 +128,13 @@ const DEFAULT_SHORTCUTS: &[(AppAction, KeyboardShortcut)] = &[
         KeyboardShortcut {
             modifiers: Modifiers::CTRL,
             logical_key: Key::O,
+        },
+    ),
+    (
+        AppAction::Quit,
+        KeyboardShortcut {
+            modifiers: Modifiers::CTRL,
+            logical_key: Key::Q,
         },
     ),
 ];
@@ -460,11 +467,11 @@ impl Ui {
         }
 
         for action in actions {
-            self.dispatch_action(action);
+            self.dispatch_action(ctx, action);
         }
     }
 
-    fn dispatch_action(&mut self, action: AppAction) {
+    fn dispatch_action(&mut self, ctx: &Context, action: AppAction) {
         match action {
             AppAction::PauseResume => {
                 if self.paused {
@@ -493,7 +500,14 @@ impl Ui {
             AppAction::OpenRom => {
                 self.open_rom();
             }
+            AppAction::Quit => {
+                self.quit(ctx);
+            }
         }
+    }
+
+    fn quit(&self, ctx: &Context) {
+        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
     }
 
     fn stop_emu_thread(&mut self) {
@@ -756,7 +770,7 @@ impl Ui {
                     });
                     ui.separator();
                     if ui.button("✖ Quit").clicked() {
-                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                        self.quit(ui.ctx());
                     }
                 }
             });
