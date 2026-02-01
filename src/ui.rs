@@ -617,7 +617,9 @@ impl Ui {
         let (debug_tx, _) = mpsc::channel();
         let mut emu = Emu::new(tx, debug_tx, false, producer, sample_rate);
 
-        emu.load_rom_from_bytes(rom_data);
+        if emu.load_rom_from_bytes(rom_data).is_err() {
+            return; // FIXME: better error handling
+        }
         self.emu = Some(emu);
         self.running = true;
         self.paused = false;

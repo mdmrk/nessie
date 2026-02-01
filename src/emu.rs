@@ -105,6 +105,15 @@ impl Emu {
         }
     }
 
+    pub fn load_rom_from_bytes(&mut self, bytes: Vec<u8>) -> Result<()> {
+        let cart = Cart::from_bytes(bytes)?;
+        self.bus.insert_cartridge(cart);
+        info!("Rom loaded from bytes");
+        self.bus.ppu.reset();
+        self.cpu.reset(&mut self.bus);
+        Ok(())
+    }
+
     pub fn load_rom(&mut self, rom_path: &str) -> Result<()> {
         let cart = Cart::insert(rom_path)?;
         self.bus.insert_cartridge(cart);
