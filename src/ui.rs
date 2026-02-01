@@ -72,7 +72,6 @@ enum AppAction {
     PauseResume = 0,
     Step,
     SaveState,
-    LoadState,
     TakeScreenshot,
     OpenRom,
     Quit,
@@ -107,13 +106,6 @@ const DEFAULT_SHORTCUTS: &[(AppAction, KeyboardShortcut)] = &[
         KeyboardShortcut {
             modifiers: Modifiers::NONE,
             logical_key: Key::F5,
-        },
-    ),
-    (
-        AppAction::LoadState,
-        KeyboardShortcut {
-            modifiers: Modifiers::NONE,
-            logical_key: Key::F6,
         },
     ),
     (
@@ -485,16 +477,12 @@ impl Ui {
                     self.emu_step();
                 }
             }
+            #[cfg(not(target_arch = "wasm32"))]
             AppAction::SaveState => {
-                #[cfg(not(target_arch = "wasm32"))]
                 self.send_command(Command::SaveState);
             }
-            AppAction::LoadState => {
-                // #[cfg(not(target_arch = "wasm32"))]
-                // self.send_command(Command::LoadState); // FIXME
-            }
+            #[cfg(not(target_arch = "wasm32"))]
             AppAction::TakeScreenshot => {
-                #[cfg(not(target_arch = "wasm32"))]
                 self.take_screenshot();
             }
             AppAction::OpenRom => {
@@ -723,6 +711,25 @@ impl Ui {
         }
     }
 
+    fn save_state(&self) {
+        self.send_command(Command::SaveState);
+    }
+
+    fn load_state(&self) {
+        use crate::emu::{ProjDirKind, get_project_dir};
+
+        if let Ok(path) = get_project_dir(ProjDirKind::Cache) {
+            let path = path.join(&self.snapshot.cart.as_ref().unwrap().hash);
+            let mut fd = FileDialog::new().add_filter("ROM state file", &["bin"]);
+            if std::fs::exists(&path).is_ok_and(|f| f) {
+                fd = fd.set_directory(path);
+            }
+            if let Some(state) = fd.pick_file() {
+                self.send_command(Command::LoadState(state));
+            }
+        }
+    }
+
     fn draw_menubar(&mut self, ui: &mut egui::Ui) {
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button("File", |ui| {
@@ -747,27 +754,10 @@ impl Ui {
                             ))
                             .clicked()
                         {
-                            self.send_command(Command::SaveState);
+                            self.save_state();
                         }
-                        if ui
-                            .add(egui::Button::new("📥 Load state").shortcut_text(
-                                ui.ctx().format_shortcut(&AppAction::LoadState.shortcut()),
-                            ))
-                            .clicked()
-                        {
-                            use crate::emu::{ProjDirKind, get_project_dir};
-
-                            if let Ok(path) = get_project_dir(ProjDirKind::Cache) {
-                                let path = path.join(&self.snapshot.cart.as_ref().unwrap().hash);
-                                let mut fd =
-                                    FileDialog::new().add_filter("ROM state file", &["bin"]);
-                                if std::fs::exists(&path).is_ok_and(|f| f) {
-                                    fd = fd.set_directory(path);
-                                }
-                                if let Some(state) = fd.pick_file() {
-                                    self.send_command(Command::LoadState(state));
-                                }
-                            }
+                        if ui.add(egui::Button::new("📥 Load state")).clicked() {
+                            self.load_state();
                         }
                     });
                     ui.separator();
