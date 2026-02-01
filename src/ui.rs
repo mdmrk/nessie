@@ -567,17 +567,15 @@ impl Ui {
             let handle = thread::Builder::new()
                 .name("emu_thread".to_string())
                 .spawn(move || {
-                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        emu_thread(
-                            command_rx,
-                            event_tx,
-                            debug_tx,
-                            &args,
-                            &rom,
-                            producer,
-                            sample_rate,
-                        );
-                    }));
+                    let result = emu_thread(
+                        command_rx,
+                        event_tx,
+                        debug_tx,
+                        &args,
+                        &rom,
+                        producer,
+                        sample_rate,
+                    );
 
                     if let Err(e) = result {
                         let msg = if let Some(s) = e.downcast_ref::<&str>() {
@@ -585,7 +583,7 @@ impl Ui {
                         } else if let Some(s) = e.downcast_ref::<String>() {
                             s.clone()
                         } else {
-                            "Unknown emulator crash".to_string()
+                            "Unknown emulator error".to_string()
                         };
 
                         let _ = event_tx_clone.send(Event::Crashed(msg));

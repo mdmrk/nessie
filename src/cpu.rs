@@ -2,6 +2,7 @@ use core::fmt;
 use std::collections::VecDeque;
 
 use bitflags::bitflags;
+use log::error;
 use phf::phf_map;
 #[cfg(not(target_arch = "wasm32"))]
 use savefile::prelude::*;
@@ -726,7 +727,7 @@ impl Cpu {
                 bus.write_byte(addr, value)
             }
             OperandValue::Implied => self.a = value,
-            _ => panic!("Cannot write to this addressing mode"),
+            _ => error!("Cannot write to this addressing mode"),
         }
     }
 

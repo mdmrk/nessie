@@ -1,3 +1,4 @@
+use anyhow::Result;
 #[cfg(not(target_arch = "wasm32"))]
 use savefile::{prelude::*, save_file_compressed};
 #[cfg(not(target_arch = "wasm32"))]
@@ -104,22 +105,13 @@ impl Emu {
         }
     }
 
-    pub fn load_rom_from_bytes(&mut self, bytes: Vec<u8>) {
-        if let Some(cart) = Cart::from_bytes(bytes) {
-            self.bus.insert_cartridge(cart);
-            info!("Rom loaded from bytes");
-            self.bus.ppu.reset();
-            self.cpu.reset(&mut self.bus);
-        }
-    }
-
-    pub fn load_rom(&mut self, rom_path: &str) {
-        if let Some(cart) = Cart::insert(rom_path) {
-            self.bus.insert_cartridge(cart);
-            info!("Rom \"{}\" loaded", rom_path);
-            self.bus.ppu.reset();
-            self.cpu.reset(&mut self.bus);
-        }
+    pub fn load_rom(&mut self, rom_path: &str) -> Result<()> {
+        let cart = Cart::insert(rom_path)?;
+        self.bus.insert_cartridge(cart);
+        info!("Rom \"{}\" loaded", rom_path);
+        self.bus.ppu.reset();
+        self.cpu.reset(&mut self.bus);
+        Ok(())
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -286,10 +278,10 @@ pub fn emu_thread(
     rom: &str,
     audio_producer: HeapProd<f32>,
     sample_rate: f32,
-) {
+) -> Result<()> {
     let mut emu = Emu::new(event_tx, debug_tx, args.log, audio_producer, sample_rate);
 
-    emu.load_rom(rom);
+    emu.load_rom(rom)?;
     if args.pause {
         emu.pause();
     }
@@ -354,6 +346,7 @@ pub fn emu_thread(
         }
     }
     info!("Stopping emulation");
+    Ok(())
 }
 
 #[cfg(not(target_arch = "wasm32"))]

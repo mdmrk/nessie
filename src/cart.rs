@@ -1,6 +1,7 @@
-use log::error;
 use modular_bitfield::prelude::*;
 use sha1_smol::Sha1;
+
+use anyhow::{Result, anyhow};
 
 use crate::mapper::{Mapper0, Mapper1, MapperEnum, Mirroring};
 
@@ -85,13 +86,17 @@ impl Header {
         prg_rom: Vec<u8>,
         chr_rom: Vec<u8>,
         mirroring: Mirroring,
-    ) -> MapperEnum {
+    ) -> Result<MapperEnum> {
         let mapper_num = self.mapper_number();
 
         match mapper_num {
-            0 => MapperEnum::Mapper0(Mapper0::new(prg_rom, chr_rom, mirroring)),
-            1 => MapperEnum::Mapper1(Mapper1::new(prg_rom, chr_rom, mirroring)),
-            _ => panic!("Unsupported mapper ({})", mapper_num),
+            0 => Ok(MapperEnum::Mapper0(Mapper0::new(
+                prg_rom, chr_rom, mirroring,
+            ))),
+            1 => Ok(MapperEnum::Mapper1(Mapper1::new(
+                prg_rom, chr_rom, mirroring,
+            ))),
+            _ => Err(anyhow!("Unsupported mapper ({})", mapper_num)),
         }
     }
 }
@@ -104,12 +109,11 @@ pub struct Cart {
 }
 
 impl Cart {
-    pub fn from_bytes(contents: Vec<u8>) -> Option<Self> {
+    pub fn from_bytes(contents: Vec<u8>) -> Result<Self> {
         let header = unsafe { std::ptr::read(contents.as_ptr() as *const Header) };
         let header_magic = [b'N', b'E', b'S', 0x1A];
         if header.magic != header_magic {
-            error!("Wrong ROM magic number");
-            return None;
+            return Err(anyhow!("Wrong ROM magic number"));
         }
         let mut hasher = Sha1::new();
         hasher.update(&contents);
@@ -123,7 +127,7 @@ impl Cart {
         };
 
         if prg_rom_offset + prg_rom_size > rom.len() {
-            return None;
+            return Err(anyhow!("PRG ROM size exceeds file size"));
         }
 
         let prg_rom = rom[prg_rom_offset..prg_rom_offset + prg_rom_size].to_vec();
@@ -141,9 +145,9 @@ impl Cart {
         } else {
             Mirroring::Horizontal
         };
-        let mapper = header.make_mapper(prg_rom, chr_rom, mirroring);
+        let mapper = header.make_mapper(prg_rom, chr_rom, mirroring)?;
 
-        Some(Self {
+        Ok(Self {
             header,
             rom,
             mapper,
@@ -151,13 +155,10 @@ impl Cart {
         })
     }
 
-    pub fn insert(rom_path: &str) -> Option<Self> {
+    pub fn insert(rom_path: &str) -> Result<Self> {
         match std::fs::read(rom_path) {
             Ok(contents) => Self::from_bytes(contents),
-            Err(e) => {
-                error!("{e}");
-                None
-            }
+            Err(e) => Err(anyhow!(e)),
         }
     }
 }
