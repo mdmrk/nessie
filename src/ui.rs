@@ -771,7 +771,14 @@ impl Ui {
                         }
                     });
                     ui.separator();
-                    if ui.button("✖ Quit").clicked() {
+                    if ui
+                        .add(
+                            egui::Button::new("✖ Quit").shortcut_text(
+                                ui.ctx().format_shortcut(&AppAction::Quit.shortcut()),
+                            ),
+                        )
+                        .clicked()
+                    {
                         self.quit(ui.ctx());
                     }
                 }
