@@ -71,7 +71,9 @@ macro_rules! make_rows {
 enum AppAction {
     PauseResume = 0,
     Step,
+    #[cfg(not(target_arch = "wasm32"))]
     SaveState,
+    #[cfg(not(target_arch = "wasm32"))]
     TakeScreenshot,
     OpenRom,
     Quit,
@@ -101,6 +103,7 @@ const DEFAULT_SHORTCUTS: &[(AppAction, KeyboardShortcut)] = &[
             logical_key: Key::Enter,
         },
     ),
+    #[cfg(not(target_arch = "wasm32"))]
     (
         AppAction::SaveState,
         KeyboardShortcut {
@@ -108,6 +111,7 @@ const DEFAULT_SHORTCUTS: &[(AppAction, KeyboardShortcut)] = &[
             logical_key: Key::F5,
         },
     ),
+    #[cfg(not(target_arch = "wasm32"))]
     (
         AppAction::TakeScreenshot,
         KeyboardShortcut {
@@ -711,10 +715,12 @@ impl Ui {
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn save_state(&self) {
         self.send_command(Command::SaveState);
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn load_state(&self) {
         use crate::emu::{ProjDirKind, get_project_dir};
 
