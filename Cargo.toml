@@ -40,5 +40,5 @@ web-time = "1.1.0"
 
 [profile.release]
 lto = true
+panic = "abort"
 codegen-units = 1
-panic   = "abort"

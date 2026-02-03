@@ -522,7 +522,7 @@ impl Ui {
 
         self.running = false;
         self.paused = false;
-        self.screen.pixels.clear();
+        self.screen.pixels.fill(Color32::BLACK);
         self.pixels_buffer = None;
     }
 
