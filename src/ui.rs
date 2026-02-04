@@ -1,6 +1,6 @@
 use crate::{audio::Audio, ppu::Ppu};
 use bytesize::ByteSize;
-use egui::{Color32, ColorImage, Context, IconData, Key, KeyboardShortcut, Modifiers};
+use egui::{Color32, ColorImage, Context, IconData, ImageData, Key, KeyboardShortcut, Modifiers};
 use egui_extras::{Column, TableBuilder};
 use egui_plot::{Line, Plot, PlotPoints};
 use log::{error, info};
@@ -17,7 +17,7 @@ use crate::emu::Emu;
 use core::f32;
 use std::{
     path::{Path, PathBuf},
-    sync::mpsc,
+    sync::{Arc, mpsc},
 };
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -398,9 +398,13 @@ pub struct Ui {
 
 impl Ui {
     pub fn new(ctx: &egui::Context, args: Args) -> Self {
-        let icon_image = load_image_from_memory(&Self::app_icon().rgba).unwrap();
+        let app_icon = Self::app_icon();
+        let app_icon_img = ImageData::Color(Arc::new(ColorImage::from_rgba_unmultiplied(
+            [app_icon.width as usize, app_icon.height as usize],
+            &app_icon.rgba,
+        )));
         let app_icon_texture =
-            ctx.load_texture("app_icon", icon_image, egui::TextureOptions::NEAREST);
+            ctx.load_texture("app_icon", app_icon_img, egui::TextureOptions::NEAREST);
         Self {
             screen: Screen::new(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -646,10 +650,16 @@ impl Ui {
     }
 
     pub fn app_icon() -> IconData {
+        let icon_data = include_bytes!("../assets/icon-1024.png");
+        let icon = image::load_from_memory(icon_data)
+            .expect("Failed to load application icon")
+            .to_rgba8();
+        let (width, height) = icon.dimensions();
+
         IconData {
-            rgba: include_bytes!("../assets/icon-1024.png").to_vec(),
-            width: 1024,
-            height: 1024,
+            rgba: icon.into_raw(),
+            width,
+            height,
         }
     }
 
@@ -1722,14 +1732,6 @@ fn get_unique_path() -> PathBuf {
     }
 
     path
-}
-
-pub fn load_image_from_memory(image_data: &[u8]) -> Result<ColorImage, image::ImageError> {
-    let image = image::load_from_memory(image_data)?;
-    let size = [image.width() as _, image.height() as _];
-    let image_buffer = image.to_rgba8();
-    let pixels = image_buffer.as_flat_samples();
-    Ok(ColorImage::from_rgba_unmultiplied(size, pixels.as_slice()))
 }
 
 fn generate_pulse_wave(freq: f64, amp: f64, duty_cycle: f64, duration: f64) -> Vec<[f64; 2]> {
