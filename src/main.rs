@@ -1,6 +1,16 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use eframe::CreationContext;
+use egui::{Style, Visuals};
 use nessie::{app::App, args::Args};
+
+fn set_style(cc: &CreationContext) {
+    let style = Style {
+        visuals: Visuals::dark(),
+        ..Default::default()
+    };
+    cc.egui_ctx.set_style(style);
+}
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
@@ -26,6 +36,7 @@ fn main() -> eframe::Result {
         "Nessie",
         options,
         Box::new(|cc| {
+            set_style(cc);
             egui_extras::install_image_loaders(&cc.egui_ctx);
             Ok(Box::new(App::new(&cc.egui_ctx, args)))
         }),
@@ -59,6 +70,7 @@ fn main() {
                 canvas,
                 options,
                 Box::new(|cc| {
+                    set_style(cc);
                     egui_extras::install_image_loaders(&cc.egui_ctx);
                     Ok(Box::new(App::new(&cc.egui_ctx, args)))
                 }),
