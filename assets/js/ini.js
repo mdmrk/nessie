@@ -1,7 +1,7 @@
 (() => {
 	function shim(prototype) {
 		const getExtension = prototype.getExtension;
-		prototype.getExtension = function(name) {
+		prototype.getExtension = function (name) {
 			if (name === "WEBGL_debug_renderer_info") {
 				return null;
 			}
@@ -14,7 +14,7 @@
 		shim(WebGL2RenderingContext.prototype);
 })();
 
-export default function() {
+export default function () {
 	const progressContainer = document.getElementById("progress-container");
 	const progressBar = document.getElementById("progress-bar");
 	const progressText = document.getElementById("progress-text");
