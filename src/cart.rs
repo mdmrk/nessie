@@ -1,7 +1,7 @@
 use modular_bitfield::prelude::*;
 use sha1_smol::Sha1;
 
-use anyhow::{Result, anyhow};
+use anyhow::{Result, bail};
 
 use crate::mapper::{Mapper0, Mapper1, MapperEnum, Mirroring};
 
@@ -96,7 +96,7 @@ impl Header {
             1 => Ok(MapperEnum::Mapper1(Mapper1::new(
                 prg_rom, chr_rom, mirroring,
             ))),
-            _ => Err(anyhow!("Unsupported mapper ({})", mapper_num)),
+            _ => bail!("Unsupported mapper ({})", mapper_num),
         }
     }
 }
@@ -113,7 +113,7 @@ impl Cart {
         let header = unsafe { std::ptr::read(contents.as_ptr() as *const Header) };
         let header_magic = [b'N', b'E', b'S', 0x1A];
         if header.magic != header_magic {
-            return Err(anyhow!("Wrong ROM magic number"));
+            bail!("Wrong ROM magic number");
         }
         let mut hasher = Sha1::new();
         hasher.update(&contents);
@@ -127,7 +127,7 @@ impl Cart {
         };
 
         if prg_rom_offset + prg_rom_size > rom.len() {
-            return Err(anyhow!("PRG ROM size exceeds file size"));
+            bail!("PRG ROM size exceeds file size");
         }
 
         let prg_rom = rom[prg_rom_offset..prg_rom_offset + prg_rom_size].to_vec();
@@ -158,7 +158,7 @@ impl Cart {
     pub fn insert(rom_path: &str) -> Result<Self> {
         match std::fs::read(rom_path) {
             Ok(contents) => Self::from_bytes(contents),
-            Err(e) => Err(anyhow!(e)),
+            Err(e) => bail!(e),
         }
     }
 }

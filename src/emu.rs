@@ -124,7 +124,7 @@ impl Emu {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn save_state(&self) -> anyhow::Result<()> {
+    fn save_state(&self) -> Result<()> {
         use anyhow::Context;
 
         let state = EmuState {
@@ -166,7 +166,7 @@ impl Emu {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn load_state(&mut self, path: &PathBuf) -> anyhow::Result<()> {
+    fn load_state(&mut self, path: &PathBuf) -> Result<()> {
         let file = load_emu_state(path)?;
 
         self.cpu = file.cpu;
@@ -359,7 +359,7 @@ pub fn emu_thread(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn load_emu_state(path: &PathBuf) -> anyhow::Result<EmuState> {
+fn load_emu_state(path: &PathBuf) -> Result<EmuState> {
     use anyhow::Context;
 
     load_file(path, 0).context("Failed to load file")
@@ -371,7 +371,7 @@ pub enum ProjDirKind {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn get_project_dir(dir_kind: ProjDirKind) -> anyhow::Result<PathBuf> {
+pub fn get_project_dir(dir_kind: ProjDirKind) -> Result<PathBuf> {
     use anyhow::Context;
     use directories::ProjectDirs;
 

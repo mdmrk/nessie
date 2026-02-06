@@ -1,4 +1,4 @@
-use anyhow::Context;
+use anyhow::{Context, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use ringbuf::HeapCons;
 use ringbuf::traits::Consumer;
@@ -9,7 +9,7 @@ pub struct Audio {
 }
 
 impl Audio {
-    pub fn new(mut consumer: HeapCons<f32>) -> Result<Self, anyhow::Error> {
+    pub fn new(mut consumer: HeapCons<f32>) -> Result<Self> {
         let host = cpal::default_host();
 
         let device = host

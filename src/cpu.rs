@@ -1,3 +1,4 @@
+use anyhow::{Result, bail};
 use core::fmt;
 use std::collections::VecDeque;
 
@@ -607,7 +608,7 @@ impl Cpu {
         }
     }
 
-    pub fn step(&mut self, bus: &mut Bus) -> Result<(), String> {
+    pub fn step(&mut self, bus: &mut Bus) -> Result<()> {
         if self.nmi_pending {
             self.handle_nmi(bus);
             self.nmi_pending = false;
@@ -627,7 +628,7 @@ impl Cpu {
                 }
                 None => {
                     self.pc = self.pc.wrapping_add(1);
-                    Err(format!("Unknown opcode: 0x{:02X}", opcode))
+                    bail!(format!("Unknown opcode: 0x{:02X}", opcode))
                 }
             }
         }
