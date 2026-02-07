@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow = { version = "1.0.100", default-features = false }
-argh = "0.1.13"
+anyhow = { version = "1.0.101", default-features = false }
+argh = "0.1.14"
 bitflags = "2.10.0"
 bytesize = "2.3.1"
 compile-time = "0.2.0"
