@@ -8,7 +8,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use directories::ProjectDirs;
-use egui::Context as EguiContext;
+use egui::{Color32, Context as EguiContext};
 use log::{error, info};
 use rfd::FileDialog;
 use ringbuf::{HeapProd, HeapRb, traits::Split};
@@ -19,11 +19,13 @@ use crate::audio::Audio;
 use crate::debug::DebugSnapshot;
 use crate::emu::{Command, Emu, EmuState, Event};
 use crate::platform::RomSource;
+use crate::ppu::{FRAME_HEIGHT, FRAME_WIDTH};
 
 pub struct PlatformRunner {
     pub command_tx: Option<mpsc::Sender<Command>>,
     pub event_rx: Option<mpsc::Receiver<Event>>,
     pub debug_rx: Option<triple_buffer::Output<DebugSnapshot>>,
+    pub frame_rx: Option<triple_buffer::Output<Vec<Color32>>>,
     pub emu_thread_handle: Option<JoinHandle<()>>,
     pub audio: Option<Audio>,
     pub running: bool,
@@ -36,6 +38,7 @@ impl PlatformRunner {
             command_tx: None,
             event_rx: None,
             debug_rx: None,
+            frame_rx: None,
             emu_thread_handle: None,
             audio: None,
             running: false,
@@ -49,8 +52,8 @@ impl PlatformRunner {
         }
 
         let rb = HeapRb::<f32>::new(4096);
-        let (producer, consumer) = rb.split();
-        let (audio_handle, sample_rate) = match Audio::new(consumer) {
+        let (tx, rx) = rb.split();
+        let (audio_handle, sample_rate) = match Audio::new(rx) {
             Ok(audio) => {
                 let rate = audio.sample_rate;
                 (Some(audio), rate)
@@ -67,10 +70,13 @@ impl PlatformRunner {
         let (command_tx, command_rx) = mpsc::channel();
         let (event_rx_tx, event_rx) = mpsc::channel();
         let (debug_tx, debug_rx) = triple_buffer::triple_buffer(&DebugSnapshot::default());
+        let (frame_tx, frame_rx) =
+            triple_buffer::triple_buffer(&vec![Color32::BLACK; FRAME_WIDTH * FRAME_HEIGHT]);
 
         self.command_tx = Some(command_tx);
         self.event_rx = Some(event_rx);
         self.debug_rx = Some(debug_rx);
+        self.frame_rx = Some(frame_rx);
 
         let event_tx_clone = event_rx_tx.clone();
 
@@ -78,12 +84,13 @@ impl PlatformRunner {
             .name("emu_thread".to_string())
             .spawn(move || {
                 let result = emu_thread(
+                    &args,
                     command_rx,
                     event_rx_tx,
                     debug_tx,
-                    &args,
+                    frame_tx,
                     rom,
-                    producer,
+                    tx,
                     sample_rate,
                 );
 
@@ -116,6 +123,7 @@ impl PlatformRunner {
         }
         self.event_rx = None;
         self.debug_rx = None;
+        self.frame_rx = None;
         self.running = false;
         self.paused = false;
     }
@@ -159,11 +167,7 @@ impl PlatformRunner {
     }
 
     pub fn get_debug_snapshot(&mut self) -> Option<DebugSnapshot> {
-        if let Some(rx) = &mut self.debug_rx {
-            Some(rx.read().clone())
-        } else {
-            None
-        }
+        self.debug_rx.as_mut().map(|rx| rx.read().clone())
     }
 
     pub fn pick_rom(&mut self, args: Args) {
@@ -195,15 +199,23 @@ impl Default for PlatformRunner {
 }
 
 pub fn emu_thread(
+    args: &Args,
     command_rx: mpsc::Receiver<Command>,
     event_tx: mpsc::Sender<Event>,
     debug_tx: triple_buffer::Input<DebugSnapshot>,
-    args: &Args,
+    frame_tx: triple_buffer::Input<Vec<Color32>>,
     rom: RomSource,
     audio_producer: HeapProd<f32>,
     sample_rate: f32,
 ) -> Result<()> {
-    let mut emu = Emu::new(event_tx, debug_tx, args.log, audio_producer, sample_rate);
+    let mut emu = Emu::new(
+        event_tx,
+        debug_tx,
+        frame_tx,
+        args.log,
+        audio_producer,
+        sample_rate,
+    );
 
     match rom {
         RomSource::Path(path) => emu.load_rom(path.to_str().unwrap())?,
@@ -257,7 +269,7 @@ pub fn emu_thread(
         let should_run = !emu.paused || emu.want_step;
         if should_run {
             if let Some(frame) = emu.step_frame() {
-                emu.send_event(Event::FrameReady(frame));
+                emu.frame_tx.write(frame);
 
                 let elapsed = frame_start_time.elapsed();
                 if elapsed < frame_duration {

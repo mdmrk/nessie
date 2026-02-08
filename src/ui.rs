@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 use web_time::{Duration, Instant};
 
 use crate::platform::RomSource;
+use crate::ppu::{FRAME_HEIGHT, FRAME_WIDTH};
 use crate::{
     args::Args,
     debug::{BYTES_PER_ROW, DebugSnapshot, ROWS_TO_SHOW},
@@ -256,26 +257,20 @@ impl FrameStats {
 pub struct Screen {
     pub width: usize,
     pub height: usize,
-    pixels: Vec<Color32>,
     pub texture_handle: Option<egui::TextureHandle>,
 }
 
 impl Screen {
     pub fn new() -> Self {
-        let width: usize = 256;
-        let height: usize = 240;
-        let pixels = vec![Color32::BLACK; width * height];
-        dbg!("yes {}", pixels.len());
         Self {
-            width,
-            height,
-            pixels,
+            width: FRAME_WIDTH,
+            height: FRAME_HEIGHT,
             texture_handle: None,
         }
     }
 
-    pub fn update_texture(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
-        let image = egui::ColorImage::new([self.width, self.height], self.pixels.clone());
+    pub fn update_texture(&mut self, ctx: &egui::Context, ui: &mut egui::Ui, pixels: &[Color32]) {
+        let image = egui::ColorImage::new([self.width, self.height], pixels.to_owned());
 
         if let Some(texture) = &mut self.texture_handle {
             texture.set(image, egui::TextureOptions::NEAREST);
@@ -364,10 +359,7 @@ pub struct Ui {
 
     running: bool,
     paused: bool,
-    frame_ready: bool,
     frame_stats: FrameStats,
-
-    pixels_buffer: Option<Vec<Color32>>,
 }
 
 impl Ui {
@@ -403,10 +395,7 @@ impl Ui {
 
             running: false,
             paused: false,
-            frame_ready: false,
             frame_stats: FrameStats::new(60.0),
-
-            pixels_buffer: None,
         }
     }
 
@@ -465,8 +454,6 @@ impl Ui {
         self.runner.stop();
         self.running = false;
         self.paused = false;
-        self.screen.pixels.fill(Color32::BLACK);
-        self.pixels_buffer = None;
     }
 
     pub fn start(&mut self, rom: RomSource) {
@@ -1296,14 +1283,12 @@ impl Ui {
     }
 
     fn draw_screen(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
-        if self.frame_ready && self.frame_stats.should_render() {
-            self.frame_ready = false;
-            if let Some(frame) = self.pixels_buffer.take() {
-                self.screen.pixels = frame;
-            }
-        }
         self.frame_stats.update_fps();
-        self.screen.update_texture(ctx, ui);
+
+        if let Some(rx) = &mut self.runner.frame_rx {
+            let pixels = rx.read();
+            self.screen.update_texture(ctx, ui, pixels);
+        }
     }
 
     fn draw_start_screen(&self, _ctx: &egui::Context, ui: &mut egui::Ui) {
@@ -1405,19 +1390,18 @@ impl Ui {
                     self.running = false;
                     self.paused = false;
                 }
-                Event::FrameReady(frame_arc) => {
-                    self.pixels_buffer = Some(frame_arc);
-                    self.frame_ready = true;
-                }
             }
         }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn take_screenshot(&self) {
+    fn take_screenshot(&mut self) {
         let frame_data: Vec<u8> = self
-            .screen
-            .pixels
+            .runner
+            .frame_rx
+            .as_mut()
+            .unwrap()
+            .read()
             .iter()
             .flat_map(|c| {
                 let [r, g, b, _a] = c.to_array();

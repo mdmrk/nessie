@@ -6,6 +6,9 @@ use savefile::prelude::*;
 
 use crate::mapper::MapperEnum;
 
+pub const FRAME_WIDTH: usize = 256;
+pub const FRAME_HEIGHT: usize = 240;
+
 #[bitfield(bytes = 1)]
 #[derive(Debug, Clone, Default, Copy)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Savefile))]

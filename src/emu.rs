@@ -39,7 +39,6 @@ pub enum Event {
     Paused,
     Resumed,
     Crashed(String),
-    FrameReady(Vec<Color32>),
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), derive(Savefile))]
@@ -61,6 +60,7 @@ pub struct Emu {
     pub want_step: bool,
     pub event_tx: mpsc::Sender<Event>,
     pub debug_tx: triple_buffer::Input<DebugSnapshot>,
+    pub frame_tx: triple_buffer::Input<Vec<Color32>>,
     pub mem_chunk_addr: usize,
     pub audio_producer: HeapProd<f32>,
     pub cycles_per_sample: f32,
@@ -73,6 +73,7 @@ impl Emu {
     pub fn new(
         event_tx: mpsc::Sender<Event>,
         debug_tx: triple_buffer::Input<DebugSnapshot>,
+        frame_tx: triple_buffer::Input<Vec<Color32>>,
         enable_logging: bool,
         audio_producer: HeapProd<f32>,
         sample_rate: f32,
@@ -85,6 +86,7 @@ impl Emu {
             want_step: false,
             event_tx,
             debug_tx,
+            frame_tx,
             mem_chunk_addr: 0,
             audio_producer,
             cycles_per_sample: 1789773.0 / sample_rate,
@@ -229,7 +231,7 @@ impl Emu {
                         &memory_slice,
                         &stack_slice,
                     );
-                    let _ = self.debug_tx.write(snapshot);
+                    self.debug_tx.write(snapshot);
 
                     break;
                 }
