@@ -26,6 +26,7 @@ phf = { version = "0.13.1", default-features = false, features = ["macros"] }
 rfd = "0.17.2"
 ringbuf = "0.4.8"
 sha1_smol = "1.0.1"
+triple_buffer = "8.1.1"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 directories = "6.0.0"

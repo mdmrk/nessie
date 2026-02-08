@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 #[cfg(target_arch = "wasm32")]
 use web_time::{Duration, Instant};
 
+use crate::platform::RomSource;
 use crate::{
     args::Args,
     debug::{BYTES_PER_ROW, DebugSnapshot, ROWS_TO_SHOW},
@@ -264,6 +265,7 @@ impl Screen {
         let width: usize = 256;
         let height: usize = 240;
         let pixels = vec![Color32::BLACK; width * height];
+        dbg!("yes {}", pixels.len());
         Self {
             width,
             height,
@@ -467,7 +469,7 @@ impl Ui {
         self.pixels_buffer = None;
     }
 
-    pub fn start(&mut self, rom: crate::platform::RomSource) {
+    pub fn start(&mut self, rom: RomSource) {
         if self.running {
             self.stop();
         }

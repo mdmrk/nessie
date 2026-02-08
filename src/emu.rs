@@ -60,7 +60,7 @@ pub struct Emu {
     pub paused: bool,
     pub want_step: bool,
     pub event_tx: mpsc::Sender<Event>,
-    pub debug_tx: mpsc::Sender<DebugSnapshot>,
+    pub debug_tx: triple_buffer::Input<DebugSnapshot>,
     pub mem_chunk_addr: usize,
     pub audio_producer: HeapProd<f32>,
     pub cycles_per_sample: f32,
@@ -72,7 +72,7 @@ pub struct Emu {
 impl Emu {
     pub fn new(
         event_tx: mpsc::Sender<Event>,
-        debug_tx: mpsc::Sender<DebugSnapshot>,
+        debug_tx: triple_buffer::Input<DebugSnapshot>,
         enable_logging: bool,
         audio_producer: HeapProd<f32>,
         sample_rate: f32,
@@ -229,7 +229,7 @@ impl Emu {
                         &memory_slice,
                         &stack_slice,
                     );
-                    let _ = self.debug_tx.send(snapshot);
+                    let _ = self.debug_tx.write(snapshot);
 
                     break;
                 }

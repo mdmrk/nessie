@@ -1746,6 +1746,7 @@ dependencies = [
  "ringbuf",
  "savefile",
  "sha1_smol",
+ "triple_buffer",
  "wasm-bindgen-futures",
  "web-sys",
  "web-time",
@@ -3026,6 +3027,15 @@ name = "tracing-core"
 version = "0.1.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a04e24fab5c89c6a36eb8558c9656f30d81de51dfa4d3b45f26b21d61fa0a6c"
+
+[[package]]
+name = "triple_buffer"
+version = "8.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "420466259f9fa5decc654c490b9ab538400e5420df8237f84ecbe20368bcf72b"
+dependencies = [
+ "crossbeam-utils",
+]
 
 [[package]]
 name = "ttf-parser"

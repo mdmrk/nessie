@@ -29,7 +29,7 @@ impl PlatformRunner {
         }
     }
 
-    pub fn start(&mut self, rom: crate::platform::RomSource, _args: crate::args::Args) {
+    pub fn start(&mut self, rom: RomSource, _args: crate::args::Args) {
         let rb = HeapRb::<f32>::new(4096);
         let (producer, consumer) = rb.split();
 
@@ -51,7 +51,7 @@ impl PlatformRunner {
         let mut emu = Emu::new(tx, debug_tx, false, producer, sample_rate);
 
         match rom {
-            crate::platform::RomSource::Bytes(bytes) => {
+            RomSource::Bytes(bytes) => {
                 if emu.load_rom_from_bytes(bytes).is_err() {
                     error!("Failed to load ROM from bytes");
                     return;
@@ -131,7 +131,7 @@ impl PlatformRunner {
         };
 
         if let Some((data, args)) = loaded_rom {
-            self.start(crate::platform::RomSource::Bytes(data), args);
+            self.start(RomSource::Bytes(data), args);
             self.rom_loader_rx = None;
         }
 

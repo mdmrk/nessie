@@ -18,11 +18,12 @@ use crate::args::Args;
 use crate::audio::Audio;
 use crate::debug::DebugSnapshot;
 use crate::emu::{Command, Emu, EmuState, Event};
+use crate::platform::RomSource;
 
 pub struct PlatformRunner {
     pub command_tx: Option<mpsc::Sender<Command>>,
     pub event_rx: Option<mpsc::Receiver<Event>>,
-    pub debug_rx: Option<mpsc::Receiver<DebugSnapshot>>,
+    pub debug_rx: Option<triple_buffer::Output<DebugSnapshot>>,
     pub emu_thread_handle: Option<JoinHandle<()>>,
     pub audio: Option<Audio>,
     pub running: bool,
@@ -42,7 +43,7 @@ impl PlatformRunner {
         }
     }
 
-    pub fn start(&mut self, rom: crate::platform::RomSource, args: Args) {
+    pub fn start(&mut self, rom: RomSource, args: Args) {
         if self.running {
             self.stop();
         }
@@ -65,7 +66,7 @@ impl PlatformRunner {
 
         let (command_tx, command_rx) = mpsc::channel();
         let (event_rx_tx, event_rx) = mpsc::channel();
-        let (debug_tx, debug_rx) = mpsc::channel();
+        let (debug_tx, debug_rx) = triple_buffer::triple_buffer(&DebugSnapshot::default());
 
         self.command_tx = Some(command_tx);
         self.event_rx = Some(event_rx);
@@ -157,13 +158,9 @@ impl PlatformRunner {
         events
     }
 
-    pub fn get_debug_snapshot(&self) -> Option<DebugSnapshot> {
-        if let Some(rx) = &self.debug_rx {
-            let mut latest = None;
-            while let Ok(snapshot) = rx.try_recv() {
-                latest = Some(snapshot);
-            }
-            latest
+    pub fn get_debug_snapshot(&mut self) -> Option<DebugSnapshot> {
+        if let Some(rx) = &mut self.debug_rx {
+            Some(rx.read().clone())
         } else {
             None
         }
@@ -174,7 +171,7 @@ impl PlatformRunner {
             .add_filter("NES rom", &["nes"])
             .pick_file()
         {
-            self.start(crate::platform::RomSource::Path(rom), args);
+            self.start(RomSource::Path(rom), args);
         }
     }
 
@@ -200,17 +197,17 @@ impl Default for PlatformRunner {
 pub fn emu_thread(
     command_rx: mpsc::Receiver<Command>,
     event_tx: mpsc::Sender<Event>,
-    debug_tx: mpsc::Sender<DebugSnapshot>,
+    debug_tx: triple_buffer::Input<DebugSnapshot>,
     args: &Args,
-    rom: crate::platform::RomSource,
+    rom: RomSource,
     audio_producer: HeapProd<f32>,
     sample_rate: f32,
 ) -> Result<()> {
     let mut emu = Emu::new(event_tx, debug_tx, args.log, audio_producer, sample_rate);
 
     match rom {
-        crate::platform::RomSource::Path(path) => emu.load_rom(path.to_str().unwrap())?,
-        crate::platform::RomSource::Bytes(bytes) => emu.load_rom_from_bytes(bytes)?,
+        RomSource::Path(path) => emu.load_rom(path.to_str().unwrap())?,
+        RomSource::Bytes(bytes) => emu.load_rom_from_bytes(bytes)?,
     }
 
     if args.pause {
