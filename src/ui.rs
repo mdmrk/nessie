@@ -1,38 +1,23 @@
-use crate::{audio::Audio, ppu::Ppu};
 use bytesize::ByteSize;
 use egui::{Color32, ColorImage, Context, IconData, ImageData, Key, KeyboardShortcut, Modifiers};
 use egui_extras::{Column, TableBuilder};
 use egui_plot::{Line, Plot, PlotPoints};
 use log::{error, info};
-use ringbuf::{HeapRb, traits::Split};
-
-#[cfg(target_arch = "wasm32")]
-use rfd::AsyncFileDialog;
-#[cfg(not(target_arch = "wasm32"))]
-use rfd::FileDialog;
-
-#[cfg(target_arch = "wasm32")]
-use crate::emu::Emu;
-
-use core::f32;
-use std::{
-    path::{Path, PathBuf},
-    sync::{Arc, mpsc},
-};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::{Duration, Instant};
 #[cfg(target_arch = "wasm32")]
 use web_time::{Duration, Instant};
 
-#[cfg(not(target_arch = "wasm32"))]
-use std::thread::{self, JoinHandle};
-
 use crate::{
     args::Args,
     debug::{BYTES_PER_ROW, DebugSnapshot, ROWS_TO_SHOW},
-    emu::{Command, Event, emu_thread},
+    emu::{Command, Event},
     mapper::MapperIcon,
+    platform::PlatformRunner,
+    ppu::Ppu,
 };
 
 macro_rules! make_rows {
@@ -358,21 +343,8 @@ impl Input {
 
 pub struct Ui {
     screen: Screen,
-    #[cfg(not(target_arch = "wasm32"))]
-    command_tx: Option<mpsc::Sender<Command>>,
-    #[cfg(not(target_arch = "wasm32"))]
-    event_rx: Option<mpsc::Receiver<Event>>,
-    #[cfg(not(target_arch = "wasm32"))]
-    debug_rx: Option<mpsc::Receiver<DebugSnapshot>>,
-    #[cfg(not(target_arch = "wasm32"))]
-    emu_thread_handle: Option<JoinHandle<()>>,
-    audio: Option<Audio>,
+    runner: PlatformRunner,
     app_icon_texture: egui::TextureHandle,
-
-    #[cfg(target_arch = "wasm32")]
-    emu: Option<Emu>,
-    #[cfg(target_arch = "wasm32")]
-    rom_loader_rx: Option<mpsc::Receiver<Vec<u8>>>,
 
     args: Args,
     snapshot: DebugSnapshot,
@@ -407,21 +379,8 @@ impl Ui {
             ctx.load_texture("app_icon", app_icon_img, egui::TextureOptions::NEAREST);
         Self {
             screen: Screen::new(),
-            #[cfg(not(target_arch = "wasm32"))]
-            command_tx: None,
-            #[cfg(not(target_arch = "wasm32"))]
-            event_rx: None,
-            #[cfg(not(target_arch = "wasm32"))]
-            debug_rx: None,
-            #[cfg(not(target_arch = "wasm32"))]
-            emu_thread_handle: None,
-            audio: None,
+            runner: Default::default(),
             app_icon_texture,
-
-            #[cfg(target_arch = "wasm32")]
-            emu: None,
-            #[cfg(target_arch = "wasm32")]
-            rom_loader_rx: None,
 
             args,
             snapshot: Default::default(),
@@ -455,14 +414,8 @@ impl Ui {
         let input_val = controller.to_u8() as u16;
 
         if input_val != self.last_controller_input {
-            #[cfg(not(target_arch = "wasm32"))]
-            self.send_command(Command::ControllerInputs(input_val));
-
-            #[cfg(target_arch = "wasm32")]
-            if let Some(emu) = &mut self.emu {
-                emu.bus.controller1.realtime = (input_val & 0xFF) as u8;
-            }
-
+            self.runner
+                .send_command(Command::ControllerInputs(input_val));
             self.last_controller_input = input_val;
         }
 
@@ -475,19 +428,19 @@ impl Ui {
         match action {
             AppAction::PauseResume => {
                 if self.paused {
-                    self.emu_resume();
+                    self.runner.resume();
                 } else {
-                    self.emu_pause();
+                    self.runner.pause();
                 }
             }
             AppAction::Step => {
                 if self.paused {
-                    self.emu_step();
+                    self.runner.step();
                 }
             }
             #[cfg(not(target_arch = "wasm32"))]
             AppAction::SaveState => {
-                self.send_command(Command::SaveState);
+                self.runner.send_command(Command::SaveState);
             }
             #[cfg(not(target_arch = "wasm32"))]
             AppAction::TakeScreenshot => {
@@ -506,147 +459,21 @@ impl Ui {
         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
     }
 
-    fn stop_emu_thread(&mut self) {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            if let Some(command_tx) = self.command_tx.take() {
-                let _ = command_tx.send(Command::Stop);
-
-                if let Some(handle) = self.emu_thread_handle.take() {
-                    let _ = handle.join();
-                }
-            }
-            self.event_rx = None;
-            self.debug_rx = None;
-        }
-        #[cfg(target_arch = "wasm32")]
-        {
-            self.emu = None;
-        }
-
+    fn stop(&mut self) {
+        self.runner.stop();
         self.running = false;
         self.paused = false;
         self.screen.pixels.fill(Color32::BLACK);
         self.pixels_buffer = None;
     }
 
-    pub fn spawn_emu_thread(&mut self, rom: &str) {
+    pub fn start(&mut self, rom: crate::platform::RomSource) {
         if self.running {
-            self.stop_emu_thread();
+            self.stop();
         }
-
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let rb = HeapRb::<f32>::new(4096);
-            let (producer, consumer) = rb.split();
-            let (audio_handle, sample_rate) = match Audio::new(consumer) {
-                Ok(audio) => {
-                    let rate = audio.sample_rate;
-                    (Some(audio), rate)
-                }
-                Err(e) => {
-                    error!("Failed to initialize audio: {}", e);
-                    (None, 44100.0)
-                }
-            };
-
-            self.audio = audio_handle;
-
-            let args = self.args.clone();
-            let rom = rom.to_owned();
-            let pause = args.pause;
-
-            let (command_tx, command_rx) = mpsc::channel();
-            let (event_tx, event_rx) = mpsc::channel();
-            let (debug_tx, debug_rx) = mpsc::channel();
-
-            self.command_tx = Some(command_tx);
-            self.event_rx = Some(event_rx);
-            self.debug_rx = Some(debug_rx);
-
-            let event_tx_clone = event_tx.clone();
-
-            self.emu_error_msg = None;
-
-            let handle = thread::Builder::new()
-                .name("emu_thread".to_string())
-                .spawn(move || {
-                    let result = emu_thread(
-                        command_rx,
-                        event_tx,
-                        debug_tx,
-                        &args,
-                        &rom,
-                        producer,
-                        sample_rate,
-                    );
-
-                    if let Err(e) = result {
-                        let msg = if let Some(s) = e.downcast_ref::<&str>() {
-                            s.to_string()
-                        } else if let Some(s) = e.downcast_ref::<String>() {
-                            s.clone()
-                        } else {
-                            "Unknown emulator error".to_string()
-                        };
-
-                        let _ = event_tx_clone.send(Event::Crashed(msg));
-                    }
-                })
-                .expect("Failed to spawn emu thread");
-
-            self.emu_thread_handle = Some(handle);
-            self.running = true;
-            self.paused = pause;
-        }
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    pub fn spawn_emu_wasm(&mut self, rom_data: Vec<u8>) {
-        let rb = HeapRb::<f32>::new(4096);
-        let (producer, consumer) = rb.split();
-
-        let (audio_handle, sample_rate) = match Audio::new(consumer) {
-            Ok(audio) => {
-                let rate = audio.sample_rate;
-                (Some(audio), rate)
-            }
-            Err(e) => {
-                error!("Failed to initialize audio: {}", e);
-                (None, 44100.0)
-            }
-        };
-        self.audio = audio_handle;
-        let (tx, _) = mpsc::channel();
-        let (debug_tx, _) = mpsc::channel();
-        let mut emu = Emu::new(tx, debug_tx, false, producer, sample_rate);
-
-        if emu.load_rom_from_bytes(rom_data).is_err() {
-            return; // FIXME: better error handling
-        }
-        self.emu = Some(emu);
+        self.runner.start(rom, self.args.clone());
         self.running = true;
-        self.paused = false;
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    fn send_command(&self, command: Command) {
-        if let Some(command_tx) = &self.command_tx
-            && let Err(e) = command_tx.send(command)
-        {
-            error!("{e}");
-        }
-    }
-
-    pub fn emu_step(&mut self) {
-        if self.running && self.paused {
-            #[cfg(not(target_arch = "wasm32"))]
-            self.send_command(Command::Step);
-            #[cfg(target_arch = "wasm32")]
-            if let Some(emu) = &mut self.emu {
-                emu.want_step = true;
-            }
-        }
+        self.paused = self.args.pause;
     }
 
     pub fn app_icon() -> IconData {
@@ -663,87 +490,8 @@ impl Ui {
         }
     }
 
-    pub fn emu_resume(&mut self) {
-        if self.running && self.paused {
-            #[cfg(not(target_arch = "wasm32"))]
-            self.send_command(Command::Resume);
-            #[cfg(target_arch = "wasm32")]
-            if let Some(emu) = &mut self.emu {
-                emu.paused = false;
-                self.paused = false;
-            }
-        }
-    }
-
-    pub fn emu_pause(&mut self) {
-        if self.running && !self.paused {
-            #[cfg(not(target_arch = "wasm32"))]
-            self.send_command(Command::Pause);
-            #[cfg(target_arch = "wasm32")]
-            if let Some(emu) = &mut self.emu {
-                emu.paused = true;
-                self.paused = true;
-            }
-        }
-    }
-
-    pub fn emu_stop(&mut self) {
-        if self.running {
-            self.stop_emu_thread();
-        }
-    }
-
-    pub fn is_paused(&self) -> bool {
-        self.paused
-    }
-
     fn open_rom(&mut self) {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            if let Some(rom) = FileDialog::new()
-                .add_filter("NES rom", &["nes"])
-                .pick_file()
-            {
-                self.spawn_emu_thread(&rom.into_os_string().into_string().unwrap());
-            }
-        }
-        #[cfg(target_arch = "wasm32")]
-        {
-            let (tx, rx) = mpsc::channel();
-            self.rom_loader_rx = Some(rx);
-            let task = async move {
-                if let Some(file) = AsyncFileDialog::new()
-                    .add_filter("NES rom", &["nes"])
-                    .pick_file()
-                    .await
-                {
-                    let data = file.read().await;
-                    let _ = tx.send(data);
-                }
-            };
-            wasm_bindgen_futures::spawn_local(task);
-        }
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    fn save_state(&self) {
-        self.send_command(Command::SaveState);
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    fn load_state(&self) {
-        use crate::emu::{ProjDirKind, get_project_dir};
-
-        if let Ok(path) = get_project_dir(ProjDirKind::Cache) {
-            let path = path.join(&self.snapshot.cart.as_ref().unwrap().hash);
-            let mut fd = FileDialog::new().add_filter("ROM state file", &["bin"]);
-            if std::fs::exists(&path).is_ok_and(|f| f) {
-                fd = fd.set_directory(path);
-            }
-            if let Some(state) = fd.pick_file() {
-                self.send_command(Command::LoadState(state));
-            }
-        }
+        self.runner.pick_rom(self.args.clone());
     }
 
     fn draw_menubar(&mut self, ui: &mut egui::Ui) {
@@ -770,10 +518,10 @@ impl Ui {
                             ))
                             .clicked()
                         {
-                            self.save_state();
+                            self.runner.send_command(Command::SaveState);
                         }
                         if ui.add(egui::Button::new("📥 Load state")).clicked() {
-                            self.load_state();
+                            self.runner.pick_state_file();
                         }
                     });
                     ui.separator();
@@ -799,7 +547,7 @@ impl Ui {
                         )
                         .clicked()
                     {
-                        self.emu_step();
+                        self.runner.step();
                     }
                 });
                 ui.add_enabled_ui(self.running && self.paused, |ui| {
@@ -809,7 +557,7 @@ impl Ui {
                         ))
                         .clicked()
                     {
-                        self.emu_resume();
+                        self.runner.resume();
                     }
                 });
                 ui.add_enabled_ui(self.running && !self.paused, |ui| {
@@ -819,12 +567,12 @@ impl Ui {
                         ))
                         .clicked()
                     {
-                        self.emu_pause();
+                        self.runner.pause();
                     }
                 });
                 ui.add_enabled_ui(self.running, |ui| {
                     if ui.button("⏹ Stop").clicked() {
-                        self.emu_stop();
+                        self.stop();
                     }
                 });
                 #[cfg(not(target_arch = "wasm32"))]
@@ -923,8 +671,7 @@ impl Ui {
             }
             let start_addr = start_row * BYTES_PER_ROW;
             if start_addr != self.prev_mem_search_addr {
-                #[cfg(not(target_arch = "wasm32"))]
-                self.send_command(Command::MemoryAddress(start_addr));
+                self.runner.send_command(Command::MemoryAddress(start_addr));
                 self.prev_mem_search_addr = start_addr;
             }
 
@@ -935,8 +682,7 @@ impl Ui {
                         .text_style(egui::TextStyle::Monospace),
                 );
                 if ui.button("Dump").clicked() {
-                    #[cfg(not(target_arch = "wasm32"))]
-                    self.send_command(Command::DumpMemory);
+                    self.runner.send_command(Command::DumpMemory);
                 }
             });
 
@@ -1566,27 +1312,9 @@ impl Ui {
     }
 
     pub fn draw(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        #[cfg(target_arch = "wasm32")]
-        if let Some(rx) = &self.rom_loader_rx {
-            if let Ok(data) = rx.try_recv() {
-                self.spawn_emu_wasm(data);
-                self.rom_loader_rx = None;
-            }
-        }
-
-        #[cfg(target_arch = "wasm32")]
-        if let Some(emu) = &mut self.emu {
-            if let Some(frame) = emu.step_frame() {
-                self.pixels_buffer = Some(frame);
-                self.frame_ready = true;
-            }
-        }
-
         #[cfg(not(target_arch = "wasm32"))]
-        if let Some(rx) = &self.debug_rx {
-            while let Ok(snapshot) = rx.try_recv() {
-                self.snapshot = snapshot;
-            }
+        if let Some(snapshot) = self.runner.get_debug_snapshot() {
+            self.snapshot = snapshot;
         }
 
         egui::TopBottomPanel::top("menubar")
@@ -1656,30 +1384,28 @@ impl Ui {
         ctx.request_repaint();
     }
 
-    pub fn handle_emu_events(&mut self, _ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        #[cfg(not(target_arch = "wasm32"))]
-        if let Some(event_rx) = &self.event_rx {
-            while let Ok(event) = event_rx.try_recv() {
-                match event {
-                    Event::Paused => {
-                        self.paused = true;
-                    }
-                    Event::Resumed => {
-                        self.paused = false;
-                    }
-                    Event::Stopped => {
-                        self.running = false;
-                        self.paused = false;
-                    }
-                    Event::Crashed(e) => {
-                        self.emu_error_msg = Some(e);
-                        self.running = false;
-                        self.paused = false;
-                    }
-                    Event::FrameReady(frame_arc) => {
-                        self.pixels_buffer = Some(frame_arc);
-                        self.frame_ready = true;
-                    }
+    pub fn handle_emu_events(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let events = self.runner.handle_events(ctx);
+        for event in events {
+            match event {
+                Event::Paused => {
+                    self.paused = true;
+                }
+                Event::Resumed => {
+                    self.paused = false;
+                }
+                Event::Stopped => {
+                    self.running = false;
+                    self.paused = false;
+                }
+                Event::Crashed(e) => {
+                    self.emu_error_msg = Some(e);
+                    self.running = false;
+                    self.paused = false;
+                }
+                Event::FrameReady(frame_arc) => {
+                    self.pixels_buffer = Some(frame_arc);
+                    self.frame_ready = true;
                 }
             }
         }
@@ -1713,7 +1439,7 @@ impl Ui {
 
 impl Drop for Ui {
     fn drop(&mut self) {
-        self.stop_emu_thread();
+        self.stop();
     }
 }
 

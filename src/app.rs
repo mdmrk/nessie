@@ -1,4 +1,6 @@
-use crate::{args::Args, ui::Ui};
+use std::path::PathBuf;
+
+use crate::{args::Args, platform::RomSource, ui::Ui};
 
 pub struct App {
     ui: Ui,
@@ -8,7 +10,7 @@ impl App {
     pub fn new(ctx: &egui::Context, args: Args) -> Self {
         let mut ui = Ui::new(ctx, args.clone());
         if let Some(rom) = &args.rom {
-            ui.spawn_emu_thread(rom);
+            ui.start(RomSource::Path(PathBuf::from(rom)));
         }
 
         Self { ui }

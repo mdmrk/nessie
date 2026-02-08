@@ -8,5 +8,6 @@ pub mod cpu;
 pub mod debug;
 pub mod emu;
 pub mod mapper;
+pub mod platform;
 pub mod ppu;
 pub mod ui;
