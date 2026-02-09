@@ -1285,8 +1285,7 @@ impl Ui {
     fn draw_screen(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         self.frame_stats.update_fps();
 
-        if let Some(rx) = &mut self.runner.frame_rx {
-            let pixels = rx.read();
+        if let Some(pixels) = self.runner.get_frame_data() {
             self.screen.update_texture(ctx, ui, pixels);
         }
     }

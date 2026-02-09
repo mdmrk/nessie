@@ -170,6 +170,14 @@ impl PlatformRunner {
         self.debug_rx.as_mut().map(|rx| rx.read().clone())
     }
 
+    pub fn get_frame_data(&mut self) -> Option<&[Color32]> {
+        if let Some(rx) = &mut self.frame_rx {
+            Some(rx.read())
+        } else {
+            None
+        }
+    }
+
     pub fn pick_rom(&mut self, args: Args) {
         if let Some(rom) = FileDialog::new()
             .add_filter("NES rom", &["nes"])

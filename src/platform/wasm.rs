@@ -7,6 +7,8 @@ use std::sync::mpsc;
 use crate::audio::Audio;
 use crate::debug::DebugSnapshot;
 use crate::emu::{Command, Emu, Event};
+use crate::platform::RomSource;
+use crate::ppu::{FRAME_HEIGHT, FRAME_WIDTH};
 
 pub struct PlatformRunner {
     pub emu: Option<Emu>,
@@ -46,9 +48,11 @@ impl PlatformRunner {
         self.audio = audio_handle;
 
         let (tx, _rx) = mpsc::channel();
-        let (debug_tx, _debug_rx) = mpsc::channel();
+        let (debug_tx, _debug_rx) = triple_buffer::triple_buffer(&DebugSnapshot::default());
+        let (frame_tx, _frame_rx) =
+            triple_buffer::triple_buffer(&vec![Color32::BLACK; FRAME_WIDTH * FRAME_HEIGHT]);
 
-        let mut emu = Emu::new(tx, debug_tx, false, producer, sample_rate);
+        let mut emu = Emu::new(tx, debug_tx, frame_tx, false, producer, sample_rate);
 
         match rom {
             RomSource::Bytes(bytes) => {
@@ -137,13 +141,11 @@ impl PlatformRunner {
 
         let mut events = std::mem::take(&mut self.pending_events);
 
-        if let Some(emu) = &mut self.emu {
-            if let Some(frame) = emu.step_frame() {
-                events.push(Event::FrameReady(frame));
-            }
-        }
-
         events
+    }
+
+    pub fn get_frame_data(&mut self) -> Option<&[Color32]> {
+        None
     }
 
     pub fn get_debug_snapshot(&self) -> Option<DebugSnapshot> {
