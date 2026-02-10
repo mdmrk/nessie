@@ -178,13 +178,10 @@ impl PlatformRunner {
         }
     }
 
-    pub fn pick_rom(&mut self, args: Args) {
-        if let Some(rom) = FileDialog::new()
+    pub fn pick_rom(&mut self) -> Option<PathBuf> {
+        FileDialog::new()
             .add_filter("NES rom", &["nes"])
             .pick_file()
-        {
-            self.start(RomSource::Path(rom), args);
-        }
     }
 
     pub fn pick_state_file(&self) {

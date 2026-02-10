@@ -4,6 +4,7 @@ use rfd::AsyncFileDialog;
 use ringbuf::{HeapRb, traits::Split};
 use std::sync::mpsc;
 
+use crate::args::Args;
 use crate::audio::Audio;
 use crate::debug::DebugSnapshot;
 use crate::emu::{Command, Emu, Event};
@@ -16,7 +17,7 @@ pub struct PlatformRunner {
     pub running: bool,
     pub paused: bool,
     pub pending_events: Vec<Event>,
-    pub rom_loader_rx: Option<mpsc::Receiver<(Vec<u8>, crate::args::Args)>>,
+    pub rom_loader_rx: Option<mpsc::Receiver<Vec<u8>>>,
 }
 
 impl PlatformRunner {
@@ -134,8 +135,8 @@ impl PlatformRunner {
             None
         };
 
-        if let Some((data, args)) = loaded_rom {
-            self.start(RomSource::Bytes(data), args);
+        if let Some(data) = loaded_rom {
+            self.start(RomSource::Bytes(data));
             self.rom_loader_rx = None;
         }
 
@@ -152,7 +153,7 @@ impl PlatformRunner {
         None
     }
 
-    pub fn pick_rom(&mut self, args: crate::args::Args) {
+    pub fn pick_rom(&mut self) -> Option<PathBuf> {
         let (tx, rx) = mpsc::channel();
         self.rom_loader_rx = Some(rx);
 
@@ -163,10 +164,11 @@ impl PlatformRunner {
                 .await
             {
                 let data = file.read().await;
-                let _ = tx.send((data, args));
+                let _ = tx.send(data); /
             }
         };
         wasm_bindgen_futures::spawn_local(task);
+        None
     }
 
     pub fn pick_state_file(&self) {

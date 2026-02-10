@@ -462,7 +462,7 @@ impl Ui {
         }
         self.runner.start(rom, self.args.clone());
         self.running = true;
-        self.paused = self.args.pause;
+        self.paused = false;
     }
 
     pub fn app_icon() -> IconData {
@@ -480,7 +480,9 @@ impl Ui {
     }
 
     fn open_rom(&mut self) {
-        self.runner.pick_rom(self.args.clone());
+        if let Some(rom) = self.runner.pick_rom() {
+            self.start(RomSource::Path(rom));
+        }
     }
 
     fn draw_menubar(&mut self, ui: &mut egui::Ui) {
