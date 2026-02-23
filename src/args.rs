@@ -11,11 +11,6 @@ pub struct Args {
     #[argh(short = 'p', switch)]
     pub pause: bool,
 
-    #[cfg(debug_assertions)]
-    /// enable profiling
-    #[argh(switch)]
-    pub profiling: bool,
-
     /// enable logging
     #[argh(short = 'l', switch)]
     pub log: bool,

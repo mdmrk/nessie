@@ -2,6 +2,7 @@ use egui::Color32;
 use log::error;
 use rfd::AsyncFileDialog;
 use ringbuf::{HeapRb, traits::Split};
+use std::path::PathBuf;
 use std::sync::mpsc;
 
 use crate::args::Args;
@@ -32,7 +33,7 @@ impl PlatformRunner {
         }
     }
 
-    pub fn start(&mut self, rom: RomSource, _args: crate::args::Args) {
+    pub fn start(&mut self, rom: RomSource, _args: Args) {
         let rb = HeapRb::<f32>::new(4096);
         let (producer, consumer) = rb.split();
 
@@ -140,9 +141,7 @@ impl PlatformRunner {
             self.rom_loader_rx = None;
         }
 
-        let mut events = std::mem::take(&mut self.pending_events);
-
-        events
+        std::mem::take(&mut self.pending_events)
     }
 
     pub fn get_frame_data(&mut self) -> Option<&[Color32]> {
@@ -164,7 +163,7 @@ impl PlatformRunner {
                 .await
             {
                 let data = file.read().await;
-                let _ = tx.send(data); /
+                let _ = tx.send(data);
             }
         };
         wasm_bindgen_futures::spawn_local(task);

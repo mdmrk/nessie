@@ -46,7 +46,7 @@ impl PlatformRunner {
         }
     }
 
-    pub fn start(&mut self, rom: RomSource, args: Args) {
+    pub fn start(&mut self, rom: RomSource, args: Option<Args>) {
         if self.running {
             self.stop();
         }

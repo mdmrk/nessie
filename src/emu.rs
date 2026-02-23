@@ -1,4 +1,6 @@
-use std::{path::PathBuf, sync::mpsc};
+#[cfg(not(target_arch = "wasm32"))]
+use std::path::PathBuf;
+use std::sync::mpsc;
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::fs;

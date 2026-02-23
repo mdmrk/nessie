@@ -1,8 +1,13 @@
+#[cfg(not(target_arch = "wasm32"))]
 use bytesize::ByteSize;
 use egui::{Color32, ColorImage, Context, IconData, ImageData, Key, KeyboardShortcut, Modifiers};
+#[cfg(not(target_arch = "wasm32"))]
 use egui_extras::{Column, TableBuilder};
+#[cfg(not(target_arch = "wasm32"))]
 use egui_plot::{Line, Plot, PlotPoints};
+#[cfg(not(target_arch = "wasm32"))]
 use log::{error, info};
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -13,15 +18,21 @@ use web_time::{Duration, Instant};
 
 use crate::platform::RomSource;
 use crate::ppu::{FRAME_HEIGHT, FRAME_WIDTH};
+#[cfg(not(target_arch = "wasm32"))]
 use crate::{
-    args::Args,
     debug::{BYTES_PER_ROW, DebugSnapshot, ROWS_TO_SHOW},
     emu::{Command, Event},
     mapper::MapperIcon,
     platform::PlatformRunner,
     ppu::Ppu,
 };
+#[cfg(target_arch = "wasm32")]
+use crate::{
+    emu::{Command, Event},
+    platform::PlatformRunner,
+};
 
+#[cfg(not(target_arch = "wasm32"))]
 macro_rules! make_rows {
     ($body:expr, $( $label:expr => $value:expr ),+ $(,)?) => {
         $(
@@ -333,7 +344,7 @@ pub struct Ui {
     runner: PlatformRunner,
     app_icon_texture: egui::TextureHandle,
 
-    args: Args,
+    #[cfg(not(target_arch = "wasm32"))]
     snapshot: DebugSnapshot,
 
     input_manager: InputManager,
@@ -341,10 +352,13 @@ pub struct Ui {
 
     emu_error_msg: Option<String>,
 
+    #[cfg(not(target_arch = "wasm32"))]
     mem_search: String,
+    #[cfg(not(target_arch = "wasm32"))]
     prev_mem_search_addr: usize,
 
     show_about: bool,
+    #[cfg(not(target_arch = "wasm32"))]
     show_debug_panels: bool,
 
     running: bool,
@@ -353,7 +367,7 @@ pub struct Ui {
 }
 
 impl Ui {
-    pub fn new(ctx: &egui::Context, args: Args) -> Self {
+    pub fn new(ctx: &egui::Context) -> Self {
         let app_icon = Self::app_icon();
         let app_icon_img = ImageData::Color(Arc::new(ColorImage::from_rgba_unmultiplied(
             [app_icon.width as usize, app_icon.height as usize],
@@ -366,7 +380,7 @@ impl Ui {
             runner: Default::default(),
             app_icon_texture,
 
-            args,
+            #[cfg(not(target_arch = "wasm32"))]
             snapshot: Default::default(),
 
             input_manager: Default::default(),
@@ -374,13 +388,15 @@ impl Ui {
 
             emu_error_msg: None,
 
+            #[cfg(not(target_arch = "wasm32"))]
             mem_search: "".into(),
+            #[cfg(not(target_arch = "wasm32"))]
             prev_mem_search_addr: 0,
 
             show_about: false,
-            #[cfg(debug_assertions)]
+            #[cfg(all(not(target_arch = "wasm32"), debug_assertions))]
             show_debug_panels: true,
-            #[cfg(not(debug_assertions))]
+            #[cfg(all(not(target_arch = "wasm32"), not(debug_assertions)))]
             show_debug_panels: false,
 
             running: false,
@@ -450,7 +466,7 @@ impl Ui {
         if self.running {
             self.stop();
         }
-        self.runner.start(rom, self.args.clone());
+        self.runner.start(rom);
         self.running = true;
         self.paused = false;
     }
@@ -634,6 +650,7 @@ impl Ui {
         });
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn draw_memory_viewer(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
             let n = (match self.mem_search.starts_with("0x") {
@@ -728,6 +745,7 @@ impl Ui {
         });
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn draw_cpu_inspector(&mut self, ui: &mut egui::Ui) {
         let cpu = &self.snapshot.cpu;
         ui.label(egui::RichText::new("CPU").strong());
@@ -803,6 +821,7 @@ impl Ui {
         });
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn draw_apu_inspector(&self, ui: &mut egui::Ui) {
         ui.label(egui::RichText::new("APU").strong());
         let apu = &self.snapshot.apu;
@@ -869,6 +888,7 @@ impl Ui {
         });
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn draw_ppu_inspector(&mut self, ui: &mut egui::Ui) {
         let ppu = &self.snapshot.ppu;
         ui.label(egui::RichText::new("PPU").strong());
@@ -1141,6 +1161,7 @@ impl Ui {
             });
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn draw_sound_waves(&mut self, ui: &mut egui::Ui) {
         let apu = &self.snapshot.apu;
         ui.label(egui::RichText::new("Pulse 1 & 2").strong());
@@ -1164,6 +1185,7 @@ impl Ui {
         });
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn draw_palette_colors(&self, ui: &mut egui::Ui) {
         let ppu = &self.snapshot.ppu;
         ui.label(egui::RichText::new("Palette Colors").strong());
@@ -1215,6 +1237,7 @@ impl Ui {
             });
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn draw_rom_details(&mut self, ui: &mut egui::Ui) {
         ui.label(egui::RichText::new("ROM details").strong());
         match &self.snapshot.cart {
@@ -1256,10 +1279,12 @@ impl Ui {
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn draw_fps(&self, ui: &mut egui::Ui) {
         ui.label(format!("FPS: {:.1}", self.frame_stats.fps));
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn draw_log_reader(&self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
             ui.label(egui::RichText::new("Log").strong());
@@ -1267,9 +1292,10 @@ impl Ui {
                 .stick_to_bottom(true)
                 .auto_shrink(false)
                 .show(ui, |ui| {
-                    if let Some(log) = &self.snapshot.cpu.log {
-                        ui.label(egui::RichText::new(log).text_style(egui::TextStyle::Monospace));
-                    }
+                    // FIXME
+                    // if let Some(log) = &self.snapshot.cpu.log {
+                    //     ui.label(egui::RichText::new(log).text_style(egui::TextStyle::Monospace));
+                    // }
                 });
         });
     }
@@ -1436,6 +1462,7 @@ fn get_unique_path() -> PathBuf {
     path
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn generate_pulse_wave(freq: f64, amp: f64, duty_cycle: f64, duration: f64) -> Vec<[f64; 2]> {
     let mut points = Vec::new();
     let period = 1.0 / freq;

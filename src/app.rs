@@ -8,7 +8,7 @@ pub struct App {
 
 impl App {
     pub fn new(ctx: &egui::Context, args: Args) -> Self {
-        let mut ui = Ui::new(ctx, args.clone());
+        let mut ui = Ui::new(ctx);
         if let Some(rom) = &args.rom {
             ui.start(RomSource::Path(PathBuf::from(rom)));
         }
