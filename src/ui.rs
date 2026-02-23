@@ -16,6 +16,8 @@ use std::time::{Duration, Instant};
 #[cfg(target_arch = "wasm32")]
 use web_time::{Duration, Instant};
 
+#[cfg(not(target_arch = "wasm32"))]
+use crate::args::get_args;
 use crate::platform::RomSource;
 use crate::ppu::{FRAME_HEIGHT, FRAME_WIDTH};
 #[cfg(not(target_arch = "wasm32"))]
@@ -351,6 +353,8 @@ pub struct Ui {
     last_controller_input: u16,
 
     emu_error_msg: Option<String>,
+    #[cfg(not(target_arch = "wasm32"))]
+    log: bool,
 
     #[cfg(not(target_arch = "wasm32"))]
     mem_search: String,
@@ -387,6 +391,8 @@ impl Ui {
             last_controller_input: 0,
 
             emu_error_msg: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            log: get_args().log,
 
             #[cfg(not(target_arch = "wasm32"))]
             mem_search: "".into(),
@@ -1292,10 +1298,9 @@ impl Ui {
                 .stick_to_bottom(true)
                 .auto_shrink(false)
                 .show(ui, |ui| {
-                    // FIXME
-                    // if let Some(log) = &self.snapshot.cpu.log {
-                    //     ui.label(egui::RichText::new(log).text_style(egui::TextStyle::Monospace));
-                    // }
+                    if let Some(log) = &self.snapshot.cpu.log {
+                        ui.label(egui::RichText::new(log).text_style(egui::TextStyle::Monospace));
+                    }
                 });
         });
     }
@@ -1365,7 +1370,7 @@ impl Ui {
                     .show(ctx, |ui| {
                         ui.horizontal_top(|ui| {
                             self.draw_memory_viewer(ui);
-                            if self.args.log {
+                            if self.log {
                                 ui.separator();
                                 self.draw_log_reader(ui);
                             }

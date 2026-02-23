@@ -5,7 +5,6 @@ use ringbuf::{HeapRb, traits::Split};
 use std::path::PathBuf;
 use std::sync::mpsc;
 
-use crate::args::Args;
 use crate::audio::Audio;
 use crate::debug::DebugSnapshot;
 use crate::emu::{Command, Emu, Event};
@@ -33,7 +32,7 @@ impl PlatformRunner {
         }
     }
 
-    pub fn start(&mut self, rom: RomSource, _args: Args) {
+    pub fn start(&mut self, rom: RomSource) {
         let rb = HeapRb::<f32>::new(4096);
         let (producer, consumer) = rb.split();
 

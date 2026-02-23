@@ -14,7 +14,7 @@ use rfd::FileDialog;
 use ringbuf::{HeapProd, HeapRb, traits::Split};
 use savefile::{load_file, save_file_compressed};
 
-use crate::args::Args;
+use crate::args::get_args;
 use crate::audio::Audio;
 use crate::debug::DebugSnapshot;
 use crate::emu::{Command, Emu, EmuState, Event};
@@ -46,7 +46,8 @@ impl PlatformRunner {
         }
     }
 
-    pub fn start(&mut self, rom: RomSource, args: Option<Args>) {
+    pub fn start(&mut self, rom: RomSource) {
+        let args = get_args();
         if self.running {
             self.stop();
         }
@@ -84,7 +85,6 @@ impl PlatformRunner {
             .name("emu_thread".to_string())
             .spawn(move || {
                 let result = emu_thread(
-                    &args,
                     command_rx,
                     event_rx_tx,
                     debug_tx,
@@ -204,7 +204,6 @@ impl Default for PlatformRunner {
 }
 
 pub fn emu_thread(
-    args: &Args,
     command_rx: mpsc::Receiver<Command>,
     event_tx: mpsc::Sender<Event>,
     debug_tx: triple_buffer::Input<DebugSnapshot>,
@@ -213,6 +212,7 @@ pub fn emu_thread(
     audio_producer: HeapProd<f32>,
     sample_rate: f32,
 ) -> Result<()> {
+    let args = get_args();
     let mut emu = Emu::new(
         event_tx,
         debug_tx,

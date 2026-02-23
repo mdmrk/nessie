@@ -1,4 +1,12 @@
+use std::sync::LazyLock;
+
 use argh::FromArgs;
+
+static ARGS: LazyLock<Args> = LazyLock::new(argh::from_env);
+
+pub fn get_args() -> &'static Args {
+    &ARGS
+}
 
 #[derive(FromArgs, Clone, Default)]
 /// Nintendo NES emulator
