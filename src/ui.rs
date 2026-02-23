@@ -1396,6 +1396,11 @@ impl Ui {
         let events = self.runner.handle_events(ctx);
         for event in events {
             match event {
+                Event::Started => {
+                    self.running = true;
+                    self.paused = false;
+                    self.emu_error_msg = None;
+                }
                 Event::Paused => {
                     self.paused = true;
                 }

@@ -37,6 +37,7 @@ pub enum Command {
 }
 
 pub enum Event {
+    Started,
     Stopped,
     Paused,
     Resumed,

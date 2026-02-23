@@ -17,7 +17,9 @@ pub struct PlatformRunner {
     pub running: bool,
     pub paused: bool,
     pub pending_events: Vec<Event>,
+    pub last_frame: Vec<Color32>,
     pub rom_loader_rx: Option<mpsc::Receiver<Vec<u8>>>,
+    _emu_event_rx: Option<mpsc::Receiver<Event>>,
 }
 
 impl PlatformRunner {
@@ -28,7 +30,9 @@ impl PlatformRunner {
             running: false,
             paused: false,
             pending_events: Vec::new(),
+            last_frame: vec![Color32::BLACK; FRAME_WIDTH * FRAME_HEIGHT],
             rom_loader_rx: None,
+            _emu_event_rx: None,
         }
     }
 
@@ -48,10 +52,11 @@ impl PlatformRunner {
         };
         self.audio = audio_handle;
 
-        let (tx, _rx) = mpsc::channel();
+        let (tx, rx) = mpsc::channel();
         let (debug_tx, _debug_rx) = triple_buffer::triple_buffer(&DebugSnapshot::default());
         let (frame_tx, _frame_rx) =
             triple_buffer::triple_buffer(&vec![Color32::BLACK; FRAME_WIDTH * FRAME_HEIGHT]);
+        self._emu_event_rx = Some(rx);
 
         let mut emu = Emu::new(tx, debug_tx, frame_tx, false, producer, sample_rate);
 
@@ -71,6 +76,7 @@ impl PlatformRunner {
         self.emu = Some(emu);
         self.running = true;
         self.paused = false;
+        self.pending_events.push(Event::Started);
     }
 
     pub fn stop(&mut self) {
@@ -128,7 +134,7 @@ impl PlatformRunner {
         }
     }
 
-    pub fn handle_events(&mut self, _ctx: &egui::Context) -> Vec<Event> {
+    pub fn handle_events(&mut self, ctx: &egui::Context) -> Vec<Event> {
         let loaded_rom = if let Some(rx) = &self.rom_loader_rx {
             rx.try_recv().ok()
         } else {
@@ -140,11 +146,26 @@ impl PlatformRunner {
             self.rom_loader_rx = None;
         }
 
+        if let Some(emu) = &mut self.emu {
+            if (!emu.paused || emu.want_step)
+                && let Some(frame) = emu.step_frame()
+            {
+                self.last_frame = frame;
+            }
+            ctx.request_repaint();
+        } else if self.rom_loader_rx.is_some() {
+            ctx.request_repaint();
+        }
+
         std::mem::take(&mut self.pending_events)
     }
 
     pub fn get_frame_data(&mut self) -> Option<&[Color32]> {
-        None
+        if self.running {
+            Some(&self.last_frame)
+        } else {
+            None
+        }
     }
 
     pub fn get_debug_snapshot(&self) -> Option<DebugSnapshot> {
