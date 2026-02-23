@@ -199,46 +199,31 @@ impl InputManager {
 }
 
 pub struct FrameStats {
-    last_update: Instant,
-    frame_count: u64,
     fps: f32,
-    target_interval: Duration,
     fps_last_update: Instant,
     render_count_since_fps_update: u64,
 }
 
-impl FrameStats {
-    pub fn new(target_fps: f32) -> Self {
-        let target_interval_secs = 1.0 / target_fps;
-        let target_interval = Duration::from_secs_f32(target_interval_secs);
-        let now = Instant::now();
-
+impl Default for FrameStats {
+    fn default() -> Self {
         Self {
-            last_update: now,
-            frame_count: 0,
+            fps: Default::default(),
+            fps_last_update: Instant::now(),
+            render_count_since_fps_update: Default::default(),
+        }
+    }
+}
+
+impl FrameStats {
+    pub fn new() -> Self {
+        Self {
             fps: 0.0,
-            target_interval,
-            fps_last_update: now,
+            fps_last_update: Instant::now(),
             render_count_since_fps_update: 0,
         }
     }
 
-    pub fn should_render(&mut self) -> bool {
-        let next_update_time = self.last_update.checked_add(self.target_interval);
-
-        if let Some(next_update) = next_update_time {
-            let now = Instant::now();
-            if now >= next_update {
-                self.frame_count += 1;
-                self.render_count_since_fps_update += 1;
-                self.last_update = now;
-                return true;
-            }
-        }
-        false
-    }
-
-    pub fn update_fps(&mut self) {
+    fn update_fps(&mut self) {
         let elapsed_duration = self.fps_last_update.elapsed();
         let one_second = Duration::from_secs(1);
 
@@ -250,6 +235,11 @@ impl FrameStats {
             self.render_count_since_fps_update = 0;
             self.fps_last_update = Instant::now();
         }
+    }
+
+    pub fn tick(&mut self) {
+        self.render_count_since_fps_update += 1;
+        self.update_fps();
     }
 }
 
@@ -395,7 +385,7 @@ impl Ui {
 
             running: false,
             paused: false,
-            frame_stats: FrameStats::new(60.0),
+            frame_stats: FrameStats::new(),
         }
     }
 
@@ -1285,10 +1275,9 @@ impl Ui {
     }
 
     fn draw_screen(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
-        self.frame_stats.update_fps();
-
         if let Some(pixels) = self.runner.get_frame_data() {
             self.screen.update_texture(ctx, ui, pixels);
+            self.frame_stats.tick();
         }
     }
 
