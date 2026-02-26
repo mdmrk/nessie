@@ -899,7 +899,7 @@ impl Ui {
         let ppu = &self.snapshot.ppu;
         ui.label(egui::RichText::new("PPU").strong());
         egui::ScrollArea::vertical()
-            .auto_shrink(false)
+            .id_salt("ppu_scroll")
             .show(ui, |ui| {
                 TableBuilder::new(ui)
                     .id_salt("ppu")
@@ -1197,7 +1197,7 @@ impl Ui {
         ui.label(egui::RichText::new("Palette Colors").strong());
 
         egui::ScrollArea::vertical()
-            .id_salt("palette")
+            .id_salt("palette_colors_scroll")
             .show(ui, |ui| {
                 let square_size = 20.0;
                 ui.label("Background Palettes");
@@ -1295,8 +1295,8 @@ impl Ui {
         ui.vertical(|ui| {
             ui.label(egui::RichText::new("Log").strong());
             egui::ScrollArea::vertical()
+                .id_salt("log_scroll")
                 .stick_to_bottom(true)
-                .auto_shrink(false)
                 .show(ui, |ui| {
                     if let Some(log) = &self.snapshot.cpu.log {
                         ui.label(egui::RichText::new(log).text_style(egui::TextStyle::Monospace));
@@ -1335,46 +1335,65 @@ impl Ui {
             if self.show_debug_panels {
                 egui::SidePanel::left("left_panel")
                     .resizable(true)
-                    .default_width(180.0)
-                    .width_range(100.0..=500.0)
+                    .default_width(420.0)
+                    .width_range(200.0..=800.0)
                     .show(ctx, |ui| {
                         ui.columns_const(|[col_1, col_2]| {
-                            col_1.vertical(|ui| {
-                                self.draw_cpu_inspector(ui);
-                                ui.separator();
-                                self.draw_apu_inspector(ui);
-                                ui.separator();
-                                self.draw_ppu_inspector(ui);
-                            });
-                            col_2.vertical(|ui| {
-                                self.draw_palette_colors(ui);
-                                ui.separator();
-                                self.draw_sound_waves(ui);
-                            });
+                            egui::ScrollArea::vertical()
+                                .id_salt("left_col1_scroll")
+                                .auto_shrink([false, false])
+                                .show(col_1, |ui| {
+                                    ui.vertical(|ui| {
+                                        self.draw_cpu_inspector(ui);
+                                        ui.separator();
+                                        self.draw_apu_inspector(ui);
+                                        ui.separator();
+                                        self.draw_ppu_inspector(ui);
+                                    });
+                                });
+                            egui::ScrollArea::vertical()
+                                .id_salt("left_col2_scroll")
+                                .auto_shrink([false, false])
+                                .show(col_2, |ui| {
+                                    ui.vertical(|ui| {
+                                        self.draw_palette_colors(ui);
+                                        ui.separator();
+                                        self.draw_sound_waves(ui);
+                                    });
+                                });
                         });
                     });
                 egui::SidePanel::right("right_panel")
                     .resizable(true)
-                    .default_width(190.0)
-                    .width_range(..=200.0)
+                    .default_width(220.0)
+                    .width_range(160.0..=400.0)
                     .show(ctx, |ui| {
-                        ui.vertical(|ui| {
-                            self.draw_rom_details(ui);
-                            ui.separator();
-                            self.draw_fps(ui);
-                        });
+                        egui::ScrollArea::vertical()
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                ui.vertical(|ui| {
+                                    self.draw_rom_details(ui);
+                                    ui.separator();
+                                    self.draw_fps(ui);
+                                });
+                            });
                     });
                 egui::TopBottomPanel::bottom("bottom_panel")
                     .resizable(true)
-                    .height_range(..=500.0)
+                    .default_height(200.0)
+                    .height_range(80.0..=500.0)
                     .show(ctx, |ui| {
-                        ui.horizontal_top(|ui| {
-                            self.draw_memory_viewer(ui);
-                            if self.log {
-                                ui.separator();
-                                self.draw_log_reader(ui);
-                            }
-                        });
+                        egui::ScrollArea::horizontal()
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                ui.horizontal_top(|ui| {
+                                    self.draw_memory_viewer(ui);
+                                    if self.log {
+                                        ui.separator();
+                                        self.draw_log_reader(ui);
+                                    }
+                                });
+                            });
                     });
             }
             egui::CentralPanel::default().show(ctx, |ui| {
