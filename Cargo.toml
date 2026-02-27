@@ -35,8 +35,8 @@ savefile = { version = "0.20.2", features = ["bzip2"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.7"
-wasm-bindgen-futures = "0.4.61"
-web-sys = "0.3.88"
+wasm-bindgen-futures = "0.4.63"
+web-sys = "0.3.90"
 web-time = "1.1.0"
 
 [profile.release]

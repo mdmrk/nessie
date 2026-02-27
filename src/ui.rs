@@ -1,5 +1,6 @@
 #[cfg(not(target_arch = "wasm32"))]
 use bytesize::ByteSize;
+use egui::mutex::Mutex;
 use egui::{Color32, ColorImage, Context, IconData, ImageData, Key, KeyboardShortcut, Modifiers};
 #[cfg(not(target_arch = "wasm32"))]
 use egui_extras::{Column, TableBuilder};
@@ -7,10 +8,12 @@ use egui_extras::{Column, TableBuilder};
 use egui_plot::{Line, Plot, PlotPoints};
 #[cfg(not(target_arch = "wasm32"))]
 use log::{error, info};
+use std::collections::HashMap;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::{Duration, Instant};
 #[cfg(target_arch = "wasm32")]
@@ -20,6 +23,7 @@ use web_time::{Duration, Instant};
 use crate::args::get_args;
 use crate::platform::RomSource;
 use crate::ppu::{FRAME_HEIGHT, FRAME_WIDTH};
+use crate::settings::{Keybindings, Settings};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::{
     debug::{BYTES_PER_ROW, DebugSnapshot, ROWS_TO_SHOW},
@@ -77,8 +81,6 @@ enum AppAction {
     TakeScreenshot,
     OpenRom,
     Quit,
-    // Reset,
-    // ToggleDebug,
 }
 
 impl AppAction {
@@ -182,7 +184,11 @@ impl ControllerState {
 struct InputManager;
 
 impl InputManager {
-    fn update(&self, ctx: &egui::Context) -> (Vec<AppAction>, ControllerState) {
+    fn update(
+        &self,
+        ctx: &egui::Context,
+        keybindings: &Keybindings,
+    ) -> (Vec<AppAction>, ControllerState) {
         let mut triggered_actions = Vec::new();
         let mut controller = ControllerState::default();
 
@@ -197,14 +203,14 @@ impl InputManager {
                 }
             }
 
-            controller.a = i.key_down(Key::A);
-            controller.b = i.key_down(Key::B);
-            controller.start = i.key_down(Key::Z);
-            controller.select = i.key_down(Key::N);
-            controller.up = i.key_down(Key::ArrowUp);
-            controller.down = i.key_down(Key::ArrowDown);
-            controller.left = i.key_down(Key::ArrowLeft);
-            controller.right = i.key_down(Key::ArrowRight);
+            controller.a = i.key_down(keybindings.in_game["a"]);
+            controller.b = i.key_down(keybindings.in_game["b"]);
+            controller.start = i.key_down(keybindings.in_game["start"]);
+            controller.select = i.key_down(keybindings.in_game["select"]);
+            controller.up = i.key_down(keybindings.in_game["up"]);
+            controller.down = i.key_down(keybindings.in_game["down"]);
+            controller.left = i.key_down(keybindings.in_game["left"]);
+            controller.right = i.key_down(keybindings.in_game["right"]);
         });
 
         (triggered_actions, controller)
@@ -341,6 +347,77 @@ impl Input {
     }
 }
 
+#[inline]
+fn draw_settings_keybindings(ui: &mut egui::Ui, settings: &Arc<Mutex<Settings>>) {
+    let mut settings = settings.lock();
+    static AWAITING_INPUT: OnceLock<Mutex<Option<&'static str>>> = OnceLock::new();
+    let awaiting = AWAITING_INPUT.get_or_init(|| Mutex::new(None));
+
+    let draw_keybinding_row = |ui: &mut egui::Ui,
+                               keybinding: (&&'static str, &mut Key),
+                               awaiting: &Mutex<Option<&str>>| {
+        let label = *keybinding.0;
+        let k = keybinding.1;
+        ui.label(label);
+        if ui.button(k.name()).clicked() {
+            *awaiting.lock() = Some(label);
+        }
+        let is_awaiting = awaiting.lock().as_ref().is_some_and(|k| *k == label);
+        if is_awaiting {
+            ui.label("Press a key...");
+            ui.input(|i| {
+                for event in &i.events {
+                    if let egui::Event::Key {
+                        key, pressed: true, ..
+                    } = event
+                    {
+                        *k = *key;
+                        *awaiting.lock() = None;
+                    }
+                }
+            });
+        } else {
+            ui.label("");
+        }
+        ui.end_row();
+    };
+
+    let table = |ui: &mut egui::Ui,
+                 label: &str,
+                 keybindings: &mut HashMap<&'static str, Key>,
+                 awaiting: &Mutex<Option<&'static str>>| {
+        ui.vertical_centered(|ui| {
+            ui.label(egui::RichText::new(label).strong().size(14.0));
+            ui.add_space(4.0);
+            egui::Grid::new(label)
+                .num_columns(3)
+                .striped(true)
+                .min_col_width(120.0)
+                .show(ui, |ui| {
+                    ui.label(egui::RichText::new("Action").strong());
+                    ui.label(egui::RichText::new("Key").strong());
+                    ui.label("");
+                    ui.end_row();
+                    for keybinding in keybindings.iter_mut() {
+                        draw_keybinding_row(ui, keybinding, awaiting);
+                    }
+                });
+            ui.add_space(12.0);
+        });
+    };
+
+    egui::ScrollArea::vertical().show(ui, |ui| {
+        table(ui, "In-Game", &mut settings.keybindings.in_game, awaiting);
+        ui.separator();
+        table(
+            ui,
+            "Application",
+            &mut settings.keybindings.application,
+            awaiting,
+        );
+    });
+}
+
 pub struct Ui {
     screen: Screen,
     runner: PlatformRunner,
@@ -362,8 +439,12 @@ pub struct Ui {
     prev_mem_search_addr: usize,
 
     show_about: bool,
+    show_settings: Arc<AtomicBool>,
     #[cfg(not(target_arch = "wasm32"))]
     show_debug_panels: bool,
+
+    settings: Arc<Mutex<Settings>>,
+    settings_selected_tab: Arc<AtomicUsize>,
 
     running: bool,
     paused: bool,
@@ -400,10 +481,14 @@ impl Ui {
             prev_mem_search_addr: 0,
 
             show_about: false,
+            show_settings: Arc::new(AtomicBool::new(false)),
             #[cfg(all(not(target_arch = "wasm32"), debug_assertions))]
             show_debug_panels: true,
             #[cfg(all(not(target_arch = "wasm32"), not(debug_assertions)))]
             show_debug_panels: false,
+
+            settings: Arc::new(Mutex::new(Default::default())),
+            settings_selected_tab: Arc::new(AtomicUsize::new(0)),
 
             running: false,
             paused: false,
@@ -412,7 +497,11 @@ impl Ui {
     }
 
     pub fn handle_input(&mut self, ctx: &egui::Context) {
-        let (actions, controller) = self.input_manager.update(ctx);
+        let keys = {
+            let settings = self.settings.lock();
+            settings.keybindings.clone()
+        };
+        let (actions, controller) = self.input_manager.update(ctx, &keys);
 
         let input_val = controller.to_u8() as u16;
 
@@ -510,6 +599,9 @@ impl Ui {
                 {
                     self.open_rom();
                 }
+                if ui.button("🛠 Settings").clicked() {
+                    self.show_settings.store(true, Ordering::Relaxed);
+                }
 
                 #[cfg(not(target_arch = "wasm32"))]
                 {
@@ -540,6 +632,51 @@ impl Ui {
                     }
                 }
             });
+            if self.show_settings.load(Ordering::Relaxed) {
+                let show_settings = self.show_settings.clone();
+                let selected_tab = self.settings_selected_tab.clone();
+                let settings = self.settings.clone();
+
+                ui.ctx().show_viewport_deferred(
+                    egui::ViewportId::from_hash_of("settings_window"),
+                    egui::ViewportBuilder::default()
+                        .with_title("Settings")
+                        .with_inner_size([800.0, 600.0]),
+                    move |ctx, _| {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            ui.with_layout(
+                                egui::Layout::left_to_right(egui::Align::TOP)
+                                    .with_cross_justify(true),
+                                |ui| {
+                                    ui.vertical(|ui| {
+                                        for (ind, label) in ["Keybindings"].iter().enumerate() {
+                                            if ui
+                                                .add_sized(
+                                                    [120., 36.],
+                                                    egui::Button::new(*label).selected(
+                                                        selected_tab.load(Ordering::Relaxed) == ind,
+                                                    ),
+                                                )
+                                                .clicked()
+                                            {
+                                                selected_tab.store(ind, Ordering::Relaxed);
+                                            }
+                                        }
+                                    });
+                                    ui.separator();
+                                    match selected_tab.load(Ordering::Relaxed) {
+                                        0 => draw_settings_keybindings(ui, &settings),
+                                        _ => unreachable!(),
+                                    };
+                                },
+                            );
+                            if ui.input(|i| i.viewport().close_requested()) {
+                                show_settings.store(false, Ordering::Relaxed);
+                            }
+                        });
+                    },
+                );
+            }
             ui.menu_button("Emulator", |ui| {
                 ui.add_enabled_ui(self.running && self.paused, |ui| {
                     if ui
@@ -641,7 +778,7 @@ impl Ui {
 
                             ui.add(
                                 egui::Hyperlink::from_label_and_url(
-                                    " Nessie on GitHub",
+                                    " Nessie on GitHub",
                                     "https://github.com/mdmrk/nessie",
                                 )
                                 .open_in_new_tab(true),

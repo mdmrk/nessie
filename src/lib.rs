@@ -10,4 +10,5 @@ pub mod emu;
 pub mod mapper;
 pub mod platform;
 pub mod ppu;
+pub mod settings;
 pub mod ui;
