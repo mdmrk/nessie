@@ -778,7 +778,7 @@ impl Ui {
 
                             ui.add(
                                 egui::Hyperlink::from_label_and_url(
-                                    " Nessie on GitHub",
+                                    " Nessie on GitHub",
                                     "https://github.com/mdmrk/nessie",
                                 )
                                 .open_in_new_tab(true),
