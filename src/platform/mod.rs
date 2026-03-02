@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 #[derive(Clone)]
-pub enum RomSource {
+pub enum FileDataSource {
     Path(PathBuf),
     Bytes(Vec<u8>),
 }

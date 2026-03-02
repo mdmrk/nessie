@@ -1,11 +1,8 @@
-#[cfg(not(target_arch = "wasm32"))]
-use std::path::PathBuf;
 use std::sync::mpsc;
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::fs;
 
-#[cfg(not(target_arch = "wasm32"))]
 use savefile::prelude::*;
 
 use anyhow::Result;
@@ -19,6 +16,7 @@ use crate::{
     cpu::Cpu,
     debug::{DebugSnapshot, MEM_BLOCK_SIZE},
     mapper::MapperEnum,
+    platform::FileDataSource,
 };
 use egui::Color32;
 
@@ -31,8 +29,7 @@ pub enum Command {
     DumpMemory,
     #[cfg(not(target_arch = "wasm32"))]
     SaveState,
-    #[cfg(not(target_arch = "wasm32"))]
-    LoadState(PathBuf),
+    LoadState(FileDataSource),
     ControllerInputs(u16),
 }
 
@@ -44,7 +41,7 @@ pub enum Event {
     Crashed(String),
 }
 
-#[cfg_attr(not(target_arch = "wasm32"), derive(Savefile))]
+#[derive(Savefile)]
 pub struct EmuState {
     pub cpu: Cpu,
     pub bus: Bus,

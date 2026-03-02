@@ -21,7 +21,7 @@ use web_time::{Duration, Instant};
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::args::get_args;
-use crate::platform::RomSource;
+use crate::platform::FileDataSource;
 use crate::ppu::{FRAME_HEIGHT, FRAME_WIDTH};
 use crate::settings::{Keybindings, Settings};
 #[cfg(not(target_arch = "wasm32"))]
@@ -557,7 +557,7 @@ impl Ui {
         self.paused = false;
     }
 
-    pub fn start(&mut self, rom: RomSource) {
+    pub fn start(&mut self, rom: FileDataSource) {
         if self.running {
             self.stop();
         }
@@ -582,7 +582,7 @@ impl Ui {
 
     fn open_rom(&mut self) {
         if let Some(rom) = self.runner.pick_rom() {
-            self.start(RomSource::Path(rom));
+            self.start(FileDataSource::Path(rom));
         }
     }
 
@@ -603,10 +603,10 @@ impl Ui {
                     self.show_settings.store(true, Ordering::Relaxed);
                 }
 
-                #[cfg(not(target_arch = "wasm32"))]
-                {
-                    ui.separator();
-                    ui.add_enabled_ui(self.running, |ui| {
+                ui.separator();
+                ui.add_enabled_ui(self.running, |ui| {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
                         if ui
                             .add(egui::Button::new("📥 Save state").shortcut_text(
                                 ui.ctx().format_shortcut(&AppAction::SaveState.shortcut()),
@@ -615,21 +615,20 @@ impl Ui {
                         {
                             self.runner.send_command(Command::SaveState);
                         }
-                        if ui.add(egui::Button::new("📥 Load state")).clicked() {
-                            self.runner.pick_state_file();
-                        }
-                    });
-                    ui.separator();
-                    if ui
-                        .add(
-                            egui::Button::new("✖ Quit").shortcut_text(
-                                ui.ctx().format_shortcut(&AppAction::Quit.shortcut()),
-                            ),
-                        )
-                        .clicked()
-                    {
-                        self.quit(ui.ctx());
                     }
+                    if ui.add(egui::Button::new("📥 Load state")).clicked() {
+                        self.runner.pick_state_file();
+                    }
+                });
+                ui.separator();
+                if ui
+                    .add(
+                        egui::Button::new("✖ Quit")
+                            .shortcut_text(ui.ctx().format_shortcut(&AppAction::Quit.shortcut())),
+                    )
+                    .clicked()
+                {
+                    self.quit(ui.ctx());
                 }
             });
             if self.show_settings.load(Ordering::Relaxed) {

@@ -1,7 +1,6 @@
 use egui::Color32;
 use modular_bitfield::prelude::*;
 
-#[cfg(not(target_arch = "wasm32"))]
 use savefile::prelude::*;
 
 use crate::mapper::MapperEnum;
@@ -21,8 +20,7 @@ static PALETTE_COLORS: [u32; 64] = [
 ];
 
 #[bitfield(bytes = 1)]
-#[derive(Debug, Clone, Default, Copy)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Savefile))]
+#[derive(Debug, Clone, Default, Copy, Savefile)]
 pub struct PpuCtrl {
     pub base_nametable_addr: B2,
     pub vram_addr_inc: B1,
@@ -34,8 +32,7 @@ pub struct PpuCtrl {
 }
 
 #[bitfield(bytes = 1)]
-#[derive(Debug, Clone, Default, Copy)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Savefile))]
+#[derive(Debug, Clone, Default, Copy, Savefile)]
 pub struct PpuMask {
     pub greyscale: bool,
     pub show_bg_left: bool,
@@ -55,8 +52,7 @@ impl PpuMask {
 }
 
 #[bitfield(bytes = 1)]
-#[derive(Debug, Clone, Default, Copy)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Savefile))]
+#[derive(Debug, Clone, Default, Copy, Savefile)]
 pub struct PpuStatus {
     pub unused: B5,
     pub sprite_overflow: bool,
@@ -64,8 +60,7 @@ pub struct PpuStatus {
     pub vblank: bool,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Savefile))]
+#[derive(Debug, Clone, Copy, Default, Savefile)]
 struct Sprite {
     y: u8,
     tile_index: u8,
@@ -95,8 +90,7 @@ impl Sprite {
     }
 }
 
-#[derive(Debug)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Savefile))]
+#[derive(Debug, Savefile)]
 pub struct Ppu {
     pub scanline: u16,
     pub dot: u16,
@@ -136,19 +130,19 @@ pub struct Ppu {
     pub suppress_vbl: bool,
     pub nmi_delay: bool,
 
-    #[cfg_attr(not(target_arch = "wasm32"), savefile_introspect_ignore)]
-    #[cfg_attr(not(target_arch = "wasm32"), savefile_ignore)]
+    #[savefile_introspect_ignore]
+    #[savefile_ignore]
     pub screen: Vec<Color32>,
 
     secondary_oam: [u8; 32],
     sprites: [Sprite; 8],
     sprite_height: u16,
 
-    #[cfg_attr(not(target_arch = "wasm32"), savefile_introspect_ignore)]
-    #[cfg_attr(not(target_arch = "wasm32"), savefile_ignore)]
+    #[savefile_introspect_ignore]
+    #[savefile_ignore]
     sprite_pattern_lo: [u8; 8],
-    #[cfg_attr(not(target_arch = "wasm32"), savefile_introspect_ignore)]
-    #[cfg_attr(not(target_arch = "wasm32"), savefile_ignore)]
+    #[savefile_introspect_ignore]
+    #[savefile_ignore]
     sprite_pattern_hi: [u8; 8],
 }
 

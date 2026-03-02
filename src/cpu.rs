@@ -5,7 +5,6 @@ use std::collections::VecDeque;
 use bitflags::bitflags;
 use log::error;
 use phf::phf_map;
-#[cfg(not(target_arch = "wasm32"))]
 use savefile::prelude::*;
 
 use crate::bus::Bus;
@@ -457,14 +456,12 @@ bitflags! {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 impl WithSchema for Flags {
     fn schema(_version: u32, _context: &mut WithSchemaContext) -> Schema {
         Schema::Primitive(SchemaPrimitive::schema_u8)
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 impl Serialize for Flags {
     fn serialize(
         &self,
@@ -474,7 +471,6 @@ impl Serialize for Flags {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 impl Deserialize for Flags {
     fn deserialize(
         deserializer: &mut Deserializer<impl std::io::Read>,
@@ -484,25 +480,23 @@ impl Deserialize for Flags {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 impl Packed for Flags {}
 
-#[derive(Clone)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Savefile))]
+#[derive(Clone, Savefile)]
 pub struct Cpu {
     pub sp: u8,
     pub pc: u16,
-    #[cfg_attr(not(target_arch = "wasm32"), savefile_introspect_ignore)]
+    #[savefile_introspect_ignore]
     pub p: Flags,
     pub a: u8,
     pub x: u8,
     pub y: u8,
-    pub cycles: u64,
+    pub cycles: u32,
     pub nmi_pending: bool,
     pub nmi_previous_state: bool,
     pub irq_pending: bool,
-    #[cfg_attr(not(target_arch = "wasm32"), savefile_introspect_ignore)]
-    #[cfg_attr(not(target_arch = "wasm32"), savefile_ignore)]
+    #[savefile_introspect_ignore]
+    #[savefile_ignore]
     pub log: Option<VecDeque<char>>,
 }
 
@@ -562,7 +556,7 @@ impl Cpu {
         self.pc = self.pc.wrapping_add(1 + operand_bytes);
         let extra_cycles = (op.execute)(self, bus, op.mode, &operands);
         let total_cycles = op.base_cycles + extra_cycles;
-        self.cycles += total_cycles as u64;
+        self.cycles += total_cycles as u32;
 
         bus.ppu
             .step(&mut bus.cart.as_mut().unwrap().mapper, total_cycles);
@@ -650,7 +644,7 @@ impl Cpu {
         self.pc = u16::from_le_bytes([lo, hi]);
 
         let cycles: u8 = 7;
-        self.cycles += cycles as u64;
+        self.cycles += cycles as u32;
         bus.ppu.step(&mut bus.cart.as_mut().unwrap().mapper, cycles);
         for _ in 0..cycles {
             bus.apu.step();
@@ -673,7 +667,7 @@ impl Cpu {
         self.pc = u16::from_le_bytes([lo, hi]);
 
         let cycles: u8 = 7;
-        self.cycles += cycles as u64;
+        self.cycles += cycles as u32;
         bus.ppu.step(&mut bus.cart.as_mut().unwrap().mapper, cycles);
         for _ in 0..cycles {
             bus.apu.step();

@@ -2,14 +2,16 @@ use egui::Color32;
 use log::error;
 use rfd::AsyncFileDialog;
 use ringbuf::{HeapRb, traits::Split};
+use savefile::load_from_mem;
 use std::path::PathBuf;
 use std::sync::mpsc;
 
 use crate::audio::Audio;
 use crate::debug::DebugSnapshot;
-use crate::emu::{Command, Emu, Event};
-use crate::platform::RomSource;
+use crate::emu::{Command, Emu, EmuState, Event};
+use crate::platform::FileDataSource;
 use crate::ppu::{FRAME_HEIGHT, FRAME_WIDTH};
+use anyhow::{Context, Result};
 
 pub struct PlatformRunner {
     pub emu: Option<Emu>,
@@ -19,7 +21,7 @@ pub struct PlatformRunner {
     pub pending_events: Vec<Event>,
     pub last_frame: Vec<Color32>,
     pub rom_loader_rx: Option<mpsc::Receiver<Vec<u8>>>,
-    _emu_event_rx: Option<mpsc::Receiver<Event>>,
+    pub state_file_loader_rx: Option<mpsc::Receiver<Vec<u8>>>,
 }
 
 impl PlatformRunner {
@@ -32,11 +34,11 @@ impl PlatformRunner {
             pending_events: Vec::new(),
             last_frame: vec![Color32::BLACK; FRAME_WIDTH * FRAME_HEIGHT],
             rom_loader_rx: None,
-            _emu_event_rx: None,
+            state_file_loader_rx: None,
         }
     }
 
-    pub fn start(&mut self, rom: RomSource) {
+    pub fn start(&mut self, rom: FileDataSource) {
         let rb = HeapRb::<f32>::new(4096);
         let (producer, consumer) = rb.split();
 
@@ -52,16 +54,15 @@ impl PlatformRunner {
         };
         self.audio = audio_handle;
 
-        let (tx, rx) = mpsc::channel();
+        let (tx, _rx) = mpsc::channel();
         let (debug_tx, _debug_rx) = triple_buffer::triple_buffer(&DebugSnapshot::default());
         let (frame_tx, _frame_rx) =
             triple_buffer::triple_buffer(&vec![Color32::BLACK; FRAME_WIDTH * FRAME_HEIGHT]);
-        self._emu_event_rx = Some(rx);
 
         let mut emu = Emu::new(tx, debug_tx, frame_tx, false, producer, sample_rate);
 
         match rom {
-            RomSource::Bytes(bytes) => {
+            FileDataSource::Bytes(bytes) => {
                 if emu.load_rom_from_bytes(bytes).is_err() {
                     error!("Failed to load ROM from bytes");
                     return;
@@ -120,6 +121,13 @@ impl PlatformRunner {
                 Command::Step => {
                     self.step();
                 }
+                Command::LoadState(file_data_source) => match file_data_source {
+                    FileDataSource::Path(_) => error!("Cannot load from a path on WASM"),
+                    FileDataSource::Bytes(data) => {
+                        load_state(self.emu.as_mut().unwrap(), &data)
+                            .unwrap_or_else(|e| error!("Failed to load state: {e}"));
+                    }
+                },
                 Command::ControllerInputs(input) => {
                     emu.bus.controller1.realtime = (input & 0xFF) as u8;
                     emu.bus.controller2.realtime = (input >> 8 & 0xFF) as u8;
@@ -142,8 +150,19 @@ impl PlatformRunner {
         };
 
         if let Some(data) = loaded_rom {
-            self.start(RomSource::Bytes(data));
+            self.start(FileDataSource::Bytes(data));
             self.rom_loader_rx = None;
+        }
+
+        let state_file = if let Some(rx) = &self.state_file_loader_rx {
+            rx.try_recv().ok()
+        } else {
+            None
+        };
+
+        if let Some(data) = state_file {
+            self.send_command(Command::LoadState(FileDataSource::Bytes(data)));
+            self.state_file_loader_rx = None;
         }
 
         if let Some(emu) = &mut self.emu {
@@ -152,8 +171,6 @@ impl PlatformRunner {
             {
                 self.last_frame = frame;
             }
-            ctx.request_repaint();
-        } else if self.rom_loader_rx.is_some() {
             ctx.request_repaint();
         }
 
@@ -190,8 +207,21 @@ impl PlatformRunner {
         None
     }
 
-    pub fn pick_state_file(&self) {
-        // TODO
+    pub fn pick_state_file(&mut self) {
+        let (tx, rx) = mpsc::channel();
+        self.state_file_loader_rx = Some(rx);
+
+        let task = async move {
+            if let Some(file) = AsyncFileDialog::new()
+                .add_filter("ROM state file", &["bin"])
+                .pick_file()
+                .await
+            {
+                let data = file.read().await;
+                let _ = tx.send(data);
+            }
+        };
+        wasm_bindgen_futures::spawn_local(task);
     }
 }
 
@@ -199,4 +229,10 @@ impl Default for PlatformRunner {
     fn default() -> Self {
         Self::new()
     }
+}
+
+fn load_state(emu: &mut Emu, data: &[u8]) -> Result<()> {
+    let state: EmuState = load_from_mem(data, 0)?;
+    emu.load_state(state);
+    Ok(())
 }

@@ -39,7 +39,7 @@ pub struct CpuSnapshot {
     pub a: u8,
     pub x: u8,
     pub y: u8,
-    pub cycles: u64,
+    pub cycles: u32,
     pub flags_n: bool,
     pub flags_v: bool,
     pub flags_b: bool,

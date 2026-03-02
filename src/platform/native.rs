@@ -12,13 +12,13 @@ use egui::{Color32, Context as EguiContext};
 use log::{error, info};
 use rfd::FileDialog;
 use ringbuf::{HeapProd, HeapRb, traits::Split};
-use savefile::{load_file, save_file_compressed};
+use savefile::{load_file, save_file};
 
 use crate::args::get_args;
 use crate::audio::Audio;
 use crate::debug::DebugSnapshot;
 use crate::emu::{Command, Emu, EmuState, Event};
-use crate::platform::RomSource;
+use crate::platform::FileDataSource;
 use crate::ppu::{FRAME_HEIGHT, FRAME_WIDTH};
 
 pub struct PlatformRunner {
@@ -46,7 +46,7 @@ impl PlatformRunner {
         }
     }
 
-    pub fn start(&mut self, rom: RomSource) {
+    pub fn start(&mut self, rom: FileDataSource) {
         let args = get_args();
         if self.running {
             self.stop();
@@ -191,7 +191,7 @@ impl PlatformRunner {
                 fd = fd.set_directory(path);
             }
             if let Some(state_path) = fd.pick_file() {
-                self.send_command(Command::LoadState(state_path));
+                self.send_command(Command::LoadState(FileDataSource::Path(state_path)));
             }
         }
     }
@@ -208,7 +208,7 @@ pub fn emu_thread(
     event_tx: mpsc::Sender<Event>,
     debug_tx: triple_buffer::Input<DebugSnapshot>,
     frame_tx: triple_buffer::Input<Vec<Color32>>,
-    rom: RomSource,
+    rom: FileDataSource,
     audio_producer: HeapProd<f32>,
     sample_rate: f32,
 ) -> Result<()> {
@@ -223,8 +223,8 @@ pub fn emu_thread(
     );
 
     match rom {
-        RomSource::Path(path) => emu.load_rom(path.to_str().unwrap())?,
-        RomSource::Bytes(bytes) => emu.load_rom_from_bytes(bytes)?,
+        FileDataSource::Path(path) => emu.load_rom(path.to_str().unwrap())?,
+        FileDataSource::Bytes(bytes) => emu.load_rom_from_bytes(bytes)?,
     }
 
     if args.pause {
@@ -246,15 +246,16 @@ pub fn emu_thread(
                 Command::Resume => {
                     emu.resume();
                 }
-                #[cfg(not(target_arch = "wasm32"))]
                 Command::SaveState => {
                     save_state(&emu).unwrap_or_else(|e| error!("Failed to save state: {e}"));
                 }
-                #[cfg(not(target_arch = "wasm32"))]
-                Command::LoadState(path) => {
-                    load_state(&mut emu, &path)
-                        .unwrap_or_else(|e| error!("Failed to load state: {e}"));
-                }
+                Command::LoadState(file_data_source) => match file_data_source {
+                    FileDataSource::Path(path) => {
+                        load_state(&mut emu, &path)
+                            .unwrap_or_else(|e| error!("Failed to load state: {e}"));
+                    }
+                    FileDataSource::Bytes(_) => error!("Cannot load from bytes on WASM"),
+                },
                 Command::Step => {
                     emu.want_step = true;
                 }
@@ -311,7 +312,7 @@ fn save_state(emu: &Emu) -> Result<()> {
         .duration_since(std::time::UNIX_EPOCH)?
         .as_millis();
     let path = cache_dir.join(format!("{}.bin", timestamp_millis));
-    save_file_compressed(&path, 0, &state)
+    save_file(&path, 0, &state)
         .with_context(|| format!("Couldn't save state to {}", path.display()))?;
 
     info!("Saved state to {}", path.display());
