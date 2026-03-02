@@ -188,7 +188,7 @@ impl Emu {
                 let cycles_before = self.cpu.cycles;
                 if let Err(e) = self.cpu.step(&mut self.bus) {
                     warn!("{e}. Emulator will be paused");
-                    self.paused = true;
+                    self.pause();
                     break;
                 }
 
