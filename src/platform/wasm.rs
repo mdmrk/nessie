@@ -11,7 +11,7 @@ use crate::debug::DebugSnapshot;
 use crate::emu::{Command, Emu, EmuState, Event};
 use crate::platform::FileDataSource;
 use crate::ppu::{FRAME_HEIGHT, FRAME_WIDTH};
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 pub struct PlatformRunner {
     pub emu: Option<Emu>,
