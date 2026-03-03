@@ -3,7 +3,7 @@ use sha1_smol::Sha1;
 
 use anyhow::{Result, bail};
 
-use crate::mapper::{Mapper0, Mapper1, MapperEnum, Mirroring};
+use crate::mapper::{Mapper0, Mapper1, Mapper2, MapperEnum, Mirroring};
 
 #[derive(Clone, Copy, Debug, Specifier, PartialEq)]
 pub enum NametableArrangement {
@@ -94,6 +94,9 @@ impl Header {
                 prg_rom, chr_rom, mirroring,
             ))),
             1 => Ok(MapperEnum::Mapper1(Mapper1::new(
+                prg_rom, chr_rom, mirroring,
+            ))),
+            2 => Ok(MapperEnum::Mapper2(Mapper2::new(
                 prg_rom, chr_rom, mirroring,
             ))),
             _ => bail!("Unsupported mapper ({})", mapper_num),

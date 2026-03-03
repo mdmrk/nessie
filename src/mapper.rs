@@ -34,7 +34,7 @@ pub enum MapperIcon {
 impl MapperIcon {
     pub fn from_mapper_number(mapper_num: u8) -> Self {
         match mapper_num {
-            0 | 1 => MapperIcon::Nintendo,
+            0..=2 => MapperIcon::Nintendo,
             _ => unreachable!(),
         }
     }
@@ -90,6 +90,7 @@ pub trait Mapper {
 pub enum MapperEnum {
     Mapper0(Mapper0),
     Mapper1(Mapper1),
+    Mapper2(Mapper2),
 }
 
 impl MapperEnum {
@@ -97,30 +98,35 @@ impl MapperEnum {
         match self {
             MapperEnum::Mapper0(m) => m.read_prg(addr),
             MapperEnum::Mapper1(m) => m.read_prg(addr),
+            MapperEnum::Mapper2(m) => m.read_prg(addr),
         }
     }
     pub fn write_prg(&mut self, addr: u16, value: u8) {
         match self {
             MapperEnum::Mapper0(m) => m.write_prg(addr, value),
             MapperEnum::Mapper1(m) => m.write_prg(addr, value),
+            MapperEnum::Mapper2(m) => m.write_prg(addr, value),
         }
     }
     pub fn read_chr(&self, addr: u16) -> u8 {
         match self {
             MapperEnum::Mapper0(m) => m.read_chr(addr),
             MapperEnum::Mapper1(m) => m.read_chr(addr),
+            MapperEnum::Mapper2(m) => m.read_chr(addr),
         }
     }
     pub fn write_chr(&mut self, addr: u16, value: u8) {
         match self {
             MapperEnum::Mapper0(m) => m.write_chr(addr, value),
             MapperEnum::Mapper1(m) => m.write_chr(addr, value),
+            MapperEnum::Mapper2(m) => m.write_chr(addr, value),
         }
     }
     pub fn mirroring(&self) -> Mirroring {
         match self {
             MapperEnum::Mapper0(m) => m.mirroring(),
             MapperEnum::Mapper1(m) => m.mirroring(),
+            MapperEnum::Mapper2(m) => m.mirroring(),
         }
     }
 }
@@ -352,5 +358,77 @@ impl Mapper for Mapper1 {
             3 => Mirroring::Horizontal,
             _ => unreachable!(),
         }
+    }
+}
+
+#[derive(Debug, Clone, Savefile)]
+pub struct Mapper2 {
+    prg_rom: Vec<u8>,
+    chr_rom: Vec<u8>,
+    mirroring: Mirroring,
+    bank_select: u8,
+    num_banks: u8,
+}
+
+impl Mapper2 {
+    pub fn new(prg_rom: Vec<u8>, chr_rom: Vec<u8>, mirroring: Mirroring) -> Self {
+        let num_banks = (prg_rom.len() / (16 * 1024)) as u8;
+        let chr_ram = if chr_rom.is_empty() {
+            vec![0u8; 8 * 1024]
+        } else {
+            chr_rom
+        };
+        Self {
+            prg_rom,
+            chr_rom: chr_ram,
+            mirroring,
+            bank_select: 0,
+            num_banks,
+        }
+    }
+}
+
+impl Mapper for Mapper2 {
+    fn read_prg(&self, addr: u16) -> Option<u8> {
+        Some(match addr {
+            0x8000..=0xBFFF => {
+                let offset = self.bank_select as usize * 0x4000 + (addr as usize - 0x8000);
+                self.prg_rom[offset % self.prg_rom.len()]
+            }
+            0xC000..=0xFFFF => {
+                let last_bank = (self.num_banks as usize - 1) * 0x4000;
+                let offset = last_bank + (addr as usize - 0xC000);
+                self.prg_rom[offset % self.prg_rom.len()]
+            }
+            _ => 0,
+        })
+    }
+
+    fn write_prg(&mut self, addr: u16, data: u8) {
+        if addr >= 0x8000 {
+            self.bank_select = data % self.num_banks;
+        }
+    }
+
+    fn read_chr(&self, addr: u16) -> u8 {
+        if addr < 0x2000 {
+            if self.chr_rom.is_empty() {
+                return 0;
+            }
+            self.chr_rom[addr as usize % self.chr_rom.len()]
+        } else {
+            0
+        }
+    }
+
+    fn write_chr(&mut self, addr: u16, data: u8) {
+        if addr < 0x2000 {
+            let idx = addr as usize % self.chr_rom.len();
+            self.chr_rom[idx] = data;
+        }
+    }
+
+    fn mirroring(&self) -> Mirroring {
+        self.mirroring
     }
 }

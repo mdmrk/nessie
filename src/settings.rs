@@ -20,7 +20,7 @@ impl Default for Keybindings {
                 ("left", Key::ArrowLeft),
                 ("right", Key::ArrowRight),
             ]),
-            application: HashMap::from([("save_state", Key::F5)]),
+            application: HashMap::from([("save_state", Key::F5), ("load_state", Key::F6)]),
         }
     }
 }
