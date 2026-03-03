@@ -5,7 +5,7 @@ use std::fs;
 
 use savefile::prelude::*;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use log::{error, info, warn};
 use ringbuf::HeapProd;
 use ringbuf::traits::Producer;
@@ -27,7 +27,6 @@ pub enum Command {
     Step,
     MemoryAddress(usize),
     DumpMemory,
-    #[cfg(not(target_arch = "wasm32"))]
     SaveState,
     LoadState(FileDataSource),
     ControllerInputs(u16),
@@ -121,30 +120,21 @@ impl Emu {
     }
 
     pub fn create_state(&self) -> Result<EmuState> {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            use anyhow::Context;
-            Ok(EmuState {
-                cpu: self.cpu.clone(),
-                bus: self.bus.clone(),
-                mapper: self
-                    .bus
-                    .cart
-                    .as_ref()
-                    .context("Cartridge is missing when saving state")?
-                    .mapper
-                    .clone(),
-                cycles_per_sample: self.cycles_per_sample,
-                cycles_accumulator: self.cycles_accumulator,
-                sample_sum: self.sample_sum,
-                sample_count: self.sample_count,
-            })
-        }
-        #[cfg(target_arch = "wasm32")]
-        {
-            use anyhow::bail;
-            bail!("Save state not supported on Wasm yet")
-        }
+        Ok(EmuState {
+            cpu: self.cpu.clone(),
+            bus: self.bus.clone(),
+            mapper: self
+                .bus
+                .cart
+                .as_ref()
+                .context("Cartridge is missing when saving state")?
+                .mapper
+                .clone(),
+            cycles_per_sample: self.cycles_per_sample,
+            cycles_accumulator: self.cycles_accumulator,
+            sample_sum: self.sample_sum,
+            sample_count: self.sample_count,
+        })
     }
 
     pub fn load_state(&mut self, state: EmuState) {

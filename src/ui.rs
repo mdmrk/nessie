@@ -75,7 +75,6 @@ macro_rules! make_rows {
 enum AppAction {
     PauseResume = 0,
     Step,
-    #[cfg(not(target_arch = "wasm32"))]
     SaveState,
     #[cfg(not(target_arch = "wasm32"))]
     TakeScreenshot,
@@ -105,7 +104,6 @@ const DEFAULT_SHORTCUTS: &[(AppAction, KeyboardShortcut)] = &[
             logical_key: Key::Enter,
         },
     ),
-    #[cfg(not(target_arch = "wasm32"))]
     (
         AppAction::SaveState,
         KeyboardShortcut {
@@ -408,7 +406,6 @@ fn draw_settings_keybindings(ui: &mut egui::Ui, settings: &Arc<Mutex<Settings>>)
 
     egui::ScrollArea::vertical().show(ui, |ui| {
         table(ui, "In-Game", &mut settings.keybindings.in_game, awaiting);
-        ui.separator();
         table(
             ui,
             "Application",
@@ -530,7 +527,6 @@ impl Ui {
                     self.runner.step();
                 }
             }
-            #[cfg(not(target_arch = "wasm32"))]
             AppAction::SaveState => {
                 self.runner.send_command(Command::SaveState);
             }
@@ -605,16 +601,13 @@ impl Ui {
 
                 ui.separator();
                 ui.add_enabled_ui(self.running, |ui| {
-                    #[cfg(not(target_arch = "wasm32"))]
+                    if ui
+                        .add(egui::Button::new("📥 Save state").shortcut_text(
+                            ui.ctx().format_shortcut(&AppAction::SaveState.shortcut()),
+                        ))
+                        .clicked()
                     {
-                        if ui
-                            .add(egui::Button::new("📥 Save state").shortcut_text(
-                                ui.ctx().format_shortcut(&AppAction::SaveState.shortcut()),
-                            ))
-                            .clicked()
-                        {
-                            self.runner.send_command(Command::SaveState);
-                        }
+                        self.runner.send_command(Command::SaveState);
                     }
                     if ui.add(egui::Button::new("📥 Load state")).clicked() {
                         self.runner.pick_state_file();

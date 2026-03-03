@@ -1,10 +1,13 @@
+use eframe::wasm_bindgen::JsCast as _;
 use egui::Color32;
 use log::error;
 use rfd::AsyncFileDialog;
 use ringbuf::{HeapRb, traits::Split};
-use savefile::load_from_mem;
+use savefile::{load_from_mem, save_to_mem};
 use std::path::PathBuf;
 use std::sync::mpsc;
+use web_sys::js_sys::{Array, Uint8Array};
+use web_sys::{Blob, BlobPropertyBag, Url};
 
 use crate::audio::Audio;
 use crate::debug::DebugSnapshot;
@@ -121,6 +124,10 @@ impl PlatformRunner {
                 Command::Step => {
                     self.step();
                 }
+                Command::SaveState => {
+                    save_state(self.emu.as_mut().unwrap())
+                        .unwrap_or_else(|e| error!("Failed to save state: {e}"));
+                }
                 Command::LoadState(file_data_source) => match file_data_source {
                     FileDataSource::Path(_) => error!("Cannot load from a path on WASM"),
                     FileDataSource::Bytes(data) => {
@@ -234,5 +241,45 @@ impl Default for PlatformRunner {
 fn load_state(emu: &mut Emu, data: &[u8]) -> Result<()> {
     let state: EmuState = load_from_mem(data, 0)?;
     emu.load_state(state);
+    Ok(())
+}
+
+fn save_state(emu: &mut Emu) -> Result<()> {
+    let state = emu.create_state()?;
+    let timestamp_millis = web_time::SystemTime::now()
+        .duration_since(web_time::UNIX_EPOCH)?
+        .as_millis();
+    let filename = format!("{}.bin", timestamp_millis);
+    let save_file_data = save_to_mem(0, &state)?;
+    let uint8_array = Uint8Array::from(&save_file_data as &[u8]);
+    let array = Array::new();
+    array.push(&uint8_array);
+
+    let document = web_sys::window()
+        .expect("No window")
+        .document()
+        .expect("No document");
+
+    let options = BlobPropertyBag::new();
+    options.set_type("application/octet-stream");
+    let blob = Blob::new_with_u8_array_sequence_and_options(&array, &options).unwrap();
+
+    let url = Url::create_object_url_with_blob(&blob).unwrap();
+
+    let anchor = document
+        .create_element("a")
+        .expect("No element")
+        .dyn_into::<web_sys::HtmlAnchorElement>()
+        .expect("Element not valid");
+    anchor.set_href(&url);
+    anchor.set_download(&filename);
+
+    let body = document.body().unwrap();
+    body.append_child(&anchor).unwrap();
+    anchor.click();
+    body.remove_child(&anchor).unwrap();
+
+    Url::revoke_object_url(&url).unwrap();
+
     Ok(())
 }
