@@ -118,7 +118,7 @@ jobs:
       - name: Build Release
         run: |
           VERSION=$(git describe --exact-match --tags HEAD 2>/dev/null || echo "$(date +'%Y%m%d')-$(git rev-parse --short HEAD)")
-          TRUNK_BUILD_ID=$(date +%s) trunk build --release --minify --public-url $public_url
+          TRUNK_BUILD_ID=$(date +%s) trunk build --release --cargo-profile release-wasm --minify --public-url $public_url
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:

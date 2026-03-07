@@ -44,3 +44,7 @@ strip = true
 lto = true
 panic = "abort"
 codegen-units = 1
+
+[profile.release-wasm]
+inherits = "release"
+strip = false
