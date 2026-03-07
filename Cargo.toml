@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = { version = "1.0.102", default-features = false }
-argh = "0.1.14"
+argh = "0.1.17"
 bitflags = "2.11.0"
 bytesize = "2.3.1"
 compile-time = "0.2.0"
