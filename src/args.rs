@@ -26,4 +26,8 @@ pub struct Args {
     /// print version and exit
     #[argh(short = 'v', switch)]
     pub version: bool,
+
+    /// create cache, config files... on cwd
+    #[argh(switch)]
+    pub portable: bool,
 }

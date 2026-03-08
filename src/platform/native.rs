@@ -331,10 +331,16 @@ pub enum ProjDirKind {
 }
 
 pub fn get_project_dir(dir_kind: ProjDirKind) -> Result<PathBuf> {
-    let proj_dirs = ProjectDirs::from("com", "mdmrk", "nessie")
-        .context("Could not determine project directories")?;
-    Ok(match dir_kind {
-        ProjDirKind::Cache => proj_dirs.cache_dir().to_owned(),
-        ProjDirKind::Config => proj_dirs.config_dir().to_owned(),
-    })
+    if get_args().portable {
+        let mut path = std::env::current_exe()?;
+        path.pop();
+        Ok(path)
+    } else {
+        let proj_dirs = ProjectDirs::from("com", "mdmrk", "nessie")
+            .context("Could not determine project directories")?;
+        Ok(match dir_kind {
+            ProjDirKind::Cache => proj_dirs.cache_dir().to_owned(),
+            ProjDirKind::Config => proj_dirs.config_dir().to_owned(),
+        })
+    }
 }
