@@ -107,6 +107,7 @@ impl Emu {
         info!("Rom loaded from bytes");
         self.bus.ppu.reset();
         self.cpu.reset(&mut self.bus);
+        self.send_event(Event::Started);
         Ok(())
     }
 
@@ -116,6 +117,7 @@ impl Emu {
         info!("Rom \"{}\" loaded", rom_path);
         self.bus.ppu.reset();
         self.cpu.reset(&mut self.bus);
+        self.send_event(Event::Started);
         Ok(())
     }
 
