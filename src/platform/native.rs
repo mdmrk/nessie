@@ -327,6 +327,7 @@ fn load_state(emu: &mut Emu, path: &PathBuf) -> Result<()> {
 
 pub enum ProjDirKind {
     Cache,
+    Config,
 }
 
 pub fn get_project_dir(dir_kind: ProjDirKind) -> Result<PathBuf> {
@@ -334,5 +335,6 @@ pub fn get_project_dir(dir_kind: ProjDirKind) -> Result<PathBuf> {
         .context("Could not determine project directories")?;
     Ok(match dir_kind {
         ProjDirKind::Cache => proj_dirs.cache_dir().to_owned(),
+        ProjDirKind::Config => proj_dirs.config_dir().to_owned(),
     })
 }

@@ -5,7 +5,7 @@ use egui::{Color32, ColorImage, Context, IconData, ImageData, KeyboardShortcut};
 use egui_extras::{Column, TableBuilder};
 #[cfg(not(target_arch = "wasm32"))]
 use egui_plot::{Line, Plot, PlotPoints};
-use linked_hash_map::LinkedHashMap;
+use indexmap::IndexMap;
 #[cfg(not(target_arch = "wasm32"))]
 use log::{error, info};
 #[cfg(not(target_arch = "wasm32"))]
@@ -373,7 +373,7 @@ fn draw_settings_keybindings(ui: &mut egui::Ui, settings: &Arc<Mutex<Settings>>)
 
     let table = |ui: &mut egui::Ui,
                  label: &str,
-                 keybindings: &mut LinkedHashMap<Action, Keybinding>,
+                 keybindings: &mut IndexMap<Action, Keybinding>,
                  awaiting: &Mutex<Option<Action>>| {
         ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
             ui.label(egui::RichText::new(label).strong().size(14.0));
@@ -499,7 +499,7 @@ impl Ui {
             #[cfg(all(not(target_arch = "wasm32"), not(debug_assertions)))]
             show_debug_panels: false,
 
-            settings: Arc::new(Mutex::new(Default::default())),
+            settings: Arc::new(Mutex::new(Settings::new())),
             settings_selected_tab: Arc::new(AtomicUsize::new(0)),
 
             running: false,
@@ -786,6 +786,10 @@ impl Ui {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     draw_settings_panel_content(ui, &selected_tab, &settings);
                     if ui.input(|i| i.viewport().close_requested()) {
+                        let settings = settings.lock();
+                        if let Err(e) = settings.save_to_file() {
+                            error!("{}", e);
+                        }
                         show_settings.store(false, Ordering::Relaxed);
                     }
                 });

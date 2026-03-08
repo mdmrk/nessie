@@ -1,7 +1,10 @@
+use anyhow::Result;
 use egui::{Key, KeyboardShortcut, Modifiers};
-use linked_hash_map::LinkedHashMap;
+use indexmap::IndexMap;
+use log::error;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Action {
     // In-game
     A,
@@ -24,10 +27,20 @@ pub enum Action {
     Quit,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+fn empty_str() -> &'static str {
+    ""
+}
+
+fn default_shortcut_placeholder() -> KeyboardShortcut {
+    KeyboardShortcut::new(Modifiers::NONE, Key::Questionmark)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Keybinding {
+    #[serde(skip_deserializing, default = "empty_str")]
     pub name: &'static str,
     pub shortcut: KeyboardShortcut,
+    #[serde(skip_deserializing, default = "default_shortcut_placeholder")]
     default_shortcut: KeyboardShortcut,
 }
 
@@ -49,15 +62,15 @@ impl Keybinding {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Keybindings {
-    pub in_game: LinkedHashMap<Action, Keybinding>,
-    pub application: LinkedHashMap<Action, Keybinding>,
+    pub in_game: IndexMap<Action, Keybinding>,
+    pub application: IndexMap<Action, Keybinding>,
 }
 
 impl Default for Keybindings {
     fn default() -> Self {
-        let mut in_game = LinkedHashMap::new();
+        let mut in_game = IndexMap::new();
         in_game.insert(
             Action::A,
             Keybinding::new("A", KeyboardShortcut::new(Modifiers::NONE, Key::A)),
@@ -100,7 +113,7 @@ impl Default for Keybindings {
             ),
         );
 
-        let mut application = LinkedHashMap::new();
+        let mut application = IndexMap::new();
         application.insert(
             Action::SaveState,
             Keybinding::new(
@@ -172,9 +185,106 @@ impl Keybindings {
     pub fn format_shortcut(&self, ctx: &egui::Context, action: Action) -> String {
         ctx.format_shortcut(&self.shortcut(action))
     }
+
+    pub fn apply_defaults(&mut self) {
+        let defaults = Keybindings::default();
+
+        self.in_game = defaults
+            .in_game
+            .iter()
+            .map(|(action, default)| {
+                let shortcut = self
+                    .in_game
+                    .get(action)
+                    .map(|loaded| loaded.shortcut)
+                    .unwrap_or(default.shortcut);
+                (
+                    *action,
+                    Keybinding {
+                        shortcut,
+                        ..*default
+                    },
+                )
+            })
+            .collect();
+
+        self.application = defaults
+            .application
+            .iter()
+            .map(|(action, default)| {
+                let shortcut = self
+                    .application
+                    .get(action)
+                    .map(|loaded| loaded.shortcut)
+                    .unwrap_or(default.shortcut);
+                (
+                    *action,
+                    Keybinding {
+                        shortcut,
+                        ..*default
+                    },
+                )
+            })
+            .collect();
+    }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Settings {
     pub keybindings: Keybindings,
+}
+
+fn load_from_file() -> Result<Option<Settings>> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use std::fs;
+
+        use crate::platform::native::{ProjDirKind, get_project_dir};
+
+        let mut path = get_project_dir(ProjDirKind::Config)?;
+        path.push("config.toml");
+        if !fs::exists(&path)? {
+            return Ok(None);
+        }
+        let contents = fs::read_to_string(path)?;
+        let mut settings: Settings = toml::from_str(&contents)?;
+        settings.keybindings.apply_defaults();
+
+        Ok(Some(settings))
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        Ok(None)
+    }
+}
+
+impl Settings {
+    pub fn new() -> Settings {
+        if let Ok(Some(settings)) = load_from_file() {
+            settings
+        } else {
+            let settings: Settings = Default::default();
+            if let Err(e) = settings.save_to_file() {
+                error!("{}", e);
+            }
+            settings
+        }
+    }
+
+    pub fn save_to_file(&self) -> Result<()> {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            use std::fs;
+
+            use crate::platform::native::{ProjDirKind, get_project_dir};
+
+            let mut path = get_project_dir(ProjDirKind::Config)?;
+            fs::create_dir_all(&path)?;
+            path.push("config.toml");
+
+            let contents = toml::to_string_pretty(self)?;
+            fs::write(path, contents)?;
+        }
+        Ok(())
+    }
 }

@@ -16,18 +16,20 @@ eframe = { version = "0.33.3", default-features = false, features = [
   "wayland",
   "x11",
 ] }
-egui = "0.33.3"
+egui = { version = "0.33.3", features = ["serde"] }
 egui_extras = { version = "0.33.3", features = ["image"] }
 egui_plot = "0.34.1"
 image = { version = "0.25.9", default-features = false, features = ["png"] }
-linked-hash-map = "0.5.6"
+indexmap = { version = "2.13.0", features = ["serde"] }
 log = "0.4.29"
 modular-bitfield = "0.13.1"
 phf = { version = "0.13.1", default-features = false, features = ["macros"] }
 rfd = "0.17.2"
 ringbuf = "0.4.8"
 savefile = "0.20.2"
+serde = { version = "1.0.228", features = ["derive"] }
 sha1_smol = "1.0.1"
+toml = "1.0.6"
 triple_buffer = "9.0.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
