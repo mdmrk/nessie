@@ -6,9 +6,9 @@ use egui::{Color32, ColorImage, Context, IconData, ImageData, Key, KeyboardShort
 use egui_extras::{Column, TableBuilder};
 #[cfg(not(target_arch = "wasm32"))]
 use egui_plot::{Line, Plot, PlotPoints};
+use linked_hash_map::LinkedHashMap;
 #[cfg(not(target_arch = "wasm32"))]
 use log::{error, info};
-use std::collections::HashMap;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
@@ -391,7 +391,7 @@ fn draw_settings_keybindings(ui: &mut egui::Ui, settings: &Arc<Mutex<Settings>>)
 
     let table = |ui: &mut egui::Ui,
                  label: &str,
-                 keybindings: &mut HashMap<&'static str, Key>,
+                 keybindings: &mut LinkedHashMap<&'static str, Key>,
                  awaiting: &Mutex<Option<&'static str>>| {
         ui.vertical_centered(|ui| {
             ui.label(egui::RichText::new(label).strong().size(14.0));

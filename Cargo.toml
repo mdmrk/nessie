@@ -20,6 +20,7 @@ egui = "0.33.3"
 egui_extras = { version = "0.33.3", features = ["image"] }
 egui_plot = "0.34.1"
 image = { version = "0.25.9", default-features = false, features = ["png"] }
+linked-hash-map = "0.5.6"
 log = "0.4.29"
 modular-bitfield = "0.13.1"
 phf = { version = "0.13.1", default-features = false, features = ["macros"] }
