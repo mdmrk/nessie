@@ -9,7 +9,7 @@ pub fn get_args() -> &'static Args {
 }
 
 #[derive(FromArgs, Clone, Default)]
-/// Nintendo NES emulator
+/// Nintendo NES emulator and debugger
 pub struct Args {
     /// path to the ROM (.nes)
     #[argh(positional)]
@@ -19,11 +19,11 @@ pub struct Args {
     #[argh(short = 'p', switch)]
     pub pause: bool,
 
-    /// enable logging
+    /// enable instruction logging
     #[argh(short = 'l', switch)]
     pub log: bool,
 
-    /// emulator version
+    /// print version and exit
     #[argh(short = 'v', switch)]
     pub version: bool,
 }
