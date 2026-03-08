@@ -1,7 +1,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 use bytesize::ByteSize;
 use egui::mutex::Mutex;
-use egui::{Color32, ColorImage, Context, IconData, ImageData, Key, KeyboardShortcut, Modifiers};
+use egui::{Color32, ColorImage, Context, IconData, ImageData, KeyboardShortcut};
 #[cfg(not(target_arch = "wasm32"))]
 use egui_extras::{Column, TableBuilder};
 #[cfg(not(target_arch = "wasm32"))]
@@ -23,7 +23,7 @@ use web_time::{Duration, Instant};
 use crate::args::get_args;
 use crate::platform::FileDataSource;
 use crate::ppu::{FRAME_HEIGHT, FRAME_WIDTH};
-use crate::settings::{Keybindings, Settings};
+use crate::settings::{Action, Keybinding, Keybindings, Settings};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::{
     debug::{BYTES_PER_ROW, DebugSnapshot, ROWS_TO_SHOW},
@@ -69,79 +69,6 @@ macro_rules! make_rows {
         )+
     };
 }
-
-#[repr(usize)]
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum AppAction {
-    PauseResume = 0,
-    Step,
-    SaveState,
-    LoadState,
-    #[cfg(not(target_arch = "wasm32"))]
-    TakeScreenshot,
-    OpenRom,
-    Quit,
-}
-
-impl AppAction {
-    #[inline(always)]
-    pub fn shortcut(&self) -> KeyboardShortcut {
-        DEFAULT_SHORTCUTS[*self as usize].1
-    }
-}
-
-const DEFAULT_SHORTCUTS: &[(AppAction, KeyboardShortcut)] = &[
-    (
-        AppAction::PauseResume,
-        KeyboardShortcut {
-            modifiers: Modifiers::NONE,
-            logical_key: Key::Space,
-        },
-    ),
-    (
-        AppAction::Step,
-        KeyboardShortcut {
-            modifiers: Modifiers::NONE,
-            logical_key: Key::Enter,
-        },
-    ),
-    (
-        AppAction::SaveState,
-        KeyboardShortcut {
-            modifiers: Modifiers::NONE,
-            logical_key: Key::F5,
-        },
-    ),
-    (
-        AppAction::LoadState,
-        KeyboardShortcut {
-            modifiers: Modifiers::NONE,
-            logical_key: Key::F6,
-        },
-    ),
-    #[cfg(not(target_arch = "wasm32"))]
-    (
-        AppAction::TakeScreenshot,
-        KeyboardShortcut {
-            modifiers: Modifiers::NONE,
-            logical_key: Key::F12,
-        },
-    ),
-    (
-        AppAction::OpenRom,
-        KeyboardShortcut {
-            modifiers: Modifiers::CTRL,
-            logical_key: Key::O,
-        },
-    ),
-    (
-        AppAction::Quit,
-        KeyboardShortcut {
-            modifiers: Modifiers::CTRL,
-            logical_key: Key::Q,
-        },
-    ),
-];
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct ControllerState {
@@ -194,7 +121,7 @@ impl InputManager {
         &self,
         ctx: &egui::Context,
         keybindings: &Keybindings,
-    ) -> (Vec<AppAction>, ControllerState) {
+    ) -> (Vec<Action>, ControllerState) {
         let mut triggered_actions = Vec::new();
         let mut controller = ControllerState::default();
 
@@ -203,20 +130,21 @@ impl InputManager {
         }
 
         ctx.input_mut(|i| {
-            for (action, shortcut) in DEFAULT_SHORTCUTS {
-                if i.consume_shortcut(shortcut) {
-                    triggered_actions.push(*action);
+            for keybinding in &keybindings.application {
+                let shortcut = keybinding.1.shortcut;
+                if i.consume_shortcut(&shortcut) {
+                    triggered_actions.push(*keybinding.0);
                 }
             }
 
-            controller.a = i.key_down(keybindings.in_game["A"]);
-            controller.b = i.key_down(keybindings.in_game["B"]);
-            controller.start = i.key_down(keybindings.in_game["Start"]);
-            controller.select = i.key_down(keybindings.in_game["Select"]);
-            controller.up = i.key_down(keybindings.in_game["Up"]);
-            controller.down = i.key_down(keybindings.in_game["Down"]);
-            controller.left = i.key_down(keybindings.in_game["Left"]);
-            controller.right = i.key_down(keybindings.in_game["Right"]);
+            controller.a = i.key_down(keybindings.shortcut(Action::A).logical_key);
+            controller.b = i.key_down(keybindings.shortcut(Action::B).logical_key);
+            controller.start = i.key_down(keybindings.shortcut(Action::Start).logical_key);
+            controller.select = i.key_down(keybindings.shortcut(Action::Select).logical_key);
+            controller.up = i.key_down(keybindings.shortcut(Action::Up).logical_key);
+            controller.down = i.key_down(keybindings.shortcut(Action::Down).logical_key);
+            controller.left = i.key_down(keybindings.shortcut(Action::Left).logical_key);
+            controller.right = i.key_down(keybindings.shortcut(Action::Right).logical_key);
         });
 
         (triggered_actions, controller)
@@ -356,61 +284,98 @@ impl Input {
 #[inline]
 fn draw_settings_keybindings(ui: &mut egui::Ui, settings: &Arc<Mutex<Settings>>) {
     let mut settings = settings.lock();
-    static AWAITING_INPUT: OnceLock<Mutex<Option<&'static str>>> = OnceLock::new();
+    static AWAITING_INPUT: OnceLock<Mutex<Option<Action>>> = OnceLock::new();
     let awaiting = AWAITING_INPUT.get_or_init(|| Mutex::new(None));
-
-    let draw_keybinding_row = |ui: &mut egui::Ui,
-                               keybinding: (&&'static str, &mut Key),
-                               awaiting: &Mutex<Option<&str>>| {
-        let key_name = *keybinding.0;
-        let k = keybinding.1;
-        ui.label(key_name);
-        let is_awaiting = awaiting.lock().as_ref().is_some_and(|k| *k == key_name);
-        let key_label = if is_awaiting { "..." } else { k.name() };
-        if ui
-            .add_sized([80., 24.], egui::Button::new(key_label))
-            .clicked()
-        {
-            *awaiting.lock() = Some(key_name);
-        }
-        if is_awaiting {
-            ui.input(|i| {
-                for event in &i.events {
-                    if let egui::Event::Key {
-                        key, pressed: true, ..
-                    } = event
-                    {
-                        *k = *key;
-                        *awaiting.lock() = None;
-                    }
-                }
-            });
-        }
-        ui.end_row();
-    };
 
     let table = |ui: &mut egui::Ui,
                  label: &str,
-                 keybindings: &mut LinkedHashMap<&'static str, Key>,
-                 awaiting: &Mutex<Option<&'static str>>| {
-        ui.vertical_centered(|ui| {
+                 keybindings: &mut LinkedHashMap<Action, Keybinding>,
+                 awaiting: &Mutex<Option<Action>>| {
+        ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
             ui.label(egui::RichText::new(label).strong().size(14.0));
-            ui.add_space(4.0);
-            let available_space = ui.available_width();
-            egui::Grid::new(label)
-                .num_columns(2)
-                .striped(true)
-                .min_col_width(available_space / 2.)
-                .show(ui, |ui| {
-                    ui.label(egui::RichText::new("Action").strong());
-                    ui.label(egui::RichText::new("Key").strong());
-                    ui.end_row();
-                    for keybinding in keybindings.iter_mut() {
-                        draw_keybinding_row(ui, keybinding, awaiting);
-                    }
-                });
-            ui.add_space(12.0);
         });
+        ui.add_space(4.0);
+        TableBuilder::new(ui)
+            .id_salt(format!("keybindings_{}", label))
+            .striped(true)
+            .column(Column::exact(120.))
+            .column(Column::exact(120.))
+            .column(Column::remainder())
+            .header(20.0, |mut header| {
+                header.col(|ui| {
+                    ui.label(egui::RichText::new("Action").strong());
+                });
+                header.col(|ui| {
+                    ui.label(egui::RichText::new("Key").strong());
+                });
+                header.col(|ui| {
+                    ui.label(egui::RichText::new("Actions").strong());
+                });
+            })
+            .body(|mut body| {
+                for (action, k) in keybindings.iter_mut() {
+                    body.row(24.0, |mut row| {
+                        row.col(|ui| {
+                            ui.with_layout(
+                                egui::Layout::left_to_right(egui::Align::Center)
+                                    .with_cross_justify(true),
+                                |ui| {
+                                    ui.label(k.name);
+                                },
+                            );
+                        });
+                        row.col(|ui| {
+                            ui.with_layout(
+                                egui::Layout::left_to_right(egui::Align::Center),
+                                |ui| {
+                                    let is_awaiting =
+                                        awaiting.lock().as_ref().is_some_and(|a| a == action);
+                                    let key_label = if is_awaiting {
+                                        "...".to_string()
+                                    } else {
+                                        ui.ctx().format_shortcut(&k.shortcut)
+                                    };
+                                    if ui
+                                        .add_sized([80., 20.], egui::Button::new(key_label))
+                                        .clicked()
+                                    {
+                                        *awaiting.lock() = Some(*action);
+                                    }
+                                    if is_awaiting {
+                                        ui.input(|i| {
+                                            for event in &i.events {
+                                                if let egui::Event::Key {
+                                                    key, pressed: true, ..
+                                                } = event
+                                                {
+                                                    k.shortcut =
+                                                        KeyboardShortcut::new(i.modifiers, *key);
+                                                    *awaiting.lock() = None;
+                                                }
+                                            }
+                                        });
+                                    }
+                                },
+                            );
+                        });
+                        row.col(|ui| {
+                            ui.with_layout(
+                                egui::Layout::left_to_right(egui::Align::Center),
+                                |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.add_enabled_ui(k.shortcut != k.default_key(), |ui| {
+                                            if ui.button("↻").clicked() {
+                                                k.reset();
+                                            }
+                                        });
+                                    });
+                                },
+                            );
+                        });
+                    });
+                }
+            });
+        ui.add_space(12.0);
     };
 
     egui::ScrollArea::vertical().show(ui, |ui| {
@@ -422,6 +387,9 @@ fn draw_settings_keybindings(ui: &mut egui::Ui, settings: &Arc<Mutex<Settings>>)
                 &mut settings.keybindings.application,
                 awaiting,
             );
+            if ui.button("Reset all").clicked() {
+                settings.keybindings.reset_all();
+            }
         });
     });
 }
@@ -524,36 +492,37 @@ impl Ui {
         }
     }
 
-    fn dispatch_action(&mut self, ctx: &Context, action: AppAction) {
+    fn dispatch_action(&mut self, ctx: &Context, action: Action) {
         match action {
-            AppAction::PauseResume => {
+            Action::PauseResume => {
                 if self.paused {
                     self.runner.resume();
                 } else {
                     self.runner.pause();
                 }
             }
-            AppAction::Step => {
+            Action::Step => {
                 if self.paused {
                     self.runner.step();
                 }
             }
-            AppAction::LoadState => {
+            Action::LoadState => {
                 self.runner.pick_state_file();
             }
-            AppAction::SaveState => {
+            Action::SaveState => {
                 self.runner.send_command(Command::SaveState);
             }
             #[cfg(not(target_arch = "wasm32"))]
-            AppAction::TakeScreenshot => {
+            Action::TakeScreenshot => {
                 self.take_screenshot();
             }
-            AppAction::OpenRom => {
+            Action::OpenRom => {
                 self.open_rom();
             }
-            AppAction::Quit => {
+            Action::Quit => {
                 self.quit(ctx);
             }
+            _ => {}
         }
     }
 
@@ -597,13 +566,14 @@ impl Ui {
     }
 
     fn draw_menubar(&mut self, ui: &mut egui::Ui) {
+        let keybindings = self.settings.lock().keybindings.clone();
+
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button("File", |ui| {
                 if ui
                     .add(
-                        egui::Button::new("🎮 Open ROM...").shortcut_text(
-                            ui.ctx().format_shortcut(&AppAction::OpenRom.shortcut()),
-                        ),
+                        egui::Button::new("🎮 Open ROM...")
+                            .shortcut_text(keybindings.format_shortcut(ui.ctx(), Action::OpenRom)),
                     )
                     .clicked()
                 {
@@ -617,7 +587,7 @@ impl Ui {
                 ui.add_enabled_ui(self.running, |ui| {
                     if ui
                         .add(egui::Button::new("💾 Save state").shortcut_text(
-                            ui.ctx().format_shortcut(&AppAction::SaveState.shortcut()),
+                            keybindings.format_shortcut(ui.ctx(), Action::SaveState),
                         ))
                         .clicked()
                     {
@@ -625,7 +595,7 @@ impl Ui {
                     }
                     if ui
                         .add(egui::Button::new("📥 Load state").shortcut_text(
-                            ui.ctx().format_shortcut(&AppAction::LoadState.shortcut()),
+                            keybindings.format_shortcut(ui.ctx(), Action::LoadState),
                         ))
                         .clicked()
                     {
@@ -636,7 +606,7 @@ impl Ui {
                 if ui
                     .add(
                         egui::Button::new("✖ Quit")
-                            .shortcut_text(ui.ctx().format_shortcut(&AppAction::Quit.shortcut())),
+                            .shortcut_text(keybindings.format_shortcut(ui.ctx(), Action::Quit)),
                     )
                     .clicked()
                 {
@@ -650,9 +620,8 @@ impl Ui {
                 ui.add_enabled_ui(self.running && self.paused, |ui| {
                     if ui
                         .add(
-                            egui::Button::new("⤵ Step").shortcut_text(
-                                ui.ctx().format_shortcut(&AppAction::Step.shortcut()),
-                            ),
+                            egui::Button::new("⤵ Step")
+                                .shortcut_text(keybindings.format_shortcut(ui.ctx(), Action::Step)),
                         )
                         .clicked()
                     {
@@ -662,7 +631,7 @@ impl Ui {
                 ui.add_enabled_ui(self.running && self.paused, |ui| {
                     if ui
                         .add(egui::Button::new("▶ Resume").shortcut_text(
-                            ui.ctx().format_shortcut(&AppAction::PauseResume.shortcut()),
+                            keybindings.format_shortcut(ui.ctx(), Action::PauseResume),
                         ))
                         .clicked()
                     {
@@ -672,7 +641,7 @@ impl Ui {
                 ui.add_enabled_ui(self.running && !self.paused, |ui| {
                     if ui
                         .add(egui::Button::new("⏸ Pause").shortcut_text(
-                            ui.ctx().format_shortcut(&AppAction::PauseResume.shortcut()),
+                            keybindings.format_shortcut(ui.ctx(), Action::PauseResume),
                         ))
                         .clicked()
                     {
@@ -689,12 +658,9 @@ impl Ui {
                     ui.separator();
                     ui.add_enabled_ui(self.running, |ui| {
                         if ui
-                            .add(
-                                egui::Button::new("📷 Take screenshot").shortcut_text(
-                                    ui.ctx()
-                                        .format_shortcut(&AppAction::TakeScreenshot.shortcut()),
-                                ),
-                            )
+                            .add(egui::Button::new("📷 Take screenshot").shortcut_text(
+                                keybindings.format_shortcut(ui.ctx(), Action::TakeScreenshot),
+                            ))
                             .clicked()
                         {
                             self.take_screenshot();
@@ -846,6 +812,7 @@ impl Ui {
                 .column(Column::auto())
                 .column(Column::auto())
                 .column(Column::auto())
+                .id_salt("mem_viewer")
                 .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
                 .body(|mut body| {
                     for (i, lines) in self
