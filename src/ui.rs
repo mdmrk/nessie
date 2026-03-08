@@ -638,15 +638,18 @@ impl Ui {
                         self.runner.pick_state_file();
                     }
                 });
-                ui.separator();
-                if ui
-                    .add(
-                        egui::Button::new("✖ Quit")
-                            .shortcut_text(keybindings.format_shortcut(ui.ctx(), Action::Quit)),
-                    )
-                    .clicked()
+                #[cfg(not(target_arch = "wasm32"))]
                 {
-                    self.quit(ui.ctx());
+                    ui.separator();
+                    if ui
+                        .add(
+                            egui::Button::new("✖ Quit")
+                                .shortcut_text(keybindings.format_shortcut(ui.ctx(), Action::Quit)),
+                        )
+                        .clicked()
+                    {
+                        self.quit(ui.ctx());
+                    }
                 }
             });
             if self.show_settings.load(Ordering::Relaxed) {
