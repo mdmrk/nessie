@@ -1332,12 +1332,12 @@ impl Ui {
                 ui.label("Background Palettes");
                 for palette_idx in 0..4 {
                     ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing = egui::vec2(3.0, 0.0);
                         ui.label(format!("BG{}: ", palette_idx));
                         for color_idx in 0..4 {
                             let addr = palette_idx * 4 + color_idx;
                             let color_byte = ppu.palette[addr];
                             let color = Ppu::get_color_from_palette(color_byte & 0x3F);
-
                             let (rect, _response) = ui.allocate_exact_size(
                                 egui::vec2(square_size, square_size),
                                 egui::Sense::hover(),
@@ -1352,6 +1352,7 @@ impl Ui {
                 ui.label("Sprite Palettes");
                 for palette_idx in 0..4 {
                     ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing = egui::vec2(3.0, 0.0);
                         ui.label(format!("SP{}: ", palette_idx));
                         for color_idx in 0..4 {
                             let addr = 0x10 + palette_idx * 4 + color_idx;
