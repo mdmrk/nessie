@@ -11,16 +11,16 @@ impl Default for Keybindings {
     fn default() -> Self {
         Self {
             in_game: HashMap::from([
-                ("a", Key::A),
-                ("b", Key::B),
-                ("start", Key::Z),
-                ("select", Key::N),
-                ("up", Key::ArrowUp),
-                ("down", Key::ArrowDown),
-                ("left", Key::ArrowLeft),
-                ("right", Key::ArrowRight),
+                ("A", Key::A),
+                ("B", Key::B),
+                ("Start", Key::Z),
+                ("Select", Key::N),
+                ("Up", Key::ArrowUp),
+                ("Down", Key::ArrowDown),
+                ("Left", Key::ArrowLeft),
+                ("Right", Key::ArrowRight),
             ]),
-            application: HashMap::from([("save_state", Key::F5), ("load_state", Key::F6)]),
+            application: HashMap::from([("Save State", Key::F5), ("Load State", Key::F6)]),
         }
     }
 }

@@ -76,6 +76,7 @@ enum AppAction {
     PauseResume = 0,
     Step,
     SaveState,
+    LoadState,
     #[cfg(not(target_arch = "wasm32"))]
     TakeScreenshot,
     OpenRom,
@@ -109,6 +110,13 @@ const DEFAULT_SHORTCUTS: &[(AppAction, KeyboardShortcut)] = &[
         KeyboardShortcut {
             modifiers: Modifiers::NONE,
             logical_key: Key::F5,
+        },
+    ),
+    (
+        AppAction::LoadState,
+        KeyboardShortcut {
+            modifiers: Modifiers::NONE,
+            logical_key: Key::F6,
         },
     ),
     #[cfg(not(target_arch = "wasm32"))]
@@ -201,14 +209,14 @@ impl InputManager {
                 }
             }
 
-            controller.a = i.key_down(keybindings.in_game["a"]);
-            controller.b = i.key_down(keybindings.in_game["b"]);
-            controller.start = i.key_down(keybindings.in_game["start"]);
-            controller.select = i.key_down(keybindings.in_game["select"]);
-            controller.up = i.key_down(keybindings.in_game["up"]);
-            controller.down = i.key_down(keybindings.in_game["down"]);
-            controller.left = i.key_down(keybindings.in_game["left"]);
-            controller.right = i.key_down(keybindings.in_game["right"]);
+            controller.a = i.key_down(keybindings.in_game["A"]);
+            controller.b = i.key_down(keybindings.in_game["B"]);
+            controller.start = i.key_down(keybindings.in_game["Start"]);
+            controller.select = i.key_down(keybindings.in_game["Select"]);
+            controller.up = i.key_down(keybindings.in_game["Up"]);
+            controller.down = i.key_down(keybindings.in_game["Down"]);
+            controller.left = i.key_down(keybindings.in_game["Left"]);
+            controller.right = i.key_down(keybindings.in_game["Right"]);
         });
 
         (triggered_actions, controller)
@@ -354,15 +362,18 @@ fn draw_settings_keybindings(ui: &mut egui::Ui, settings: &Arc<Mutex<Settings>>)
     let draw_keybinding_row = |ui: &mut egui::Ui,
                                keybinding: (&&'static str, &mut Key),
                                awaiting: &Mutex<Option<&str>>| {
-        let label = *keybinding.0;
+        let key_name = *keybinding.0;
         let k = keybinding.1;
-        ui.label(label);
-        if ui.button(k.name()).clicked() {
-            *awaiting.lock() = Some(label);
+        ui.label(key_name);
+        let is_awaiting = awaiting.lock().as_ref().is_some_and(|k| *k == key_name);
+        let key_label = if is_awaiting { "..." } else { k.name() };
+        if ui
+            .add_sized([80., 24.], egui::Button::new(key_label))
+            .clicked()
+        {
+            *awaiting.lock() = Some(key_name);
         }
-        let is_awaiting = awaiting.lock().as_ref().is_some_and(|k| *k == label);
         if is_awaiting {
-            ui.label("Press a key...");
             ui.input(|i| {
                 for event in &i.events {
                     if let egui::Event::Key {
@@ -374,8 +385,6 @@ fn draw_settings_keybindings(ui: &mut egui::Ui, settings: &Arc<Mutex<Settings>>)
                     }
                 }
             });
-        } else {
-            ui.label("");
         }
         ui.end_row();
     };
@@ -387,14 +396,14 @@ fn draw_settings_keybindings(ui: &mut egui::Ui, settings: &Arc<Mutex<Settings>>)
         ui.vertical_centered(|ui| {
             ui.label(egui::RichText::new(label).strong().size(14.0));
             ui.add_space(4.0);
+            let available_space = ui.available_width();
             egui::Grid::new(label)
-                .num_columns(3)
+                .num_columns(2)
                 .striped(true)
-                .min_col_width(120.0)
+                .min_col_width(available_space / 2.)
                 .show(ui, |ui| {
                     ui.label(egui::RichText::new("Action").strong());
                     ui.label(egui::RichText::new("Key").strong());
-                    ui.label("");
                     ui.end_row();
                     for keybinding in keybindings.iter_mut() {
                         draw_keybinding_row(ui, keybinding, awaiting);
@@ -405,13 +414,15 @@ fn draw_settings_keybindings(ui: &mut egui::Ui, settings: &Arc<Mutex<Settings>>)
     };
 
     egui::ScrollArea::vertical().show(ui, |ui| {
-        table(ui, "In-Game", &mut settings.keybindings.in_game, awaiting);
-        table(
-            ui,
-            "Application",
-            &mut settings.keybindings.application,
-            awaiting,
-        );
+        ui.vertical(|ui| {
+            table(ui, "In-Game", &mut settings.keybindings.in_game, awaiting);
+            table(
+                ui,
+                "Application",
+                &mut settings.keybindings.application,
+                awaiting,
+            );
+        });
     });
 }
 
@@ -527,6 +538,9 @@ impl Ui {
                     self.runner.step();
                 }
             }
+            AppAction::LoadState => {
+                self.runner.pick_state_file();
+            }
             AppAction::SaveState => {
                 self.runner.send_command(Command::SaveState);
             }
@@ -602,14 +616,19 @@ impl Ui {
                 ui.separator();
                 ui.add_enabled_ui(self.running, |ui| {
                     if ui
-                        .add(egui::Button::new("📥 Save state").shortcut_text(
+                        .add(egui::Button::new("💾 Save state").shortcut_text(
                             ui.ctx().format_shortcut(&AppAction::SaveState.shortcut()),
                         ))
                         .clicked()
                     {
                         self.runner.send_command(Command::SaveState);
                     }
-                    if ui.add(egui::Button::new("📥 Load state")).clicked() {
+                    if ui
+                        .add(egui::Button::new("📥 Load state").shortcut_text(
+                            ui.ctx().format_shortcut(&AppAction::LoadState.shortcut()),
+                        ))
+                        .clicked()
+                    {
                         self.runner.pick_state_file();
                     }
                 });
@@ -625,49 +644,7 @@ impl Ui {
                 }
             });
             if self.show_settings.load(Ordering::Relaxed) {
-                let show_settings = self.show_settings.clone();
-                let selected_tab = self.settings_selected_tab.clone();
-                let settings = self.settings.clone();
-
-                ui.ctx().show_viewport_deferred(
-                    egui::ViewportId::from_hash_of("settings_window"),
-                    egui::ViewportBuilder::default()
-                        .with_title("Settings")
-                        .with_inner_size([800.0, 600.0]),
-                    move |ctx, _| {
-                        egui::CentralPanel::default().show(ctx, |ui| {
-                            ui.with_layout(
-                                egui::Layout::left_to_right(egui::Align::TOP)
-                                    .with_cross_justify(true),
-                                |ui| {
-                                    ui.vertical(|ui| {
-                                        for (ind, label) in ["Keybindings"].iter().enumerate() {
-                                            if ui
-                                                .add_sized(
-                                                    [120., 36.],
-                                                    egui::Button::new(*label).selected(
-                                                        selected_tab.load(Ordering::Relaxed) == ind,
-                                                    ),
-                                                )
-                                                .clicked()
-                                            {
-                                                selected_tab.store(ind, Ordering::Relaxed);
-                                            }
-                                        }
-                                    });
-                                    ui.separator();
-                                    match selected_tab.load(Ordering::Relaxed) {
-                                        0 => draw_settings_keybindings(ui, &settings),
-                                        _ => unreachable!(),
-                                    };
-                                },
-                            );
-                            if ui.input(|i| i.viewport().close_requested()) {
-                                show_settings.store(false, Ordering::Relaxed);
-                            }
-                        });
-                    },
-                );
+                self.draw_settings_window(ui);
             }
             ui.menu_button("Emulator", |ui| {
                 ui.add_enabled_ui(self.running && self.paused, |ui| {
@@ -783,6 +760,51 @@ impl Ui {
                 }
             }
         });
+    }
+
+    fn draw_settings_window(&mut self, ui: &mut egui::Ui) {
+        let show_settings = self.show_settings.clone();
+        let selected_tab = self.settings_selected_tab.clone();
+        let settings = self.settings.clone();
+
+        ui.ctx().show_viewport_deferred(
+            egui::ViewportId::from_hash_of("settings_window"),
+            egui::ViewportBuilder::default()
+                .with_title("Settings")
+                .with_inner_size([800.0, 600.0]),
+            move |ctx, _| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.with_layout(
+                        egui::Layout::left_to_right(egui::Align::TOP).with_cross_justify(true),
+                        |ui| {
+                            ui.vertical(|ui| {
+                                for (ind, label) in ["Keybindings"].iter().enumerate() {
+                                    if ui
+                                        .add_sized(
+                                            [100., 30.],
+                                            egui::Button::new(*label).selected(
+                                                selected_tab.load(Ordering::Relaxed) == ind,
+                                            ),
+                                        )
+                                        .clicked()
+                                    {
+                                        selected_tab.store(ind, Ordering::Relaxed);
+                                    }
+                                }
+                            });
+                            ui.separator();
+                            match selected_tab.load(Ordering::Relaxed) {
+                                0 => draw_settings_keybindings(ui, &settings),
+                                _ => unreachable!(),
+                            };
+                        },
+                    );
+                    if ui.input(|i| i.viewport().close_requested()) {
+                        show_settings.store(false, Ordering::Relaxed);
+                    }
+                });
+            },
+        );
     }
 
     #[cfg(not(target_arch = "wasm32"))]
