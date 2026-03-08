@@ -73,19 +73,22 @@ impl Default for Keybindings {
         let mut in_game = IndexMap::new();
         in_game.insert(
             Action::A,
-            Keybinding::new("A", KeyboardShortcut::new(Modifiers::NONE, Key::A)),
+            Keybinding::new("A", KeyboardShortcut::new(Modifiers::NONE, Key::Z)),
         );
         in_game.insert(
             Action::B,
-            Keybinding::new("B", KeyboardShortcut::new(Modifiers::NONE, Key::B)),
+            Keybinding::new("B", KeyboardShortcut::new(Modifiers::NONE, Key::X)),
         );
         in_game.insert(
             Action::Start,
-            Keybinding::new("Start", KeyboardShortcut::new(Modifiers::NONE, Key::Z)),
+            Keybinding::new("Start", KeyboardShortcut::new(Modifiers::NONE, Key::Enter)),
         );
         in_game.insert(
             Action::Select,
-            Keybinding::new("Select", KeyboardShortcut::new(Modifiers::NONE, Key::N)),
+            Keybinding::new(
+                "Select",
+                KeyboardShortcut::new(Modifiers::NONE, Key::Escape),
+            ),
         );
         in_game.insert(
             Action::Up,

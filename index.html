@@ -1,103 +1,427 @@
 <!DOCTYPE html>
 <html>
-	<head>
-		<title>Nessie</title>
-		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-		<link data-trunk rel="rust" data-wasm-opt="3" data-initializer="assets/js/ini.js">
-		<base data-trunk-public-url>
-		<link data-trunk rel="icon" href="assets/favicon.ico">
-		<link data-trunk rel="copy-file" href="assets/js/sw.js">
-		<link data-trunk rel="copy-file" href="assets/manifest.json">
-		<link data-trunk rel="copy-file" href="assets/icon-1024.png" data-target-path="assets">
-		<link data-trunk rel="copy-file" href="assets/icon-256.png" data-target-path="assets">
-		<link data-trunk rel="copy-file" href="assets/icon_ios_touch_192.png" data-target-path="assets">
-		<link data-trunk rel="copy-file" href="assets/maskable_icon_x512.png" data-target-path="assets">
-		<link rel="manifest" href="manifest.json">
-		<link rel="apple-touch-icon" href="assets/icon_ios_touch_192.png">
-		<meta name="theme-color" media="(prefers-color-scheme: light)" content="white">
-		<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#404040">
-		<style>
-			html {
-				touch-action: manipulation;
-			}
-			
-			body {
-				background: #909090;
-			}
-			
-			@media (prefers-color-scheme: dark) {
-				body {
-					background: #404040;
-				}
-			}
-			
-			html,
-			body {
-				overflow: hidden;
-				margin: 0 !important;
-				padding: 0 !important;
-				height: 100%;
-				width: 100%;
-			}
-			
-			canvas {
-				margin-right: auto;
-				margin-left: auto;
-				display: block;
-				position: absolute;
-				top: 0;
-				left: 0;
-				width: 100%;
-				height: 100%;
-			}
-			
-			.centered {
-				margin-right: auto;
-				margin-left: auto;
-				display: block;
-				position: absolute;
-				top: 50%;
-				left: 50%;
-				transform: translate(-50%, -50%);
-				color: #f0f0f0;
-				font-size: 24px;
-				font-family: Ubuntu-Light, Helvetica, sans-serif;
-				text-align: center;
-			}
-			
-			#progress-text {
-				font-size: 16px;
-			}
-			
-			#progress-container {
-				display: none;
-				width: 200px;
-				height: 6px;
-				background: rgba(255, 255, 255, 0.2);
-				margin: 20px auto;
-				border-radius: 3px;
-				overflow: hidden;
-			}
-			
-			#progress-bar {
-				width: 0%;
-				height: 100%;
-				background: #fff;
-				border-radius: 3px;
-			}
-		</style>
-	</head>
 
-	<body>
-		<canvas id="the_canvas_id"></canvas>
-		<div class="centered" id="loading_text">
-			<noscript>You need javascript to use this website</noscript>
-			<p id="progress-text">Loading…</p>
-			<div id="progress-container">
-				<div id="progress-bar">
+<head>
+	<title>Nessie</title>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+	<link data-trunk rel="rust" data-wasm-opt="3" data-initializer="assets/js/ini.js">
+	<base data-trunk-public-url>
+	<link data-trunk rel="icon" href="assets/favicon.ico">
+	<link data-trunk rel="copy-file" href="assets/js/sw.js">
+	<link data-trunk rel="copy-file" href="assets/manifest.json">
+	<link data-trunk rel="copy-file" href="assets/icon-1024.png" data-target-path="assets">
+	<link data-trunk rel="copy-file" href="assets/icon-256.png" data-target-path="assets">
+	<link data-trunk rel="copy-file" href="assets/icon_ios_touch_192.png" data-target-path="assets">
+	<link data-trunk rel="copy-file" href="assets/maskable_icon_x512.png" data-target-path="assets">
+	<link rel="manifest" href="manifest.json">
+	<link rel="apple-touch-icon" href="assets/icon_ios_touch_192.png">
+	<meta name="theme-color" media="(prefers-color-scheme: light)" content="white">
+	<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#404040">
+	<style>
+		html {
+			touch-action: manipulation;
+		}
+
+		body {
+			background: #909090;
+		}
+
+		@media (prefers-color-scheme: dark) {
+			body {
+				background: #404040;
+			}
+		}
+
+		html,
+		body {
+			overflow: hidden;
+			margin: 0 !important;
+			padding: 0 !important;
+			height: 100%;
+			width: 100%;
+		}
+
+		canvas {
+			margin-right: auto;
+			margin-left: auto;
+			display: block;
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+		}
+
+		.centered {
+			margin-right: auto;
+			margin-left: auto;
+			display: block;
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			transform: translate(-50%, -50%);
+			color: #f0f0f0;
+			font-size: 24px;
+			font-family: Ubuntu-Light, Helvetica, sans-serif;
+			text-align: center;
+		}
+
+		#progress-text {
+			font-size: 16px;
+		}
+
+		#progress-container {
+			display: none;
+			width: 200px;
+			height: 6px;
+			background: rgba(255, 255, 255, 0.2);
+			margin: 20px auto;
+			border-radius: 3px;
+			overflow: hidden;
+		}
+
+		#progress-bar {
+			width: 0%;
+			height: 100%;
+			background: #fff;
+			border-radius: 3px;
+		}
+
+		#nes-controller {
+			display: none;
+			position: fixed;
+			bottom: 0;
+			left: 0;
+			right: 0;
+			height: 180px;
+			pointer-events: none;
+			z-index: 100;
+			user-select: none;
+			-webkit-user-select: none;
+			touch-action: none;
+		}
+
+		@media (pointer: coarse) {
+			#nes-controller.visible {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				padding: 0 20px 16px;
+			}
+		}
+
+		.dpad {
+			position: relative;
+			width: 132px;
+			height: 132px;
+			pointer-events: auto;
+			flex-shrink: 0;
+		}
+
+		.dpad-arm {
+			position: absolute;
+			background: rgba(0, 0, 0, 0.52);
+			border: 1.5px solid rgba(255, 255, 255, 0.1);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			-webkit-tap-highlight-color: transparent;
+			transition: background 0.06s;
+		}
+
+		.dpad-arm.pressed {
+			background: rgba(255, 255, 255, 0.18);
+		}
+
+		.dpad-up {
+			width: 44px;
+			height: 44px;
+			top: 0;
+			left: 44px;
+			border-radius: 6px 6px 0 0;
+		}
+
+		.dpad-down {
+			width: 44px;
+			height: 44px;
+			top: 88px;
+			left: 44px;
+			border-radius: 0 0 6px 6px;
+		}
+
+		.dpad-left {
+			width: 44px;
+			height: 44px;
+			top: 44px;
+			left: 0;
+			border-radius: 6px 0 0 6px;
+		}
+
+		.dpad-right {
+			width: 44px;
+			height: 44px;
+			top: 44px;
+			left: 88px;
+			border-radius: 0 6px 6px 0;
+		}
+
+		.dpad-center {
+			position: absolute;
+			width: 44px;
+			height: 44px;
+			top: 44px;
+			left: 44px;
+			background: rgba(0, 0, 0, 0.52);
+			border: 1.5px solid rgba(255, 255, 255, 0.1);
+			pointer-events: none;
+		}
+
+		.dpad-arm svg {
+			width: 16px;
+			height: 16px;
+			fill: rgba(255, 255, 255, 0.45);
+			pointer-events: none;
+		}
+
+		.center-btns {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 8px;
+			pointer-events: auto;
+			flex-shrink: 0;
+		}
+
+		.small-btns {
+			display: flex;
+			gap: 18px;
+		}
+
+		.small-btn {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 4px;
+			-webkit-tap-highlight-color: transparent;
+		}
+
+		.small-btn-pill {
+			width: 46px;
+			height: 14px;
+			background: rgba(0, 0, 0, 0.5);
+			border: 1.5px solid rgba(255, 255, 255, 0.15);
+			border-radius: 7px;
+			transition: background 0.06s;
+		}
+
+		.small-btn.pressed .small-btn-pill {
+			background: rgba(255, 255, 255, 0.28);
+		}
+
+		.small-btn-label {
+			font-size: 9px;
+			color: rgba(255, 255, 255, 0.4);
+			font-family: Helvetica, Arial, sans-serif;
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+			font-weight: bold;
+		}
+
+		.ab-buttons {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			pointer-events: auto;
+			flex-shrink: 0;
+			transform: rotate(-15deg);
+			margin-bottom: 16px;
+		}
+
+		.action-btn {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 6px;
+			-webkit-tap-highlight-color: transparent;
+		}
+
+		.action-btn-circle {
+			width: 52px;
+			height: 52px;
+			border-radius: 50%;
+			background: radial-gradient(circle at 38% 38%,
+					rgba(190, 25, 25, 0.82), rgba(100, 0, 0, 0.72));
+			border: 2px solid rgba(255, 255, 255, 0.1);
+			box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45),
+				inset 0 -3px 6px rgba(0, 0, 0, 0.3);
+			transition: filter 0.06s, transform 0.06s;
+		}
+
+		.action-btn.pressed .action-btn-circle {
+			filter: brightness(1.55);
+			transform: scale(0.90);
+			box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+		}
+
+		.action-btn-label {
+			font-size: 13px;
+			font-weight: bold;
+			color: rgba(255, 255, 255, 0.42);
+			font-family: Helvetica, Arial, sans-serif;
+			transform: rotate(15deg);
+		}
+	</style>
+</head>
+
+<body>
+	<canvas id="the_canvas_id"></canvas>
+
+	<div class="centered" id="loading_text">
+		<noscript>You need javascript to use this website</noscript>
+		<p id="progress-text">Loading…</p>
+		<div id="progress-container">
+			<div id="progress-bar"></div>
+		</div>
+	</div>
+
+	<div id="nes-controller">
+		<div class="dpad">
+			<div class="dpad-arm dpad-up" data-key="ArrowUp">
+				<svg viewBox="0 0 24 24">
+					<path d="M12 5l-7 9h14z" />
+				</svg>
+			</div>
+			<div class="dpad-arm dpad-down" data-key="ArrowDown">
+				<svg viewBox="0 0 24 24">
+					<path d="M12 19l7-9H5z" />
+				</svg>
+			</div>
+			<div class="dpad-arm dpad-left" data-key="ArrowLeft">
+				<svg viewBox="0 0 24 24">
+					<path d="M5 12l9-7v14z" />
+				</svg>
+			</div>
+			<div class="dpad-arm dpad-right" data-key="ArrowRight">
+				<svg viewBox="0 0 24 24">
+					<path d="M19 12l-9 7V5z" />
+				</svg>
+			</div>
+			<div class="dpad-center"></div>
+		</div>
+
+		<div class="center-btns">
+			<div class="small-btns">
+				<div class="small-btn" data-key="Escape">
+					<div class="small-btn-pill"></div>
+					<span class="small-btn-label">Select</span>
+				</div>
+				<div class="small-btn" data-key="Enter">
+					<div class="small-btn-pill"></div>
+					<span class="small-btn-label">Start</span>
 				</div>
 			</div>
 		</div>
-	</body>
+
+		<div class="ab-buttons">
+			<div class="action-btn" data-key="x">
+				<div class="action-btn-circle"></div>
+				<span class="action-btn-label">B</span>
+			</div>
+			<div class="action-btn" data-key="z">
+				<div class="action-btn-circle"></div>
+				<span class="action-btn-label">A</span>
+			</div>
+		</div>
+	</div>
+
+	<script>
+		(function () {
+			'use strict';
+
+			const canvas = document.getElementById('the_canvas_id');
+			const ctrl = document.getElementById('nes-controller');
+
+			window.showController = () => ctrl.classList.add('visible');
+			window.hideController = () => ctrl.classList.remove('visible');
+
+			const KEY_CODE = {
+				ArrowUp: 'ArrowUp', ArrowDown: 'ArrowDown',
+				ArrowLeft: 'ArrowLeft', ArrowRight: 'ArrowRight',
+				Enter: 'Enter', Escape: 'Escape',
+				z: 'KeyZ', x: 'KeyX',
+			};
+
+			function fire(type, key) {
+				const e = new KeyboardEvent(type, {
+					key, code: KEY_CODE[key] || ('Key' + key.toUpperCase()),
+					bubbles: true, cancelable: true,
+				});
+				canvas.dispatchEvent(e);
+				window.dispatchEvent(e);
+			}
+
+			function press(el) {
+				if (!el || el._held) return;
+				el._held = true;
+				el.classList.add('pressed');
+				fire('keydown', el.dataset.key);
+			}
+
+			function release(el) {
+				if (!el || !el._held) return;
+				el._held = false;
+				el.classList.remove('pressed');
+				fire('keyup', el.dataset.key);
+			}
+
+			function btnAt(x, y) {
+				const el = document.elementFromPoint(x, y);
+				return el && el.closest('[data-key]');
+			}
+
+			const touchMap = new Map();
+
+			ctrl.addEventListener('touchstart', e => {
+				e.preventDefault();
+				for (const t of e.changedTouches) {
+					const btn = btnAt(t.clientX, t.clientY);
+					touchMap.set(t.identifier, btn);
+					press(btn);
+				}
+			}, {passive: false});
+
+			ctrl.addEventListener('touchmove', e => {
+				e.preventDefault();
+				for (const t of e.changedTouches) {
+					const prev = touchMap.get(t.identifier);
+					const cur = btnAt(t.clientX, t.clientY);
+					if (prev !== cur) {
+						release(prev);
+						press(cur);
+						touchMap.set(t.identifier, cur);
+					}
+				}
+			}, {passive: false});
+
+			function endTouches(e) {
+				e.preventDefault();
+				for (const t of e.changedTouches) {
+					release(touchMap.get(t.identifier));
+					touchMap.delete(t.identifier);
+				}
+			}
+
+			ctrl.addEventListener('touchend', endTouches, {passive: false});
+			ctrl.addEventListener('touchcancel', endTouches, {passive: false});
+
+			ctrl.querySelectorAll('[data-key]').forEach(btn => {
+				btn.addEventListener('mousedown', e => {e.preventDefault(); press(btn);});
+				btn.addEventListener('mouseup', e => {e.preventDefault(); release(btn);});
+				btn.addEventListener('mouseleave', () => release(btn));
+			});
+		})();
+	</script>
+</body>
+
 </html>

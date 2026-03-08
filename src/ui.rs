@@ -1,5 +1,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 use bytesize::ByteSize;
+#[cfg(target_arch = "wasm32")]
+use eframe::wasm_bindgen;
 use egui::mutex::Mutex;
 use egui::{Color32, ColorImage, Context, IconData, ImageData, KeyboardShortcut};
 use egui_extras::{Column, TableBuilder};
@@ -67,6 +69,13 @@ macro_rules! make_rows {
             });
         )+
     };
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen::prelude::wasm_bindgen]
+extern "C" {
+    fn showController();
+    fn hideController();
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
@@ -1581,6 +1590,8 @@ impl Ui {
                     self.running = true;
                     self.paused = false;
                     self.emu_error_msg = None;
+                    #[cfg(target_arch = "wasm32")]
+                    showController();
                 }
                 Event::Paused => {
                     self.paused = true;
