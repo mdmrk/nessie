@@ -533,8 +533,10 @@ impl Ui {
             Action::PauseResume => {
                 if self.paused {
                     self.runner.resume();
+                    self.paused = false;
                 } else {
                     self.runner.pause();
+                    self.paused = true;
                 }
             }
             Action::Step => {
@@ -675,6 +677,7 @@ impl Ui {
                         .clicked()
                     {
                         self.runner.resume();
+                        self.paused = false;
                     }
                 });
                 ui.add_enabled_ui(self.running && !self.paused, |ui| {
@@ -685,6 +688,7 @@ impl Ui {
                         .clicked()
                     {
                         self.runner.pause();
+                        self.paused = true;
                     }
                 });
                 ui.add_enabled_ui(self.running, |ui| {
