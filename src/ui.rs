@@ -2,7 +2,6 @@
 use bytesize::ByteSize;
 use egui::mutex::Mutex;
 use egui::{Color32, ColorImage, Context, IconData, ImageData, KeyboardShortcut};
-#[cfg(not(target_arch = "wasm32"))]
 use egui_extras::{Column, TableBuilder};
 #[cfg(not(target_arch = "wasm32"))]
 use egui_plot::{Line, Plot, PlotPoints};
@@ -281,6 +280,91 @@ impl Input {
     }
 }
 
+fn draw_settings_panel_content(
+    ui: &mut egui::Ui,
+    selected_tab: &Arc<AtomicUsize>,
+    settings: &Arc<Mutex<Settings>>,
+) {
+    ui.with_layout(
+        egui::Layout::left_to_right(egui::Align::TOP).with_cross_justify(true),
+        |ui| {
+            ui.vertical(|ui| {
+                for (ind, label) in ["Keybindings"].iter().enumerate() {
+                    if ui
+                        .add_sized(
+                            [100., 30.],
+                            egui::Button::new(*label)
+                                .selected(selected_tab.load(Ordering::Relaxed) == ind),
+                        )
+                        .clicked()
+                    {
+                        selected_tab.store(ind, Ordering::Relaxed);
+                    }
+                }
+            });
+            ui.separator();
+            match selected_tab.load(Ordering::Relaxed) {
+                0 => draw_settings_keybindings(ui, settings),
+                _ => unreachable!(),
+            };
+        },
+    );
+}
+
+fn draw_keybinding_action_cell(ui: &mut egui::Ui, k: &Keybinding) {
+    ui.with_layout(
+        egui::Layout::left_to_right(egui::Align::Center).with_cross_justify(true),
+        |ui| {
+            ui.label(k.name);
+        },
+    );
+}
+
+fn draw_keybinding_key_cell(
+    ui: &mut egui::Ui,
+    action: &Action,
+    k: &mut Keybinding,
+    awaiting: &Mutex<Option<Action>>,
+) {
+    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+        let is_awaiting = awaiting.lock().as_ref().is_some_and(|a| a == action);
+        let key_label = if is_awaiting {
+            "...".to_string()
+        } else {
+            ui.ctx().format_shortcut(&k.shortcut)
+        };
+        if ui
+            .add_sized([80., 20.], egui::Button::new(key_label))
+            .clicked()
+        {
+            *awaiting.lock() = Some(*action);
+        }
+        if is_awaiting {
+            ui.input(|i| {
+                for event in &i.events {
+                    if let egui::Event::Key {
+                        key, pressed: true, ..
+                    } = event
+                    {
+                        k.shortcut = KeyboardShortcut::new(i.modifiers, *key);
+                        *awaiting.lock() = None;
+                    }
+                }
+            });
+        }
+    });
+}
+
+fn draw_keybinding_reset_cell(ui: &mut egui::Ui, k: &mut Keybinding) {
+    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+        ui.add_enabled_ui(k.shortcut != k.default_key(), |ui| {
+            if ui.button("↻").clicked() {
+                k.reset();
+            }
+        });
+    });
+}
+
 #[inline]
 fn draw_settings_keybindings(ui: &mut egui::Ui, settings: &Arc<Mutex<Settings>>) {
     let mut settings = settings.lock();
@@ -316,61 +400,13 @@ fn draw_settings_keybindings(ui: &mut egui::Ui, settings: &Arc<Mutex<Settings>>)
                 for (action, k) in keybindings.iter_mut() {
                     body.row(24.0, |mut row| {
                         row.col(|ui| {
-                            ui.with_layout(
-                                egui::Layout::left_to_right(egui::Align::Center)
-                                    .with_cross_justify(true),
-                                |ui| {
-                                    ui.label(k.name);
-                                },
-                            );
+                            draw_keybinding_action_cell(ui, k);
                         });
                         row.col(|ui| {
-                            ui.with_layout(
-                                egui::Layout::left_to_right(egui::Align::Center),
-                                |ui| {
-                                    let is_awaiting =
-                                        awaiting.lock().as_ref().is_some_and(|a| a == action);
-                                    let key_label = if is_awaiting {
-                                        "...".to_string()
-                                    } else {
-                                        ui.ctx().format_shortcut(&k.shortcut)
-                                    };
-                                    if ui
-                                        .add_sized([80., 20.], egui::Button::new(key_label))
-                                        .clicked()
-                                    {
-                                        *awaiting.lock() = Some(*action);
-                                    }
-                                    if is_awaiting {
-                                        ui.input(|i| {
-                                            for event in &i.events {
-                                                if let egui::Event::Key {
-                                                    key, pressed: true, ..
-                                                } = event
-                                                {
-                                                    k.shortcut =
-                                                        KeyboardShortcut::new(i.modifiers, *key);
-                                                    *awaiting.lock() = None;
-                                                }
-                                            }
-                                        });
-                                    }
-                                },
-                            );
+                            draw_keybinding_key_cell(ui, action, k, awaiting);
                         });
                         row.col(|ui| {
-                            ui.with_layout(
-                                egui::Layout::left_to_right(egui::Align::Center),
-                                |ui| {
-                                    ui.horizontal(|ui| {
-                                        ui.add_enabled_ui(k.shortcut != k.default_key(), |ui| {
-                                            if ui.button("↻").clicked() {
-                                                k.reset();
-                                            }
-                                        });
-                                    });
-                                },
-                            );
+                            draw_keybinding_reset_cell(ui, k);
                         });
                     });
                 }
@@ -728,6 +764,7 @@ impl Ui {
         });
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn draw_settings_window(&mut self, ui: &mut egui::Ui) {
         let show_settings = self.show_settings.clone();
         let selected_tab = self.settings_selected_tab.clone();
@@ -740,37 +777,32 @@ impl Ui {
                 .with_inner_size([800.0, 600.0]),
             move |ctx, _| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.with_layout(
-                        egui::Layout::left_to_right(egui::Align::TOP).with_cross_justify(true),
-                        |ui| {
-                            ui.vertical(|ui| {
-                                for (ind, label) in ["Keybindings"].iter().enumerate() {
-                                    if ui
-                                        .add_sized(
-                                            [100., 30.],
-                                            egui::Button::new(*label).selected(
-                                                selected_tab.load(Ordering::Relaxed) == ind,
-                                            ),
-                                        )
-                                        .clicked()
-                                    {
-                                        selected_tab.store(ind, Ordering::Relaxed);
-                                    }
-                                }
-                            });
-                            ui.separator();
-                            match selected_tab.load(Ordering::Relaxed) {
-                                0 => draw_settings_keybindings(ui, &settings),
-                                _ => unreachable!(),
-                            };
-                        },
-                    );
+                    draw_settings_panel_content(ui, &selected_tab, &settings);
                     if ui.input(|i| i.viewport().close_requested()) {
                         show_settings.store(false, Ordering::Relaxed);
                     }
                 });
             },
         );
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn draw_settings_window(&mut self, ui: &mut egui::Ui) {
+        let show_settings = self.show_settings.clone();
+        let selected_tab = self.settings_selected_tab.clone();
+        let settings = self.settings.clone();
+
+        let modal = egui::Modal::new(egui::Id::new("settings_modal")).show(ui.ctx(), |ui| {
+            ui.set_min_width(800.0);
+            ui.set_min_height(600.0);
+            ui.label(egui::RichText::new("Settings").strong().size(18.0));
+            ui.separator();
+            draw_settings_panel_content(ui, &selected_tab, &settings);
+        });
+
+        if modal.should_close() {
+            show_settings.store(false, Ordering::Relaxed);
+        }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
