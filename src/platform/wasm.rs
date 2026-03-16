@@ -25,6 +25,7 @@ pub struct PlatformRunner {
     pub last_frame: Vec<Color32>,
     pub rom_loader_rx: Option<mpsc::Receiver<Vec<u8>>>,
     pub state_file_loader_rx: Option<mpsc::Receiver<Vec<u8>>>,
+    event_rx: Option<mpsc::Receiver<Event>>,
 }
 
 impl PlatformRunner {
@@ -38,6 +39,7 @@ impl PlatformRunner {
             last_frame: vec![Color32::BLACK; FRAME_WIDTH * FRAME_HEIGHT],
             rom_loader_rx: None,
             state_file_loader_rx: None,
+            event_rx: None,
         }
     }
 
@@ -57,7 +59,7 @@ impl PlatformRunner {
         };
         self.audio = audio_handle;
 
-        let (tx, _rx) = mpsc::channel();
+        let (tx, rx) = mpsc::channel();
         let (debug_tx, _debug_rx) = triple_buffer::triple_buffer(&DebugSnapshot::default());
         let (frame_tx, _frame_rx) =
             triple_buffer::triple_buffer(&vec![Color32::BLACK; FRAME_WIDTH * FRAME_HEIGHT]);
@@ -78,6 +80,7 @@ impl PlatformRunner {
         }
 
         self.emu = Some(emu);
+        self.event_rx = Some(rx);
         self.running = true;
         self.paused = false;
         self.pending_events.push(Event::Started);
@@ -85,6 +88,7 @@ impl PlatformRunner {
 
     pub fn stop(&mut self) {
         self.emu = None;
+        self.event_rx = None;
         self.running = false;
         self.paused = false;
     }
@@ -179,6 +183,27 @@ impl PlatformRunner {
                 self.last_frame = frame;
             }
             ctx.request_repaint();
+        }
+
+        if let Some(rx) = &self.event_rx {
+            while let Ok(event) = rx.try_recv() {
+                match event {
+                    Event::Paused => {
+                        self.paused = true;
+                        self.pending_events.push(Event::Paused);
+                    }
+                    Event::Resumed => {
+                        self.paused = false;
+                        self.pending_events.push(Event::Resumed);
+                    }
+                    Event::Crashed(msg) => {
+                        self.running = false;
+                        self.paused = false;
+                        self.pending_events.push(Event::Crashed(msg));
+                    }
+                    _ => {}
+                }
+            }
         }
 
         std::mem::take(&mut self.pending_events)

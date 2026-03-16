@@ -172,7 +172,7 @@ impl PlatformRunner {
 
     pub fn get_frame_data(&mut self) -> Option<&[Color32]> {
         if let Some(rx) = &mut self.frame_rx {
-            Some(rx.read())
+            if rx.update() { Some(rx.output_buffer()) } else { None }
         } else {
             None
         }
@@ -200,6 +200,43 @@ impl PlatformRunner {
 impl Default for PlatformRunner {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+fn process_command(command: Command, emu: &mut Emu) {
+    match command {
+        Command::Stop => {
+            emu.stop();
+        }
+        Command::Pause => {
+            emu.pause();
+        }
+        Command::Resume => {
+            emu.resume();
+        }
+        Command::SaveState => {
+            save_state(emu).unwrap_or_else(|e| error!("Failed to save state: {e}"));
+        }
+        Command::LoadState(file_data_source) => match file_data_source {
+            FileDataSource::Path(path) => {
+                load_state(emu, &path)
+                    .unwrap_or_else(|e| error!("Failed to load state: {e}"));
+            }
+            FileDataSource::Bytes(_) => error!("Cannot load state from bytes on native"),
+        },
+        Command::Step => {
+            emu.want_step = true;
+        }
+        Command::MemoryAddress(addr) => {
+            emu.mem_chunk_addr = addr;
+        }
+        Command::DumpMemory => {
+            emu.dump_memory();
+        }
+        Command::ControllerInputs(input) => {
+            emu.bus.controller1.realtime = (input & 0xFF) as u8;
+            emu.bus.controller2.realtime = (input >> 8 & 0xFF) as u8;
+        }
     }
 }
 
@@ -232,62 +269,35 @@ pub fn emu_thread(
     }
 
     let frame_duration = Duration::from_secs_f64(1.0 / 60.0);
-    let mut frame_start_time = Instant::now();
+    let mut next_frame_time = Instant::now() + frame_duration;
 
     loop {
-        while let Ok(command) = command_rx.try_recv() {
-            match command {
-                Command::Stop => {
-                    emu.stop();
-                }
-                Command::Pause => {
-                    emu.pause();
-                }
-                Command::Resume => {
-                    emu.resume();
-                }
-                Command::SaveState => {
-                    save_state(&emu).unwrap_or_else(|e| error!("Failed to save state: {e}"));
-                }
-                Command::LoadState(file_data_source) => match file_data_source {
-                    FileDataSource::Path(path) => {
-                        load_state(&mut emu, &path)
-                            .unwrap_or_else(|e| error!("Failed to load state: {e}"));
-                    }
-                    FileDataSource::Bytes(_) => error!("Cannot load from bytes on WASM"),
-                },
-                Command::Step => {
-                    emu.want_step = true;
-                }
-                Command::MemoryAddress(addr) => {
-                    emu.mem_chunk_addr = addr;
-                }
-                Command::DumpMemory => {
-                    emu.dump_memory();
-                }
-                Command::ControllerInputs(input) => {
-                    emu.bus.controller1.realtime = (input & 0xFF) as u8;
-                    emu.bus.controller2.realtime = (input >> 8 & 0xFF) as u8;
-                }
+        if emu.paused && !emu.want_step {
+            if let Ok(command) = command_rx.recv_timeout(Duration::from_millis(8)) {
+                process_command(command, &mut emu);
             }
         }
 
-        let should_run = !emu.paused || emu.want_step;
-        if should_run {
+        while let Ok(command) = command_rx.try_recv() {
+            process_command(command, &mut emu);
+        }
+
+        if !emu.running {
+            break;
+        }
+
+        if !emu.paused || emu.want_step {
             if let Some(frame) = emu.step_frame() {
                 emu.frame_tx.write(frame);
 
-                let elapsed = frame_start_time.elapsed();
-                if elapsed < frame_duration {
-                    thread::sleep(frame_duration - elapsed);
+                let now = Instant::now();
+                if next_frame_time > now {
+                    thread::sleep(next_frame_time - now);
+                    next_frame_time += frame_duration;
+                } else {
+                    next_frame_time = now + frame_duration;
                 }
-                frame_start_time = Instant::now();
             }
-        } else {
-            thread::yield_now();
-        }
-        if !emu.running {
-            break;
         }
     }
     info!("Stopping emulation");
