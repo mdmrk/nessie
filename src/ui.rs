@@ -220,72 +220,27 @@ impl Screen {
         }
     }
 
-    pub fn update_texture(&mut self, ctx: &egui::Context, ui: &mut egui::Ui, pixels: &[Color32]) {
+    pub fn set_pixels(&mut self, ctx: &egui::Context, pixels: &[Color32]) {
         let image = egui::ColorImage::new([self.width, self.height], pixels.to_owned());
-
         if let Some(texture) = &mut self.texture_handle {
             texture.set(image, egui::TextureOptions::NEAREST);
         } else {
             self.texture_handle =
                 Some(ctx.load_texture("screen", image, egui::TextureOptions::NEAREST));
         }
-
-        let texture = self.texture_handle.as_ref().unwrap();
-        let available = ui.available_size();
-        let aspect_ratio = self.width as f32 / self.height as f32;
-
-        let fitted_size = if available.x / available.y > aspect_ratio {
-            egui::Vec2::new(available.y * aspect_ratio, available.y)
-        } else {
-            egui::Vec2::new(available.x, available.x / aspect_ratio)
-        };
-
-        ui.image((texture.id(), fitted_size));
     }
-}
 
-#[derive(Default)]
-pub struct Input {
-    a: bool,
-    b: bool,
-    select: bool,
-    start: bool,
-    up: bool,
-    down: bool,
-    left: bool,
-    right: bool,
-}
-
-impl Input {
-    pub fn as_byte(&self) -> u8 {
-        let mut byte: u8 = 0;
-
-        if self.a {
-            byte |= 1 << 0;
+    pub fn render(&self, ui: &mut egui::Ui) {
+        if let Some(texture) = &self.texture_handle {
+            let available = ui.available_size();
+            let aspect_ratio = self.width as f32 / self.height as f32;
+            let fitted_size = if available.x / available.y > aspect_ratio {
+                egui::Vec2::new(available.y * aspect_ratio, available.y)
+            } else {
+                egui::Vec2::new(available.x, available.x / aspect_ratio)
+            };
+            ui.image((texture.id(), fitted_size));
         }
-        if self.b {
-            byte |= 1 << 1;
-        }
-        if self.select {
-            byte |= 1 << 2;
-        }
-        if self.start {
-            byte |= 1 << 3;
-        }
-        if self.up {
-            byte |= 1 << 4;
-        }
-        if self.down {
-            byte |= 1 << 5;
-        }
-        if self.left {
-            byte |= 1 << 6;
-        }
-        if self.right {
-            byte |= 1 << 7;
-        }
-
-        byte
     }
 }
 
@@ -1478,9 +1433,10 @@ impl Ui {
 
     fn draw_screen(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         if let Some(pixels) = self.runner.get_frame_data() {
-            self.screen.update_texture(ctx, ui, pixels);
+            self.screen.set_pixels(ctx, pixels);
             self.frame_stats.tick();
         }
+        self.screen.render(ui);
     }
 
     fn draw_start_screen(&self, _ctx: &egui::Context, ui: &mut egui::Ui) {
