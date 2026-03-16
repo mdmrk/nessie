@@ -61,7 +61,7 @@ jobs:
             artifact_name: nessie-linux-x64
           - os: windows-latest
             toolchain: stable
-            target: x86_64-pc-windows-msvc
+            target: x86_64-pc-windows-gnu
             bin_ext: ".exe"
             artifact_name: nessie-windows-x64
           - os: macos-latest
