@@ -172,7 +172,11 @@ impl PlatformRunner {
 
     pub fn get_frame_data(&mut self) -> Option<&[Color32]> {
         if let Some(rx) = &mut self.frame_rx {
-            if rx.update() { Some(rx.output_buffer()) } else { None }
+            if rx.update() {
+                Some(rx.output_buffer())
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -219,8 +223,7 @@ fn process_command(command: Command, emu: &mut Emu) {
         }
         Command::LoadState(file_data_source) => match file_data_source {
             FileDataSource::Path(path) => {
-                load_state(emu, &path)
-                    .unwrap_or_else(|e| error!("Failed to load state: {e}"));
+                load_state(emu, &path).unwrap_or_else(|e| error!("Failed to load state: {e}"));
             }
             FileDataSource::Bytes(_) => error!("Cannot load state from bytes on native"),
         },

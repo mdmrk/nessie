@@ -559,11 +559,7 @@ impl Cpu {
         self.cycles += total_cycles as u32;
 
         bus.ppu
-            .step(&mut bus.cart.as_mut().unwrap().mapper, total_cycles);
-        for _ in 0..total_cycles {
-            bus.apu.step();
-        }
-        self.irq_pending = bus.apu.irq_occurred();
+            .step(&mut bus.cart.as_mut().unwrap().mapper, total_cycles as u32);
         let nmi_current_state = bus.ppu.check_nmi();
         if nmi_current_state && !self.nmi_previous_state {
             self.nmi_pending = true;
@@ -643,12 +639,9 @@ impl Cpu {
         let hi = bus.read_byte(0xFFFB);
         self.pc = u16::from_le_bytes([lo, hi]);
 
-        let cycles: u8 = 7;
-        self.cycles += cycles as u32;
+        let cycles: u32 = 7;
+        self.cycles += cycles;
         bus.ppu.step(&mut bus.cart.as_mut().unwrap().mapper, cycles);
-        for _ in 0..cycles {
-            bus.apu.step();
-        }
     }
 
     fn handle_irq(&mut self, bus: &mut Bus) {
@@ -666,12 +659,9 @@ impl Cpu {
         let hi = bus.read_byte(0xFFFF);
         self.pc = u16::from_le_bytes([lo, hi]);
 
-        let cycles: u8 = 7;
-        self.cycles += cycles as u32;
+        let cycles: u32 = 7;
+        self.cycles += cycles;
         bus.ppu.step(&mut bus.cart.as_mut().unwrap().mapper, cycles);
-        for _ in 0..cycles {
-            bus.apu.step();
-        }
     }
 
     fn update_nz(&mut self, value: u8) {

@@ -47,8 +47,6 @@ pub struct EmuState {
     pub mapper: MapperEnum,
     pub cycles_per_sample: f32,
     pub cycles_accumulator: f32,
-    pub sample_sum: f32,
-    pub sample_count: f32,
 }
 
 pub struct Emu {
@@ -64,8 +62,6 @@ pub struct Emu {
     pub audio_producer: HeapProd<f32>,
     pub cycles_per_sample: f32,
     pub cycles_accumulator: f32,
-    pub sample_sum: f32,
-    pub sample_count: f32,
 }
 
 impl Emu {
@@ -77,9 +73,11 @@ impl Emu {
         audio_producer: HeapProd<f32>,
         sample_rate: f32,
     ) -> Self {
+        let mut bus = Bus::new();
+        bus.apu.set_sample_rate(sample_rate);
         Self {
             cpu: Cpu::new(enable_logging),
-            bus: Bus::new(),
+            bus,
             running: true,
             paused: false,
             want_step: false,
@@ -90,8 +88,6 @@ impl Emu {
             audio_producer,
             cycles_per_sample: 1789773.0 / sample_rate,
             cycles_accumulator: 0.0,
-            sample_sum: 0.0,
-            sample_count: 0.0,
         }
     }
 
@@ -134,8 +130,6 @@ impl Emu {
                 .clone(),
             cycles_per_sample: self.cycles_per_sample,
             cycles_accumulator: self.cycles_accumulator,
-            sample_sum: self.sample_sum,
-            sample_count: self.sample_count,
         })
     }
 
@@ -154,8 +148,6 @@ impl Emu {
 
         self.cycles_per_sample = state.cycles_per_sample;
         self.cycles_accumulator = state.cycles_accumulator;
-        self.sample_sum = state.sample_sum;
-        self.sample_count = state.sample_count;
     }
 
     pub fn stop(&mut self) {
@@ -184,27 +176,29 @@ impl Emu {
                     break;
                 }
 
+                if self.bus.dma_stall > 0 {
+                    let stall = self.bus.dma_stall;
+                    self.bus.dma_stall = 0;
+                    if let Some(cart) = self.bus.cart.as_mut() {
+                        self.bus.ppu.step(&mut cart.mapper, stall);
+                    }
+                    self.cpu.cycles += stall;
+                }
+
                 let cycles_delta = self.cpu.cycles - cycles_before;
 
                 for _ in 0..cycles_delta {
                     self.bus.tick_apu();
-                    self.sample_sum += self.bus.apu.output();
-                    self.sample_count += 1.0;
                     self.cycles_accumulator += 1.0;
 
                     if self.cycles_accumulator >= self.cycles_per_sample {
-                        let sample = if self.sample_count > 0.0 {
-                            self.sample_sum / self.sample_count
-                        } else {
-                            0.0
-                        };
+                        let sample = self.bus.apu.output();
                         let _ = self.audio_producer.try_push(sample);
-
                         self.cycles_accumulator -= self.cycles_per_sample;
-                        self.sample_sum = 0.0;
-                        self.sample_count = 0.0;
                     }
                 }
+
+                self.cpu.irq_pending = self.bus.apu.irq_occurred();
 
                 if self.bus.ppu.frame_ready {
                     self.bus.ppu.frame_ready = false;

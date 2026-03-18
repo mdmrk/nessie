@@ -22,6 +22,7 @@ pub struct Bus {
     pub controller1: Controller,
     pub controller2: Controller,
     pub open_bus: u8,
+    pub dma_stall: u32,
 }
 
 impl Default for Bus {
@@ -34,6 +35,7 @@ impl Default for Bus {
             controller1: Default::default(),
             controller2: Default::default(),
             open_bus: 0,
+            dma_stall: 0,
         }
     }
 }
@@ -96,7 +98,7 @@ impl Bus {
 
     fn read_controller1(&mut self) -> u8 {
         let data = if self.controller1.strobe {
-            self.controller1.latched & 1
+            self.controller1.realtime & 1
         } else if self.controller1.index < 8 {
             let val = (self.controller1.latched >> self.controller1.index) & 1;
             self.controller1.index += 1;
@@ -109,7 +111,7 @@ impl Bus {
 
     fn read_controller2(&mut self) -> u8 {
         let data = if self.controller2.strobe {
-            self.controller2.latched & 1
+            self.controller2.realtime & 1
         } else if self.controller2.index < 8 {
             let val = (self.controller2.latched >> self.controller2.index) & 1;
             self.controller2.index += 1;
@@ -200,11 +202,15 @@ impl Bus {
         if new_strobe {
             self.controller1.latched = self.controller1.realtime;
             self.controller1.index = 0;
+            self.controller2.latched = self.controller2.realtime;
+            self.controller2.index = 0;
         } else if self.controller1.strobe {
             self.controller1.index = 0;
+            self.controller2.index = 0;
         }
 
         self.controller1.strobe = new_strobe;
+        self.controller2.strobe = new_strobe;
     }
 
     fn write_dma(&mut self, value: u8) {
@@ -214,6 +220,7 @@ impl Bus {
             data[i as usize] = self.read_byte(page + i);
         }
         self.ppu.write_oam_dma(&data);
+        self.dma_stall = 513;
     }
 
     pub fn write_byte(&mut self, addr: u16, value: u8) {

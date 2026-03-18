@@ -622,6 +622,11 @@ impl Apu {
                     self.step_half_frame();
                 }
                 22371 => self.step_quarter_frame(),
+                29828 => {
+                    if !self.frame_irq_inhibit {
+                        self.frame_irq_pending = true;
+                    }
+                }
                 29829 => {
                     self.step_quarter_frame();
                     self.step_half_frame();
@@ -728,5 +733,10 @@ impl Apu {
 
     pub fn fill_dmc_buffer(&mut self, val: u8) {
         self.dmc.buffer = Some(val);
+    }
+
+    pub fn set_sample_rate(&mut self, sample_rate: f32) {
+        self.hpf1 = HighPassFilter::new(90.0, sample_rate);
+        self.hpf2 = HighPassFilter::new(440.0, sample_rate);
     }
 }

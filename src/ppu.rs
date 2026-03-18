@@ -264,7 +264,7 @@ impl Ppu {
         self.sprite_pattern_hi = [0; 8];
     }
 
-    pub fn step(&mut self, mapper: &mut MapperEnum, cpu_cycles: u8) {
+    pub fn step(&mut self, mapper: &mut MapperEnum, cpu_cycles: u32) {
         for _ in 0..(cpu_cycles * 3) {
             self.tick(mapper);
         }
