@@ -165,66 +165,72 @@ impl Emu {
         self.send_event(Event::Resumed);
     }
 
-    pub fn step_frame(&mut self) -> Option<Vec<Color32>> {
-        let mut frame_out = None;
-        if !self.paused || self.want_step {
-            loop {
-                let cycles_before = self.cpu.cycles;
-                if let Err(e) = self.cpu.step(&mut self.bus) {
-                    warn!("{e}. Emulator will be paused");
-                    self.pause();
-                    break;
+    pub fn step_frame(&mut self) -> bool {
+        if self.paused && !self.want_step {
+            return false;
+        }
+        let mut frame_ready = false;
+        loop {
+            let cycles_before = self.cpu.cycles;
+            if let Err(e) = self.cpu.step(&mut self.bus) {
+                warn!("{e}. Emulator will be paused");
+                self.pause();
+                break;
+            }
+
+            if self.bus.dma_stall > 0 {
+                let stall = self.bus.dma_stall;
+                self.bus.dma_stall = 0;
+                if let Some(cart) = self.bus.cart.as_mut() {
+                    self.bus.ppu.step(&mut cart.mapper, stall);
                 }
+                self.cpu.cycles += stall;
+            }
 
-                if self.bus.dma_stall > 0 {
-                    let stall = self.bus.dma_stall;
-                    self.bus.dma_stall = 0;
-                    if let Some(cart) = self.bus.cart.as_mut() {
-                        self.bus.ppu.step(&mut cart.mapper, stall);
-                    }
-                    self.cpu.cycles += stall;
-                }
+            let cycles_delta = self.cpu.cycles - cycles_before;
 
-                let cycles_delta = self.cpu.cycles - cycles_before;
+            for _ in 0..cycles_delta {
+                self.bus.tick_apu();
+                self.cycles_accumulator += 1.0;
 
-                for _ in 0..cycles_delta {
-                    self.bus.tick_apu();
-                    self.cycles_accumulator += 1.0;
-
-                    if self.cycles_accumulator >= self.cycles_per_sample {
-                        let sample = self.bus.apu.output();
-                        let _ = self.audio_producer.try_push(sample);
-                        self.cycles_accumulator -= self.cycles_per_sample;
-                    }
-                }
-
-                self.cpu.irq_pending = self.bus.apu.irq_occurred();
-
-                if self.bus.ppu.frame_ready {
-                    self.bus.ppu.frame_ready = false;
-                    frame_out = Some(self.bus.ppu.screen.clone());
-
-                    let memory_slice = self
-                        .bus
-                        .read_only_range(self.mem_chunk_addr as u16, MEM_BLOCK_SIZE as u16);
-                    let stack_slice = self.bus.read_only_range(0x100, 0x100);
-
-                    let snapshot = DebugSnapshot::new(
-                        &self.cpu,
-                        &self.bus.ppu,
-                        &self.bus.apu,
-                        self.bus.cart.as_ref(),
-                        &memory_slice,
-                        &stack_slice,
-                    );
-                    self.debug_tx.write(snapshot);
-
-                    break;
+                if self.cycles_accumulator >= self.cycles_per_sample {
+                    let sample = self.bus.apu.output();
+                    let _ = self.audio_producer.try_push(sample);
+                    self.cycles_accumulator -= self.cycles_per_sample;
                 }
             }
-            self.want_step = false;
+
+            self.cpu.irq_pending = self.bus.apu.irq_occurred();
+
+            if self.bus.ppu.frame_ready {
+                self.bus.ppu.frame_ready = false;
+
+                self.frame_tx
+                    .input_buffer_mut()
+                    .copy_from_slice(&self.bus.ppu.screen);
+                self.frame_tx.publish();
+
+                let memory_slice = self
+                    .bus
+                    .read_only_range(self.mem_chunk_addr as u16, MEM_BLOCK_SIZE as u16);
+                let stack_slice = self.bus.read_only_range(0x100, 0x100);
+
+                *self.debug_tx.input_buffer_mut() = DebugSnapshot::new(
+                    &self.cpu,
+                    &self.bus.ppu,
+                    &self.bus.apu,
+                    self.bus.cart.as_ref(),
+                    &memory_slice,
+                    &stack_slice,
+                );
+                self.debug_tx.publish();
+
+                frame_ready = true;
+                break;
+            }
         }
-        frame_out
+        self.want_step = false;
+        frame_ready
     }
 
     pub fn dump_memory(&mut self) {

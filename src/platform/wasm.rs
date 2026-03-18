@@ -177,10 +177,8 @@ impl PlatformRunner {
         }
 
         if let Some(emu) = &mut self.emu {
-            if (!emu.paused || emu.want_step)
-                && let Some(frame) = emu.step_frame()
-            {
-                self.last_frame = frame;
+            if emu.step_frame() {
+                self.last_frame.copy_from_slice(&emu.bus.ppu.screen);
             }
             ctx.request_repaint();
         }

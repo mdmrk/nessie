@@ -289,17 +289,13 @@ pub fn emu_thread(
             break;
         }
 
-        if !emu.paused || emu.want_step {
-            if let Some(frame) = emu.step_frame() {
-                emu.frame_tx.write(frame);
-
-                let now = Instant::now();
-                if next_frame_time > now {
-                    thread::sleep(next_frame_time - now);
-                    next_frame_time += frame_duration;
-                } else {
-                    next_frame_time = now + frame_duration;
-                }
+        if emu.step_frame() {
+            let now = Instant::now();
+            if next_frame_time > now {
+                thread::sleep(next_frame_time - now);
+                next_frame_time += frame_duration;
+            } else {
+                next_frame_time = now + frame_duration;
             }
         }
     }
