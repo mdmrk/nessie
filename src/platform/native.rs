@@ -275,10 +275,11 @@ pub fn emu_thread(
     let mut next_frame_time = Instant::now() + frame_duration;
 
     loop {
-        if emu.paused && !emu.want_step {
-            if let Ok(command) = command_rx.recv_timeout(Duration::from_millis(8)) {
-                process_command(command, &mut emu);
-            }
+        if emu.paused
+            && !emu.want_step
+            && let Ok(command) = command_rx.recv_timeout(Duration::from_millis(8))
+        {
+            process_command(command, &mut emu);
         }
 
         while let Ok(command) = command_rx.try_recv() {
