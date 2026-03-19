@@ -27,7 +27,7 @@ fn main() -> eframe::Result {
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1280.0, 720.0])
+            .with_inner_size([1600.0, 900.0])
             .with_title(format!("Nessie {VERSION}"))
             .with_icon(nessie::ui::Ui::app_icon()),
         ..Default::default()

@@ -1295,25 +1295,96 @@ impl Ui {
     #[cfg(not(target_arch = "wasm32"))]
     fn draw_sound_waves(&mut self, ui: &mut egui::Ui) {
         let apu = &self.snapshot.apu;
+
         ui.label(egui::RichText::new("Pulse 1 & 2").strong());
-        Plot::new("pulses").view_aspect(2.0).show(ui, |plot_ui| {
-            let hz1 = if apu.pulse1_period > 0 {
-                1789773.0 / (16.0 * (apu.pulse1_period as f32 + 1.0))
+        Plot::new("pulses")
+            .view_aspect(2.0)
+            .allow_zoom(false)
+            .allow_drag(false)
+            .allow_scroll(false)
+            .allow_axis_zoom_drag(false)
+            .show(ui, |plot_ui| {
+                let hz1 = if apu.pulse1_period > 0 {
+                    1789773.0 / (16.0 * (apu.pulse1_period as f32 + 1.0))
+                } else {
+                    0.0
+                };
+                let hz2 = if apu.pulse2_period > 0 {
+                    1789773.0 / (16.0 * (apu.pulse2_period as f32 + 1.0))
+                } else {
+                    0.0
+                };
+                let duty1 = [0.125, 0.25, 0.5, 0.75][apu.pulse1_duty.min(3) as usize];
+                let duty2 = [0.125, 0.25, 0.5, 0.75][apu.pulse2_duty.min(3) as usize];
+                let points1 = generate_pulse_wave(hz1 as f64, 1.0, duty1, 0.016);
+                let points2 = generate_pulse_wave(hz2 as f64, 0.6, duty2, 0.016);
+                let line1 = Line::new("pulse1", PlotPoints::new(points1)).width(2.0);
+                let line2 = Line::new("pulse2", PlotPoints::new(points2)).width(2.0);
+                plot_ui.line(line1);
+                plot_ui.line(line2);
+            });
+
+        ui.add_space(4.0);
+        ui.label(egui::RichText::new("Triangle").strong());
+        Plot::new("triangle")
+            .view_aspect(2.0)
+            .allow_zoom(false)
+            .allow_drag(false)
+            .allow_scroll(false)
+            .allow_axis_zoom_drag(false)
+            .show(ui, |plot_ui| {
+                // Triangle runs at CPU clock; 32 steps per period
+                let hz = if apu.tri_period >= 2 {
+                    1789773.0 / (32.0 * (apu.tri_period as f64 + 1.0))
+                } else {
+                    0.0
+                };
+                let points = generate_triangle_wave(hz, 1.0, 0.016);
+                let line = Line::new("triangle", PlotPoints::new(points)).width(2.0);
+                plot_ui.line(line);
+            });
+
+        ui.add_space(4.0);
+        ui.label(egui::RichText::new("Noise").strong());
+        Plot::new("noise")
+            .view_aspect(2.0)
+            .allow_zoom(false)
+            .allow_drag(false)
+            .allow_scroll(false)
+            .allow_axis_zoom_drag(false)
+            .show(ui, |plot_ui| {
+                // Noise timer runs at CPU/2 clock
+                let hz = if apu.noise_period > 0 {
+                    894886.5 / apu.noise_period as f64
+                } else {
+                    0.0
+                };
+                let points = generate_noise_wave(hz, 1.0, 0.016, apu.noise_mode);
+                let line = Line::new("noise", PlotPoints::new(points)).width(2.0);
+                plot_ui.line(line);
+            });
+
+        ui.add_space(4.0);
+        ui.label(egui::RichText::new("DMC").strong());
+        if apu.dmc_enabled && apu.dmc_sample_length > 0 {
+            let remaining = apu.dmc_len as f32;
+            let total = apu.dmc_sample_length as f32;
+            let progress = 1.0 - (remaining / total).min(1.0);
+            ui.add(egui::ProgressBar::new(progress).text(format!(
+                "{}/{} bytes",
+                total as u16 - apu.dmc_len,
+                total as u16
+            )));
+            // DMC rate
+            let hz = if apu.dmc_period > 0 {
+                894886.5 / apu.dmc_period as f64
             } else {
                 0.0
             };
-            let hz2 = if apu.pulse2_period > 0 {
-                1789773.0 / (16.0 * (apu.pulse2_period as f32 + 1.0))
-            } else {
-                0.0
-            };
-            let points1 = generate_pulse_wave(hz1 as f64, 1.0, 0.5, 0.016);
-            let points2 = generate_pulse_wave(hz2 as f64, 1.0, 0.5, 0.016);
-            let line1 = Line::new("pulse1", PlotPoints::new(points1)).width(2.0);
-            let line2 = Line::new("pulse2", PlotPoints::new(points2)).width(2.0);
-            plot_ui.line(line1);
-            plot_ui.line(line2);
-        });
+            ui.label(format!("Rate: {:.0} Hz", hz));
+        } else {
+            ui.label("Inactive");
+        }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1618,6 +1689,63 @@ fn get_unique_path() -> PathBuf {
     }
 
     path
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn generate_triangle_wave(freq: f64, amp: f64, duration: f64) -> Vec<[f64; 2]> {
+    if freq <= 0.0 {
+        return vec![[0.0, 0.0], [duration, 0.0]];
+    }
+    let period = 1.0 / freq;
+    let mut points = Vec::new();
+    let steps = 32;
+    let step_dur = period / steps as f64;
+    let mut t = 0.0;
+    while t < duration {
+        // 32-step NES triangle: 15..0, 0..15
+        for step in 0..steps {
+            let val = if step < 16 {
+                (15 - step) as f64 / 15.0 * amp
+            } else {
+                (step - 16) as f64 / 15.0 * amp
+            };
+            let t_end = (t + step_dur).min(duration);
+            points.push([t, val]);
+            points.push([t_end, val]);
+            t = t_end;
+            if t >= duration {
+                break;
+            }
+        }
+    }
+    points
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn generate_noise_wave(freq: f64, amp: f64, duration: f64, short_mode: bool) -> Vec<[f64; 2]> {
+    if freq <= 0.0 {
+        return vec![[0.0, 0.0], [duration, 0.0]];
+    }
+    let period = 1.0 / freq;
+    let mut points = Vec::new();
+    let mut shift_reg: u16 = 1;
+    let mut t = 0.0;
+    while t < duration {
+        let bit0 = shift_reg & 1;
+        let other = if short_mode {
+            (shift_reg >> 6) & 1
+        } else {
+            (shift_reg >> 1) & 1
+        };
+        let feedback = bit0 ^ other;
+        shift_reg = (shift_reg >> 1) | (feedback << 14);
+        let val = if (shift_reg & 1) == 0 { amp } else { 0.0 };
+        let t_end = (t + period).min(duration);
+        points.push([t, val]);
+        points.push([t_end, val]);
+        t = t_end;
+    }
+    points
 }
 
 #[cfg(not(target_arch = "wasm32"))]

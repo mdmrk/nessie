@@ -97,15 +97,20 @@ pub struct ApuSnapshot {
     pub pulse2_enabled: bool,
     pub pulse2_period: u16,
     pub pulse2_vol: u8,
+    pub pulse2_duty: u8,
 
     pub tri_enabled: bool,
     pub tri_linear: u8,
+    pub tri_period: u16,
 
     pub noise_enabled: bool,
     pub noise_mode: bool,
+    pub noise_period: u16,
 
     pub dmc_enabled: bool,
     pub dmc_len: u16,
+    pub dmc_sample_length: u16,
+    pub dmc_period: u16,
     pub dmc_irq: bool,
     pub frame_mode: bool,
     pub frame_irq: bool,
@@ -186,12 +191,17 @@ impl DebugSnapshot {
                 } else {
                     apu.pulse2.envelope.decay_count
                 },
+                pulse2_duty: apu.pulse2.duty_mode,
                 tri_enabled: apu.triangle.enabled,
                 tri_linear: apu.triangle.linear_counter,
+                tri_period: apu.triangle.timer_period,
                 noise_enabled: apu.noise.enabled,
                 noise_mode: apu.noise.mode,
+                noise_period: apu.noise.timer_period,
                 dmc_enabled: apu.dmc.enabled,
                 dmc_len: apu.dmc.current_length,
+                dmc_sample_length: apu.dmc.sample_length,
+                dmc_period: apu.dmc.timer_period,
                 dmc_irq: apu.dmc.irq_pending,
                 frame_mode: apu.frame_mode,
                 frame_irq: apu.frame_irq_pending,
