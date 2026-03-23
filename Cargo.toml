@@ -29,12 +29,12 @@ ringbuf = "0.4.8"
 savefile = "0.20.2"
 serde = { version = "1.0.228", features = ["derive"] }
 sha1_smol = "1.0.1"
-toml = "1.0.7"
+toml = "1.1.0"
 triple_buffer = "9.0.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 directories = "6.0.0"
-env_logger = "0.11.9"
+env_logger = "0.11.10"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.7"
