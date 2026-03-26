@@ -18,10 +18,10 @@
 
 | Platform | Stable | Nightly |
 |----------|:------:|:-------:|
-| 🪟 Windows x64 | [zip ↓](https://github.com/mdmrk/nessie/releases/latest/download/nessie-windows-x64.zip) | [zip ↓](https://github.com/mdmrk/nessie/releases) |
-| 🍎 macOS x64 | [zip ↓](https://github.com/mdmrk/nessie/releases/latest/download/nessie-macos-x64.zip) | [zip ↓](https://github.com/mdmrk/nessie/releases) |
-| 🍎 macOS ARM64 | [zip ↓](https://github.com/mdmrk/nessie/releases/latest/download/nessie-macos-arm64.zip) | [zip ↓](https://github.com/mdmrk/nessie/releases) |
-| 🐧 Linux x64 | [zip ↓](https://github.com/mdmrk/nessie/releases/latest/download/nessie-linux-x64.zip) | [zip ↓](https://github.com/mdmrk/nessie/releases) |
+| 🪟 `x86_64-pc-windows-gnu` | [zip ↓](https://github.com/mdmrk/nessie/releases/latest/download/nessie-windows-x64.zip) | [zip ↓](https://github.com/mdmrk/nessie/releases) |
+| 🍎 `x86_64-apple-darwin` | [zip ↓](https://github.com/mdmrk/nessie/releases/latest/download/nessie-macos-x64.zip) | [zip ↓](https://github.com/mdmrk/nessie/releases) |
+| 🍎 `aarch64-apple-darwin` | [zip ↓](https://github.com/mdmrk/nessie/releases/latest/download/nessie-macos-arm64.zip) | [zip ↓](https://github.com/mdmrk/nessie/releases) |
+| 🐧 `x86_64-unknown-linux-gnu` | [zip ↓](https://github.com/mdmrk/nessie/releases/latest/download/nessie-linux-x64.zip) | [zip ↓](https://github.com/mdmrk/nessie/releases) |
 
 Nightly builds track the latest commit on `main` and supersede the previous prerelease.
 
