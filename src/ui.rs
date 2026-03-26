@@ -548,7 +548,7 @@ impl Ui {
     }
 
     pub fn app_icon() -> IconData {
-        let icon_data = include_bytes!("../assets/icon-1024.png");
+        let icon_data = include_bytes!("../assets/icons/icon-1024.png");
         let icon = image::load_from_memory(icon_data)
             .expect("Failed to load application icon")
             .to_rgba8();
