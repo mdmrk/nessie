@@ -11,15 +11,15 @@ pub fn get_args() -> &'static Args {
 #[derive(FromArgs, Clone, Default)]
 /// Nintendo NES emulator and debugger
 pub struct Args {
-    /// path to the ROM (.nes)
+    /// path to the ROM file (.nes)
     #[argh(positional)]
     pub rom: Option<String>,
 
-    /// start paused
+    /// start emulation paused
     #[argh(short = 'p', switch)]
     pub pause: bool,
 
-    /// enable instruction logging
+    /// enable CPU instruction logging
     #[argh(short = 'l', switch)]
     pub log: bool,
 
@@ -27,7 +27,7 @@ pub struct Args {
     #[argh(short = 'v', switch)]
     pub version: bool,
 
-    /// create cache, config files... on cwd
+    /// store config and cache in the working directory
     #[argh(switch)]
     pub portable: bool,
 }
