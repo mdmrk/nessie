@@ -43,7 +43,7 @@ jobs:
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             TAG="${{ github.ref_name }}"
           else
-            TAG=$(git tag --points-at HEAD | head -1)
+            TAG=$(git tag --points-at HEAD | grep -E '^v[0-9]' | head -1)
           fi
           if [[ -n "$TAG" ]]; then
             echo "is_tagged=true" >> "$GITHUB_OUTPUT"
@@ -139,6 +139,7 @@ jobs:
 
   wasm:
     needs: [build-info]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     name: build and deploy (wasm32-unknown-unknown, ubuntu-latest)
     runs-on: ubuntu-latest
     environment:
