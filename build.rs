@@ -1,7 +1,8 @@
 use std::process::Command;
 
 fn main() {
-    let version = get_git_tag()
+    let version = get_version_from_env()
+        .or_else(get_git_tag)
         .or_else(get_date_hash_version)
         .unwrap_or_else(|| "unknown".to_string());
 
@@ -9,6 +10,11 @@ fn main() {
 
     println!("cargo:rerun-if-changed=.git/HEAD");
     println!("cargo:rerun-if-changed=.git/refs/tags");
+    println!("cargo:rerun-if-env-changed=VERSION");
+}
+
+fn get_version_from_env() -> Option<String> {
+    std::env::var("VERSION").ok().filter(|v| !v.is_empty())
 }
 
 fn get_git_tag() -> Option<String> {

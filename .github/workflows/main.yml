@@ -24,10 +24,9 @@ jobs:
   build-info:
     runs-on: ubuntu-latest
     outputs:
-      date: ${{ steps.info.outputs.date }}
-      commit_hash: ${{ steps.info.outputs.commit_hash }}
       is_tagged: ${{ steps.info.outputs.is_tagged }}
       version: ${{ steps.info.outputs.version }}
+      release_tag: ${{ steps.info.outputs.release_tag }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -36,16 +35,16 @@ jobs:
         id: info
         shell: bash
         run: |
-          echo "date=$(date +'%Y%m%d')" >> "$GITHUB_OUTPUT"
-          echo "commit_hash=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          DATE=$(date +'%Y%m%d')
+          HASH=$(git rev-parse --short HEAD)
           if TAG=$(git describe --exact-match --tags HEAD 2>/dev/null); then
             echo "is_tagged=true" >> "$GITHUB_OUTPUT"
             echo "version=$TAG" >> "$GITHUB_OUTPUT"
+            echo "release_tag=$TAG" >> "$GITHUB_OUTPUT"
           else
-            DATE=$(date +'%Y%m%d')
-            HASH=$(git rev-parse --short HEAD)
             echo "is_tagged=false" >> "$GITHUB_OUTPUT"
-            echo "version=nessie-${DATE}-${HASH}" >> "$GITHUB_OUTPUT"
+            echo "version=${DATE}-${HASH}" >> "$GITHUB_OUTPUT"
+            echo "release_tag=nessie-${DATE}-${HASH}" >> "$GITHUB_OUTPUT"
           fi
 
   fmt:
@@ -76,6 +75,7 @@ jobs:
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
   build:
+    needs: [build-info]
     name: build (${{ matrix.target }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -119,6 +119,8 @@ jobs:
         with:
           key: ${{ matrix.target }}
       - run: cargo build --release --locked --verbose --target ${{ matrix.target }}
+        env:
+          VERSION: ${{ needs.build-info.outputs.version }}
       - name: Upload binary
         uses: actions/upload-artifact@v7
         with:
@@ -128,6 +130,7 @@ jobs:
           if-no-files-found: error
 
   wasm:
+    needs: [build-info]
     name: build and deploy (wasm32-unknown-unknown, ubuntu-latest)
     runs-on: ubuntu-latest
     environment:
@@ -144,8 +147,9 @@ jobs:
       - name: Install Trunk
         uses: jetli/trunk-action@v0.5.1
       - name: Build Release
+        env:
+          VERSION: ${{ needs.build-info.outputs.version }}
         run: |
-          VERSION=$(git describe --exact-match --tags HEAD 2>/dev/null || echo "$(date +'%Y%m%d')-$(git rev-parse --short HEAD)")
           TRUNK_BUILD_ID=$(date +%s) trunk build --release --cargo-profile release-wasm --minify --public-url $public_url
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
@@ -195,10 +199,10 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          name: ${{ needs.build-info.outputs.version }}
-          tag: ${{ needs.build-info.outputs.version }}
+          name: ${{ needs.build-info.outputs.release_tag }}
+          tag: ${{ needs.build-info.outputs.release_tag }}
           draft: false
           prerelease: ${{ needs.build-info.outputs.is_tagged == 'false' }}
           artifacts: "artifacts/*.zip"
           body: |
-            Automated prerelease: ${{ needs.build-info.outputs.version }}
+            Automated prerelease: ${{ needs.build-info.outputs.release_tag }}
