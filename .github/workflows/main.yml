@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -17,16 +17,41 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 jobs:
+  build-info:
+    runs-on: ubuntu-latest
+    outputs:
+      date: ${{ steps.info.outputs.date }}
+      commit_hash: ${{ steps.info.outputs.commit_hash }}
+      is_tagged: ${{ steps.info.outputs.is_tagged }}
+      version: ${{ steps.info.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Get build info
+        id: info
+        shell: bash
+        run: |
+          echo "date=$(date +'%Y%m%d')" >> "$GITHUB_OUTPUT"
+          echo "commit_hash=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          if TAG=$(git describe --exact-match --tags HEAD 2>/dev/null); then
+            echo "is_tagged=true" >> "$GITHUB_OUTPUT"
+            echo "version=$TAG" >> "$GITHUB_OUTPUT"
+          else
+            DATE=$(date +'%Y%m%d')
+            HASH=$(git rev-parse --short HEAD)
+            echo "is_tagged=false" >> "$GITHUB_OUTPUT"
+            echo "version=nessie-${DATE}-${HASH}" >> "$GITHUB_OUTPUT"
+          fi
+
   fmt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -35,21 +60,20 @@ jobs:
   clippy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
       - name: Install Linux Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libasound2-dev libudev-dev pkg-config
+          sudo apt-get install -y libasound2t64 libudev-dev pkg-config
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
   build:
     name: build (${{ matrix.target }}, ${{ matrix.os }})
+    needs: build-info
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -76,14 +100,12 @@ jobs:
             bin_ext: ""
             artifact_name: nessie-macos-arm64
     steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4
       - name: Install Linux Dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libasound2-dev libudev-dev pkg-config
+          sudo apt-get install -y libasound2t64 libudev-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ matrix.toolchain }}
@@ -93,37 +115,71 @@ jobs:
           key: ${{ matrix.target }}
       - run: cargo build --release --locked --verbose --target ${{ matrix.target }}
       - name: Upload binary
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          path: |
-            target/${{ matrix.target }}/release/nessie${{ matrix.bin_ext }}
+          path: target/${{ matrix.target }}/release/nessie${{ matrix.bin_ext }}
           if-no-files-found: error
 
   wasm:
-    name: build and deploy (wasm32-unknown-unknown, ubuntu-latest)
+    name: build and deploy (wasm)
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    env:
-      public_url: "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       - name: Install Trunk
-        uses: jetli/trunk-action@v0.5.1
+        uses: jetli/trunk-action@v0.5.0
       - name: Build Release
         run: |
           VERSION=$(git describe --exact-match --tags HEAD 2>/dev/null || echo "$(date +'%Y%m%d')-$(git rev-parse --short HEAD)")
-          TRUNK_BUILD_ID=$(date +%s) trunk build --release --cargo-profile release-wasm --minify --public-url $public_url
+          trunk build --release --public-url "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v3
         with:
           path: dist
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  release:
+    needs: [build-info, build]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Prepare release files
+        run: |
+          cd artifacts
+          for dir in */; do
+            name="${dir%/}"
+            cd "$dir"
+            zip -r "../${name}.zip" .
+            cd ..
+          done
+      - name: Delete existing prereleases
+        if: needs.build-info.outputs.is_tagged == 'false'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release list --limit 100 | grep "Pre-release" | cut -f1 | while read -r tag; do
+            echo "Deleting prerelease: $tag"
+            gh release delete "$tag" --yes --cleanup-tag
+          done
+      - name: Create release
+        uses: ncipollo/release-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: ${{ needs.build-info.outputs.version }}
+          tag: ${{ needs.build-info.outputs.version }}
+          prerelease: ${{ needs.build-info.outputs.is_tagged == 'false' }}
+          artifacts: "artifacts/*.zip"
+          body: "Automated build: ${{ needs.build-info.outputs.version }}"
