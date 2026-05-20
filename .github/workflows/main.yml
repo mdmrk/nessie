@@ -2,10 +2,10 @@ name: ci
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
     tags: ['*']
   pull_request:
-    branches: [main, master]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -139,7 +139,7 @@ jobs:
 
   wasm:
     needs: [build-info]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main')
     name: build and deploy (wasm32-unknown-unknown, ubuntu-latest)
     runs-on: ubuntu-latest
     environment:
@@ -170,7 +170,7 @@ jobs:
 
   release:
     needs: [build-info, build]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     permissions:
       contents: write
