@@ -503,10 +503,8 @@ impl Ui {
                     self.paused = true;
                 }
             }
-            Action::Step => {
-                if self.paused {
-                    self.runner.step();
-                }
+            Action::Step if self.paused => {
+                self.runner.step();
             }
             Action::LoadState => {
                 self.runner.pick_state_file();

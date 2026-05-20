@@ -10,7 +10,7 @@ bitflags = "2.11.1"
 bytesize = "2.3.1"
 compile-time = "0.2.0"
 cpal = { version = "0.17.3", features = ["wasm-bindgen"] }
-eframe = { version = "0.34.2"}
+eframe = { version = "0.34.2" }
 egui = { version = "0.34.2", features = ["serde"] }
 egui_extras = { version = "0.34.2", features = ["image"] }
 egui_plot = "0.35.0"

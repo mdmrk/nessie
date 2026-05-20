@@ -622,10 +622,8 @@ impl Apu {
                     self.step_half_frame();
                 }
                 22371 => self.step_quarter_frame(),
-                29828 => {
-                    if !self.frame_irq_inhibit {
-                        self.frame_irq_pending = true;
-                    }
+                29828 if !self.frame_irq_inhibit => {
+                    self.frame_irq_pending = true;
                 }
                 29829 => {
                     self.step_quarter_frame();
