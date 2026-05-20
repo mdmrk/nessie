@@ -6,30 +6,25 @@ edition = "2024"
 [dependencies]
 anyhow = { version = "1.0.102", default-features = false }
 argh = "0.1.19"
-bitflags = "2.11.0"
+bitflags = "2.11.1"
 bytesize = "2.3.1"
 compile-time = "0.2.0"
 cpal = { version = "0.17.3", features = ["wasm-bindgen"] }
-eframe = { version = "0.33.3", default-features = false, features = [
-  "default_fonts",
-  "glow",
-  "wayland",
-  "x11",
-] }
-egui = { version = "0.33.3", features = ["serde"] }
-egui_extras = { version = "0.33.3", features = ["image"] }
-egui_plot = "0.34.1"
+eframe = { version = "0.34.2"}
+egui = { version = "0.34.2", features = ["serde"] }
+egui_extras = { version = "0.34.2", features = ["image"] }
+egui_plot = "0.35.0"
 image = { version = "0.25.10", default-features = false, features = ["png"] }
-indexmap = { version = "2.13.0", features = ["serde"] }
+indexmap = { version = "2.14.0", features = ["serde"] }
 log = "0.4.29"
 modular-bitfield = "0.13.1"
 phf = { version = "0.13.1", default-features = false, features = ["macros"] }
 rfd = "0.17.2"
-ringbuf = "0.4.8"
+ringbuf = "0.5.0"
 savefile = "0.20.2"
 serde = { version = "1.0.228", features = ["derive"] }
 sha1_smol = "1.0.1"
-toml = "1.1.0"
+toml = "1.1.2"
 triple_buffer = "9.0.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -38,8 +33,8 @@ env_logger = "0.11.10"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.7"
-wasm-bindgen-futures = "0.4.64"
-web-sys = "0.3.91"
+wasm-bindgen-futures = "0.4.71"
+web-sys = "0.3.98"
 web-time = "1.1.0"
 
 [profile.release]

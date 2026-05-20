@@ -133,7 +133,7 @@ impl InputManager {
         let mut triggered_actions = Vec::new();
         let mut controller = ControllerState::default();
 
-        if ctx.wants_keyboard_input() {
+        if ctx.egui_wants_keyboard_input() {
             return (triggered_actions, controller);
         }
 
@@ -741,13 +741,13 @@ impl Ui {
         let selected_tab = self.settings_selected_tab.clone();
         let settings = self.settings.clone();
 
-        ui.ctx().show_viewport_deferred(
+        ui.show_viewport_deferred(
             egui::ViewportId::from_hash_of("settings_window"),
             egui::ViewportBuilder::default()
                 .with_title("Settings")
                 .with_inner_size([800.0, 600.0]),
-            move |ctx, _| {
-                egui::CentralPanel::default().show(ctx, |ui| {
+            move |ui, _| {
+                egui::CentralPanel::default().show_inside(ui, |ui| {
                     draw_settings_panel_content(ui, &selected_tab, &settings);
                     if ui.input(|i| i.viewport().close_requested()) {
                         let settings = settings.lock();
@@ -1502,40 +1502,40 @@ impl Ui {
         });
     }
 
-    fn draw_screen(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+    fn draw_screen(&mut self, ui: &mut egui::Ui) {
         if let Some(pixels) = self.runner.get_frame_data() {
-            self.screen.set_pixels(ctx, pixels);
+            self.screen.set_pixels(ui.ctx(), pixels);
             self.frame_stats.tick();
         }
         self.screen.render(ui);
     }
 
-    fn draw_start_screen(&self, _ctx: &egui::Context, ui: &mut egui::Ui) {
+    fn draw_start_screen(&self, ui: &mut egui::Ui) {
         match &self.emu_error_msg {
             Some(msg) => ui.colored_label(Color32::RED, msg),
             None => ui.label("Load a rom"),
         };
     }
 
-    pub fn draw(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    pub fn draw(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(snapshot) = self.runner.get_debug_snapshot() {
             self.snapshot = snapshot;
         }
 
-        egui::TopBottomPanel::top("menubar")
+        egui::Panel::top("menubar")
             .resizable(false)
-            .show(ctx, |ui| {
+            .show_inside(ui, |ui| {
                 self.draw_menubar(ui);
             });
         if self.running {
             #[cfg(not(target_arch = "wasm32"))]
             if self.show_debug_panels {
-                egui::SidePanel::left("left_panel")
+                egui::Panel::left("left_panel")
                     .resizable(true)
-                    .default_width(420.0)
-                    .width_range(200.0..=800.0)
-                    .show(ctx, |ui| {
+                    .default_size(420.0)
+                    .size_range(200.0..=800.0)
+                    .show_inside(ui, |ui| {
                         ui.columns_const(|[col_1, col_2]| {
                             egui::ScrollArea::vertical()
                                 .id_salt("left_col1_scroll")
@@ -1561,11 +1561,11 @@ impl Ui {
                                 });
                         });
                     });
-                egui::SidePanel::right("right_panel")
+                egui::Panel::right("right_panel")
                     .resizable(true)
-                    .default_width(220.0)
-                    .width_range(160.0..=400.0)
-                    .show(ctx, |ui| {
+                    .default_size(220.0)
+                    .size_range(160.0..=400.0)
+                    .show_inside(ui, |ui| {
                         egui::ScrollArea::vertical()
                             .auto_shrink([false, false])
                             .show(ui, |ui| {
@@ -1576,11 +1576,11 @@ impl Ui {
                                 });
                             });
                     });
-                egui::TopBottomPanel::bottom("bottom_panel")
+                egui::Panel::bottom("bottom_panel")
                     .resizable(true)
-                    .default_height(200.0)
-                    .height_range(80.0..=500.0)
-                    .show(ctx, |ui| {
+                    .default_size(200.0)
+                    .size_range(80.0..=500.0)
+                    .show_inside(ui, |ui| {
                         egui::ScrollArea::horizontal()
                             .auto_shrink([false, false])
                             .show(ui, |ui| {
@@ -1594,19 +1594,19 @@ impl Ui {
                             });
                     });
             }
-            egui::CentralPanel::default().show(ctx, |ui| {
+            egui::CentralPanel::default().show_inside(ui, |ui| {
                 ui.centered_and_justified(|ui| {
-                    self.draw_screen(ctx, ui);
+                    self.draw_screen(ui);
                 });
             });
         } else {
-            egui::CentralPanel::default().show(ctx, |ui| {
+            egui::CentralPanel::default().show_inside(ui, |ui| {
                 ui.centered_and_justified(|ui| {
-                    self.draw_start_screen(ctx, ui);
+                    self.draw_start_screen(ui);
                 });
             });
         }
-        ctx.request_repaint();
+        ui.request_repaint();
     }
 
     pub fn handle_emu_events(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {

@@ -9,7 +9,7 @@ fn set_style(cc: &CreationContext) {
         visuals: Visuals::dark(),
         ..Default::default()
     };
-    cc.egui_ctx.set_style(style);
+    cc.egui_ctx.set_global_style(style);
 }
 
 #[cfg(not(target_arch = "wasm32"))]
