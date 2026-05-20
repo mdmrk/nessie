@@ -63,7 +63,7 @@ trunk build --release --cargo-profile release-wasm
 ## Usage
 
 ```
-Usage: nessie [<rom>] [-p] [-l] [-v] [--portable]
+Usage: nessie [-p] [-l] [-v] [--portable] [--] [<rom>]
 
 Nintendo NES emulator and debugger
 
@@ -75,5 +75,5 @@ Options:
   -l, --log         enable CPU instruction logging
   -v, --version     print version and exit
   --portable        store config and cache in the working directory
-  -h, --help        display usage information
+  --help, help      display usage information
 ```
