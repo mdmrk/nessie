@@ -11,7 +11,8 @@ use indexmap::IndexMap;
 #[cfg(not(target_arch = "wasm32"))]
 use log::{error, info};
 #[cfg(not(target_arch = "wasm32"))]
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};

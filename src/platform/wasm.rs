@@ -153,7 +153,7 @@ impl PlatformRunner {
         }
     }
 
-    pub fn handle_events(&mut self, ctx: &egui::Context) -> Vec<Event> {
+    pub fn handle_events(&mut self) -> Vec<Event> {
         let loaded_rom = if let Some(rx) = &self.rom_loader_rx {
             rx.try_recv().ok()
         } else {
@@ -180,7 +180,6 @@ impl PlatformRunner {
             if emu.step_frame() {
                 self.last_frame.copy_from_slice(&emu.bus.ppu.screen);
             }
-            ctx.request_repaint();
         }
 
         if let Some(rx) = &self.event_rx {
