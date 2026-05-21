@@ -2,10 +2,10 @@ name: ci
 
 on:
   push:
-    branches: [main]
-    tags: ['*']
+    branches: [ main ]
+    tags: [ "*" ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -39,7 +39,8 @@ jobs:
         run: |
           DATE=$(date +'%Y%m%d')
           HASH=$(git rev-parse --short HEAD)
-          echo "prerelease_tag=nessie-${DATE}-${HASH}" >> "$GITHUB_OUTPUT"
+          echo "prerelease_name=nessie-${DATE}-${HASH}" >> "$GITHUB_OUTPUT"
+          echo "prerelease_tag=${DATE}-${HASH}" >> "$GITHUB_OUTPUT"
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             TAG="${{ github.ref_name }}"
           else
@@ -83,7 +84,7 @@ jobs:
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
   build:
-    needs: [build-info]
+    needs: [ build-info ]
     name: build (${{ matrix.target }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -138,7 +139,7 @@ jobs:
           if-no-files-found: error
 
   wasm:
-    needs: [build-info]
+    needs: [ build-info ]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main')
     name: build and deploy (wasm32-unknown-unknown, ubuntu-latest)
     runs-on: ubuntu-latest
@@ -146,7 +147,8 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     env:
-      public_url: "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+      public_url: "https://${{ github.repository_owner }}.github.io/${{
+        github.event.repository.name }}"
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
@@ -169,8 +171,9 @@ jobs:
         uses: actions/deploy-pages@v5
 
   release:
-    needs: [build-info, build]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+    needs: [ build-info, build ]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' ||
+      startsWith(github.ref, 'refs/tags/'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -202,7 +205,7 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          name: ${{ needs.build-info.outputs.prerelease_tag }}
+          name: ${{ needs.build-info.outputs.prerelease_name }}
           tag: ${{ needs.build-info.outputs.prerelease_tag }}
           draft: false
           prerelease: true
