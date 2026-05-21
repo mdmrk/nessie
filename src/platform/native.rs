@@ -8,7 +8,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use directories::ProjectDirs;
-use egui::{Color32, Context as EguiContext};
+use egui::Color32;
 use log::{error, info};
 use rfd::FileDialog;
 use ringbuf::{HeapProd, HeapRb, traits::Split};
@@ -156,7 +156,7 @@ impl PlatformRunner {
         }
     }
 
-    pub fn handle_events(&mut self, _ctx: &EguiContext) -> Vec<Event> {
+    pub fn handle_events(&mut self) -> Vec<Event> {
         let mut events = Vec::new();
         if let Some(rx) = &self.event_rx {
             while let Ok(event) = rx.try_recv() {

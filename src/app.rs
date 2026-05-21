@@ -19,8 +19,8 @@ impl App {
 
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
-        self.ui.handle_input(ui.ctx());
-        self.ui.handle_emu_events(ui.ctx(), frame);
+        self.ui.handle_input(ui);
+        self.ui.handle_emu_events();
         self.ui.draw(ui, frame);
     }
 }

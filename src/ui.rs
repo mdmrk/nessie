@@ -125,19 +125,15 @@ impl ControllerState {
 struct InputManager;
 
 impl InputManager {
-    fn update(
-        &self,
-        ctx: &egui::Context,
-        keybindings: &Keybindings,
-    ) -> (Vec<Action>, ControllerState) {
+    fn update(&self, ui: &egui::Ui, keybindings: &Keybindings) -> (Vec<Action>, ControllerState) {
         let mut triggered_actions = Vec::new();
         let mut controller = ControllerState::default();
 
-        if ctx.egui_wants_keyboard_input() {
+        if ui.egui_wants_keyboard_input() {
             return (triggered_actions, controller);
         }
 
-        ctx.input_mut(|i| {
+        ui.input_mut(|i| {
             for keybinding in &keybindings.application {
                 let shortcut = keybinding.1.shortcut;
                 if i.consume_shortcut(&shortcut) {
@@ -220,13 +216,13 @@ impl Screen {
         }
     }
 
-    pub fn set_pixels(&mut self, ctx: &egui::Context, pixels: &[Color32]) {
+    pub fn set_pixels(&mut self, ui: &egui::Ui, pixels: &[Color32]) {
         let image = egui::ColorImage::new([self.width, self.height], pixels.to_owned());
         if let Some(texture) = &mut self.texture_handle {
             texture.set(image, egui::TextureOptions::NEAREST);
         } else {
             self.texture_handle =
-                Some(ctx.load_texture("screen", image, egui::TextureOptions::NEAREST));
+                Some(ui.load_texture("screen", image, egui::TextureOptions::NEAREST));
         }
     }
 
@@ -295,7 +291,7 @@ fn draw_keybinding_key_cell(
         let key_label = if is_awaiting {
             "...".to_string()
         } else {
-            ui.ctx().format_shortcut(&k.shortcut)
+            ui.format_shortcut(&k.shortcut)
         };
         if ui
             .add_sized([80., 20.], egui::Button::new(key_label))
@@ -472,12 +468,12 @@ impl Ui {
         }
     }
 
-    pub fn handle_input(&mut self, ctx: &egui::Context) {
+    pub fn handle_input(&mut self, ui: &egui::Ui) {
         let keys = {
             let settings = self.settings.lock();
             settings.keybindings.clone()
         };
-        let (actions, controller) = self.input_manager.update(ctx, &keys);
+        let (actions, controller) = self.input_manager.update(ui, &keys);
 
         let input_val = controller.to_u8() as u16;
 
@@ -488,7 +484,7 @@ impl Ui {
         }
 
         for action in actions {
-            self.dispatch_action(ctx, action);
+            self.dispatch_action(ui, action);
         }
     }
 
@@ -573,7 +569,7 @@ impl Ui {
                 if ui
                     .add(
                         egui::Button::new("🎮 Open ROM...")
-                            .shortcut_text(keybindings.format_shortcut(ui.ctx(), Action::OpenRom)),
+                            .shortcut_text(keybindings.format_shortcut(ui, Action::OpenRom)),
                     )
                     .clicked()
                 {
@@ -586,17 +582,19 @@ impl Ui {
                 ui.separator();
                 ui.add_enabled_ui(self.running, |ui| {
                     if ui
-                        .add(egui::Button::new("💾 Save state").shortcut_text(
-                            keybindings.format_shortcut(ui.ctx(), Action::SaveState),
-                        ))
+                        .add(
+                            egui::Button::new("💾 Save state")
+                                .shortcut_text(keybindings.format_shortcut(ui, Action::SaveState)),
+                        )
                         .clicked()
                     {
                         self.runner.send_command(Command::SaveState);
                     }
                     if ui
-                        .add(egui::Button::new("📥 Load state").shortcut_text(
-                            keybindings.format_shortcut(ui.ctx(), Action::LoadState),
-                        ))
+                        .add(
+                            egui::Button::new("📥 Load state")
+                                .shortcut_text(keybindings.format_shortcut(ui, Action::LoadState)),
+                        )
                         .clicked()
                     {
                         self.runner.pick_state_file();
@@ -608,7 +606,7 @@ impl Ui {
                     if ui
                         .add(
                             egui::Button::new("✖ Quit")
-                                .shortcut_text(keybindings.format_shortcut(ui.ctx(), Action::Quit)),
+                                .shortcut_text(keybindings.format_shortcut(ui, Action::Quit)),
                         )
                         .clicked()
                     {
@@ -624,7 +622,7 @@ impl Ui {
                     if ui
                         .add(
                             egui::Button::new("⤵ Step")
-                                .shortcut_text(keybindings.format_shortcut(ui.ctx(), Action::Step)),
+                                .shortcut_text(keybindings.format_shortcut(ui, Action::Step)),
                         )
                         .clicked()
                     {
@@ -633,9 +631,11 @@ impl Ui {
                 });
                 ui.add_enabled_ui(self.running && self.paused, |ui| {
                     if ui
-                        .add(egui::Button::new("▶ Resume").shortcut_text(
-                            keybindings.format_shortcut(ui.ctx(), Action::PauseResume),
-                        ))
+                        .add(
+                            egui::Button::new("▶ Resume").shortcut_text(
+                                keybindings.format_shortcut(ui, Action::PauseResume),
+                            ),
+                        )
                         .clicked()
                     {
                         self.runner.resume();
@@ -644,9 +644,11 @@ impl Ui {
                 });
                 ui.add_enabled_ui(self.running && !self.paused, |ui| {
                     if ui
-                        .add(egui::Button::new("⏸ Pause").shortcut_text(
-                            keybindings.format_shortcut(ui.ctx(), Action::PauseResume),
-                        ))
+                        .add(
+                            egui::Button::new("⏸ Pause").shortcut_text(
+                                keybindings.format_shortcut(ui, Action::PauseResume),
+                            ),
+                        )
                         .clicked()
                     {
                         self.runner.pause();
@@ -664,7 +666,7 @@ impl Ui {
                     ui.add_enabled_ui(self.running, |ui| {
                         if ui
                             .add(egui::Button::new("📷 Take screenshot").shortcut_text(
-                                keybindings.format_shortcut(ui.ctx(), Action::TakeScreenshot),
+                                keybindings.format_shortcut(ui, Action::TakeScreenshot),
                             ))
                             .clicked()
                         {
@@ -1502,7 +1504,7 @@ impl Ui {
 
     fn draw_screen(&mut self, ui: &mut egui::Ui) {
         if let Some(pixels) = self.runner.get_frame_data() {
-            self.screen.set_pixels(ui.ctx(), pixels);
+            self.screen.set_pixels(ui, pixels);
             self.frame_stats.tick();
         }
         self.screen.render(ui);
@@ -1607,8 +1609,8 @@ impl Ui {
         ui.request_repaint();
     }
 
-    pub fn handle_emu_events(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let events = self.runner.handle_events(ctx);
+    pub fn handle_emu_events(&mut self) {
+        let events = self.runner.handle_events();
         for event in events {
             match event {
                 Event::Started => {

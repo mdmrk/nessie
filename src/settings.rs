@@ -185,8 +185,8 @@ impl Keybindings {
             .unwrap()
     }
 
-    pub fn format_shortcut(&self, ctx: &egui::Context, action: Action) -> String {
-        ctx.format_shortcut(&self.shortcut(action))
+    pub fn format_shortcut(&self, ui: &egui::Ui, action: Action) -> String {
+        ui.format_shortcut(&self.shortcut(action))
     }
 
     pub fn apply_defaults(&mut self) {
