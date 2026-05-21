@@ -1485,7 +1485,7 @@ impl Ui {
                     .column(Column::remainder())
                     .body(|mut body| {
                         make_rows!(body,
-                            "ROM hash" => format!("{}...", &cart.hash[0..8]),
+                            "ROM hash" => format!("{}", &cart.hash),
                             "PRG ROM Size" =>
                                 format!("{}", ByteSize::kib(16) * (cart.prg_rom_size as u64)),
                             "CHR ROM Size" =>
@@ -1517,7 +1517,11 @@ impl Ui {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn draw_fps(&self, ui: &mut egui::Ui) {
-        ui.label(format!("FPS: {:.1}", self.frame_stats.fps));
+        if self.paused {
+            ui.label("FPS: -");
+        } else {
+            ui.label(format!("FPS: {:.1}", self.frame_stats.fps));
+        }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1597,7 +1601,7 @@ impl Ui {
                 egui::Panel::right("right_panel")
                     .resizable(true)
                     .default_size(220.0)
-                    .size_range(160.0..=400.0)
+                    .size_range(200.0..=400.0)
                     .show_inside(ui, |ui| {
                         egui::ScrollArea::vertical()
                             .auto_shrink([false, false])
