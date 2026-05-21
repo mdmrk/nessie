@@ -12,6 +12,7 @@ use indexmap::IndexMap;
 use log::{error, info};
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
@@ -130,7 +131,7 @@ impl InputManager {
         &self,
         ui: &egui::Ui,
         keybindings: &Keybindings,
-    ) -> (Vec<Action>, ControllerState, Option<PathBuf>) {
+    ) -> (Vec<Action>, ControllerState, Option<FileDataSource>) {
         let mut triggered_actions = Vec::new();
         let mut controller = ControllerState::default();
 
@@ -166,9 +167,20 @@ impl InputManager {
             painter.rect_filled(screen_rect, 0.0, egui::Color32::from_black_alpha(100));
         }
 
-        let dropped_path = ui.input(|i| i.raw.dropped_files.iter().find_map(|f| f.path.clone()));
+        let dropped = ui.input(|i| {
+            i.raw.dropped_files.first().and_then(|f| {
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    f.path.clone().map(FileDataSource::Path)
+                }
+                #[cfg(target_arch = "wasm32")]
+                {
+                    f.bytes.as_ref().map(|b| FileDataSource::Bytes(b.to_vec()))
+                }
+            })
+        });
 
-        (triggered_actions, controller, dropped_path)
+        (triggered_actions, controller, dropped)
     }
 }
 
@@ -490,7 +502,7 @@ impl Ui {
             let settings = self.settings.lock();
             settings.keybindings.clone()
         };
-        let (actions, controller, dropped_path) = self.input_manager.update(ui, &keys);
+        let (actions, controller, dropped) = self.input_manager.update(ui, &keys);
 
         let input_val = controller.to_u8() as u16;
 
@@ -504,8 +516,8 @@ impl Ui {
             self.dispatch_action(ui, action);
         }
 
-        if let Some(path) = dropped_path {
-            self.start(FileDataSource::Path(path));
+        if let Some(source) = dropped {
+            self.start(source);
         }
     }
 
