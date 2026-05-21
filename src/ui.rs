@@ -125,12 +125,16 @@ impl ControllerState {
 struct InputManager;
 
 impl InputManager {
-    fn update(&self, ui: &egui::Ui, keybindings: &Keybindings) -> (Vec<Action>, ControllerState) {
+    fn update(
+        &self,
+        ui: &egui::Ui,
+        keybindings: &Keybindings,
+    ) -> (Vec<Action>, ControllerState, Option<PathBuf>) {
         let mut triggered_actions = Vec::new();
         let mut controller = ControllerState::default();
 
         if ui.egui_wants_keyboard_input() {
-            return (triggered_actions, controller);
+            return (triggered_actions, controller, None);
         }
 
         ui.input_mut(|i| {
@@ -151,7 +155,19 @@ impl InputManager {
             controller.right = i.key_down(keybindings.shortcut(Action::Right).logical_key);
         });
 
-        (triggered_actions, controller)
+        if !ui.input(|i| i.raw.hovered_files.is_empty()) {
+            let painter = ui.layer_painter(egui::LayerId::new(
+                egui::Order::Foreground,
+                egui::Id::new("file_drop_target"),
+            ));
+
+            let screen_rect = ui.content_rect();
+            painter.rect_filled(screen_rect, 0.0, egui::Color32::from_black_alpha(100));
+        }
+
+        let dropped_path = ui.input(|i| i.raw.dropped_files.iter().find_map(|f| f.path.clone()));
+
+        (triggered_actions, controller, dropped_path)
     }
 }
 
@@ -473,7 +489,7 @@ impl Ui {
             let settings = self.settings.lock();
             settings.keybindings.clone()
         };
-        let (actions, controller) = self.input_manager.update(ui, &keys);
+        let (actions, controller, dropped_path) = self.input_manager.update(ui, &keys);
 
         let input_val = controller.to_u8() as u16;
 
@@ -485,6 +501,10 @@ impl Ui {
 
         for action in actions {
             self.dispatch_action(ui, action);
+        }
+
+        if let Some(path) = dropped_path {
+            self.start(FileDataSource::Path(path));
         }
     }
 
