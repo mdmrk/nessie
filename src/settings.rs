@@ -140,7 +140,7 @@ impl Default for Keybindings {
         );
         application.insert(
             Action::Step,
-            Keybinding::new("Step", KeyboardShortcut::new(Modifiers::NONE, Key::Enter)),
+            Keybinding::new("Step", KeyboardShortcut::new(Modifiers::NONE, Key::P)),
         );
         #[cfg(not(target_arch = "wasm32"))]
         application.insert(
