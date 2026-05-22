@@ -7,25 +7,20 @@
 
   [![CI](https://github.com/mdmrk/nessie/actions/workflows/main.yml/badge.svg)](https://github.com/mdmrk/nessie/actions/workflows/main.yml)&nbsp;
   [![Release](https://img.shields.io/github/v/release/mdmrk/nessie?label=release&color=blue)](https://github.com/mdmrk/nessie/releases/latest)&nbsp;
-  [![Nightly](https://img.shields.io/github/v/release/mdmrk/nessie?include_prereleases&label=nightly&color=orange)](https://github.com/mdmrk/nessie/releases)
 
-  **[▶&nbsp; Try in Browser](https://mdmrk.github.io/nessie)**
+  **[Try in Browser](https://mdmrk.github.io/nessie)**
 </div>
-
----
 
 ## Downloads
 
 | Platform | Stable | Nightly |
 |----------|:------:|:-------:|
-| 🪟 `x86_64-pc-windows-gnu` | [zip ↓](https://github.com/mdmrk/nessie/releases/latest/download/nessie-windows-x64.zip) | [zip ↓](https://github.com/mdmrk/nessie/releases) |
-| 🍎 `x86_64-apple-darwin` | [zip ↓](https://github.com/mdmrk/nessie/releases/latest/download/nessie-macos-x64.zip) | [zip ↓](https://github.com/mdmrk/nessie/releases) |
-| 🍎 `aarch64-apple-darwin` | [zip ↓](https://github.com/mdmrk/nessie/releases/latest/download/nessie-macos-arm64.zip) | [zip ↓](https://github.com/mdmrk/nessie/releases) |
-| 🐧 `x86_64-unknown-linux-gnu` | [zip ↓](https://github.com/mdmrk/nessie/releases/latest/download/nessie-linux-x64.zip) | [zip ↓](https://github.com/mdmrk/nessie/releases) |
+| `x86_64-pc-windows-gnu` | [zip](https://github.com/mdmrk/nessie/releases/latest/download/nessie-windows-x64.zip) | [zip](https://github.com/mdmrk/nessie/releases) |
+| `x86_64-apple-darwin` | [zip](https://github.com/mdmrk/nessie/releases/latest/download/nessie-macos-x64.zip) | [zip](https://github.com/mdmrk/nessie/releases) |
+| `aarch64-apple-darwin` | [zip](https://github.com/mdmrk/nessie/releases/latest/download/nessie-macos-arm64.zip) | [zip](https://github.com/mdmrk/nessie/releases) |
+| `x86_64-unknown-linux-gnu` | [zip](https://github.com/mdmrk/nessie/releases/latest/download/nessie-linux-x64.zip) | [zip](https://github.com/mdmrk/nessie/releases) |
 
 Nightly builds track the latest commit on `main` and supersede the previous prerelease.
-
----
 
 ## Build
 
@@ -48,8 +43,6 @@ cargo build --release
 trunk build --release --cargo-profile release-wasm
 ```
 
----
-
 ## Features
 
 - 6502 CPU, PPU, and APU emulation
@@ -57,8 +50,6 @@ trunk build --release --cargo-profile release-wasm
 - Built-in debugger
 - Save states
 - Native (Windows, macOS, Linux) and Web (WebAssembly)
-
----
 
 ## Usage
 
